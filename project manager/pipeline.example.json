@@ -15,6 +15,12 @@
     "version_padding": 3,
     "valid_statuses": ["not_started", "in_progress", "published"]
   },
+  "team": [
+    "alex",
+    "maria",
+    "ina",
+    "erik"
+  ],
   "sequences": [
     {
       "code": "neon",

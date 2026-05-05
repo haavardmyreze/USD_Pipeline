@@ -29,6 +29,7 @@ def format_pipeline_json(payload):
     lines.append('  "project": ' + json.dumps(payload["project"], indent=2).replace("\n", "\n  ") + ",")
     lines.append('  "software": ' + json.dumps(payload["software"], indent=2).replace("\n", "\n  ") + ",")
     lines.append('  "conventions": ' + json.dumps(payload["conventions"], indent=2).replace("\n", "\n  ") + ",")
+    lines.append(f'  "team": {_array_one_object_per_line(payload.get("team", []), 2)},')
     lines.append(f'  "sequences": {_array_one_object_per_line(payload["sequences"], 2)},')
     lines.append(f'  "assets": {_array_one_object_per_line(payload["assets"], 2)},')
     lines.append(f'  "sets": {_array_one_object_per_line(payload["sets"], 2)},')
@@ -40,6 +41,39 @@ def format_pipeline_json(payload):
 
 
 class PipelineServer(BaseHTTPRequestHandler):
+    @staticmethod
+    def _parse_artist_from_hip(hip_value):
+        if not isinstance(hip_value, str) or not hip_value.strip():
+            return None
+        stem = Path(hip_value).name
+        if stem.endswith(".hip"):
+            stem = stem[:-4]
+        parts = stem.split("_")
+        if len(parts) < 3:
+            return None
+        version = parts[-1]
+        if version.startswith("v") and version[1:].isdigit():
+            artist = parts[-2].strip().lower()
+            return artist if artist and artist.isalnum() else None
+        return None
+
+    @staticmethod
+    def _find_publish_target(data, entity_type, target):
+        if entity_type == "asset":
+            asset_name = target.get("name")
+            return next((item for item in data["assets"] if item["name"] == asset_name), None)
+        if entity_type == "set":
+            set_name = target.get("name")
+            return next((item for item in data["sets"] if item["name"] == set_name), None)
+        if entity_type == "shot":
+            sequence_code = target.get("sequence")
+            shot_code = target.get("shot")
+            sequence = next((seq for seq in data["sequences"] if seq["code"] == sequence_code), None)
+            if sequence is None:
+                return None
+            return next((shot for shot in sequence.get("shots", []) if shot["shot"] == shot_code), None)
+        return None
+
     def _send_json(self, payload, status=HTTPStatus.OK):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -213,6 +247,57 @@ class PipelineServer(BaseHTTPRequestHandler):
                     return
                 self._create_shot_folders(sequence_code, entry["shot"])
                 self._append_entry(data, entity_type, entry, sequence_code=sequence_code)
+
+            self._write_pipeline_atomic(data)
+            self._send_json({"ok": True, "data": data})
+            return
+
+        if self.path == "/publish":
+            payload, error = self._read_body_json()
+            if error:
+                self._send_json({"error": error}, status=HTTPStatus.BAD_REQUEST)
+                return
+            if not DATA_PATH.exists():
+                self._send_json({"error": "pipeline.json not found"}, status=HTTPStatus.NOT_FOUND)
+                return
+
+            entity_type = payload.get("type")
+            step = payload.get("step")
+            target = payload.get("target")
+            if entity_type not in {"asset", "shot", "set"} or not isinstance(step, str) or not isinstance(target, dict):
+                self._send_json({"error": "Expected type, step and target fields"}, status=HTTPStatus.BAD_REQUEST)
+                return
+
+            with DATA_PATH.open("r", encoding="utf-8-sig") as handle:
+                data = json.load(handle)
+
+            data.setdefault("team", [])
+            target_item = self._find_publish_target(data, entity_type, target)
+            if target_item is None:
+                self._send_json({"error": "Publish target not found"}, status=HTTPStatus.NOT_FOUND)
+                return
+
+            steps = target_item.get("steps", {})
+            if step not in steps or not isinstance(steps[step], list):
+                self._send_json({"error": "Invalid publish step for target"}, status=HTTPStatus.BAD_REQUEST)
+                return
+
+            hip_value = payload.get("hip")
+            record_artist = payload.get("artist")
+            if not isinstance(record_artist, str) and isinstance(payload.get("record"), dict):
+                record_artist = payload["record"].get("artist")
+            if not isinstance(hip_value, str) and isinstance(payload.get("record"), dict):
+                hip_value = payload["record"].get("hip")
+
+            publish_record = {
+                "artist": record_artist.lower() if isinstance(record_artist, str) and record_artist.strip() else None,
+                "hip": hip_value if isinstance(hip_value, str) and hip_value.strip() else None,
+            }
+            steps[step].append(publish_record)
+
+            parsed_artist = self._parse_artist_from_hip(publish_record["hip"])
+            if parsed_artist and parsed_artist not in data["team"]:
+                data["team"].append(parsed_artist)
 
             self._write_pipeline_atomic(data)
             self._send_json({"ok": True, "data": data})

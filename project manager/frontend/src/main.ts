@@ -17,7 +17,7 @@ interface Shot { shot: string; set: string; created_at: string; notes: string; s
 interface Sequence { code: string; name: string; shots: Shot[] }
 interface SetItem { name: string; created_at: string; notes: string; steps: { dressing: PublishRecord[]; lighting: PublishRecord[]; lookdev: PublishRecord[]; fx: PublishRecord[]; assembly: PublishRecord[] } }
 interface LibraryMaterial { name: string }
-interface PipelineData { project: Project; software: Software; conventions: Conventions; sequences: Sequence[]; assets: Asset[]; sets: SetItem[]; library: { materials: LibraryMaterial[] } }
+interface PipelineData { project: Project; software: Software; conventions: Conventions; team: string[]; sequences: Sequence[]; assets: Asset[]; sets: SetItem[]; library: { materials: LibraryMaterial[] } }
 
 interface ArtistTask {
   artist: string
@@ -58,6 +58,9 @@ let artistFilter = ''
 let artistKindFilter: 'all' | 'asset' | 'shot' | 'set' = 'all'
 let artistStatusFilter: 'all' | Status = 'all'
 let flashMessage = ''
+let activeDataFileLabel = 'pipeline.json'
+let activeDataFileHandle: FileSystemFileHandle | null = null
+let activeFileNeedsPickerSave = false
 
 const statusColor: Record<Status, string> = { not_started: '#6b7280', in_progress: '#f59e0b', published: '#22c55e' }
 const nav: Array<{ key: PageKey; label: string; icon: unknown }> = [
@@ -129,6 +132,19 @@ function cloneData<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as
 function isDirty() { return JSON.stringify(currentData) !== JSON.stringify(baselineData) }
 function getState() { if (!currentData) throw new Error('Pipeline data not loaded'); return currentData }
 function setState(mutator: (draft: PipelineData) => void) { const next = cloneData(getState()); mutator(next); currentData = next; render() }
+function normalizeTeam(input: string[]) {
+  const seen = new Set<string>()
+  const out: string[] = []
+  input.forEach((name) => {
+    const normalized = String(name ?? '').trim().toLowerCase()
+    if (!normalized) return
+    if (!/^[a-z0-9]+$/.test(normalized)) return
+    if (seen.has(normalized)) return
+    seen.add(normalized)
+    out.push(normalized)
+  })
+  return out
+}
 
 function statusPill(status: Status) { return `<span class="status-pill" style="--status:${statusColor[status]};">${status.replace('_', ' ')}</span>` }
 function notesIcon(notes: string) { return notes.trim() ? `<span class="notes-icon" title="Has notes">${iconSvg(MessageSquare, 14)}</span>` : '' }
@@ -195,7 +211,8 @@ function renderOverview(data: PipelineData) {
     return `<tr><td>${setItem.name}</td><td>${related}</td></tr>`
   }).join('')
 
-  return `<section class="section-block"><h2 class="section-title">Overview</h2><div class="card-grid">${cards}</div><article class="surface-card"><h3>Software Versions</h3><div class="kv-grid"><p>Houdini</p><p>${data.software.houdini}</p><p>Karma</p><p>${data.software.karma}</p><p>USD</p><p>${data.software.usd}</p></div></article><article class="surface-card"><h3>Set to Shot Dependencies</h3><table class="simple-table"><thead><tr><th>Set</th><th>Referenced by Shots</th></tr></thead><tbody>${setRows}</tbody></table></article></section>`
+  const teamRows = [...(data.team ?? [])].sort((a, b) => a.localeCompare(b)).map((name) => `<li>${name}</li>`).join('')
+  return `<section class="section-block"><h2 class="section-title">Overview</h2><div class="card-grid">${cards}</div><article class="surface-card"><h3>Software Versions</h3><div class="kv-grid"><p>Houdini</p><p>${data.software.houdini}</p><p>Karma</p><p>${data.software.karma}</p><p>USD</p><p>${data.software.usd}</p></div></article><article class="surface-card"><h3>Team</h3><ul class="team-overview-list">${teamRows || '<li>-</li>'}</ul></article><article class="surface-card"><h3>Set to Shot Dependencies</h3><table class="simple-table"><thead><tr><th>Set</th><th>Referenced by Shots</th></tr></thead><tbody>${setRows}</tbody></table></article></section>`
 }
 
 function renderAssetsSection(data: PipelineData) {
@@ -268,11 +285,10 @@ function renderLibrarySection(data: PipelineData) {
 }
 
 function renderWorkspace(data: PipelineData) {
-  const sectionTabs: Array<{ key: WorkspaceSection; label: string }> = [
+  const primaryTabs: Array<{ key: WorkspaceSection; label: string }> = [
     { key: 'assets', label: 'Assets' },
-    { key: 'shots', label: 'Shots' },
     { key: 'sets', label: 'Sets' },
-    { key: 'library', label: 'Library' },
+    { key: 'shots', label: 'Shots' },
   ]
 
   const activeContent = workspaceSection === 'assets'
@@ -283,7 +299,7 @@ function renderWorkspace(data: PipelineData) {
         ? renderSetsSection(data)
         : renderLibrarySection(data)
 
-  return `<section class="section-block"><h2 class="section-title">Pipeline Workspace</h2><div class="workspace-tabs">${sectionTabs.map((tab) => `<button class="workspace-tab ${workspaceSection === tab.key ? 'active' : ''}" data-workspace-tab="${tab.key}">${tab.label}</button>`).join('')}</div>${activeContent}</section>`
+  return `<section class="section-block"><h2 class="section-title">Pipeline Workspace</h2><div class="workspace-tabs">${primaryTabs.map((tab) => `<button class="workspace-tab ${workspaceSection === tab.key ? 'active' : ''}" data-workspace-tab="${tab.key}">${tab.label}</button>`).join('')}<span class="workspace-tab-divider"></span><button class="workspace-tab ${workspaceSection === 'library' ? 'active' : ''}" data-workspace-tab="library">Library</button></div>${activeContent}</section>`
 }
 
 function renderArtists(data: PipelineData) {
@@ -293,12 +309,31 @@ function renderArtists(data: PipelineData) {
     const statusMatch = artistStatusFilter === 'all' || task.status === artistStatusFilter
     return artistMatch && kindMatch && statusMatch
   })
-  const rows = tasks.map((task) => `<tr><td>${task.artist}</td><td>${task.kind}</td><td>${task.entity}</td><td>${task.step}</td><td>${statusPill(task.status)}</td><td>${task.hip ?? '-'}</td></tr>`).join('')
-  return `<section class="section-block"><h2 class="section-title">Artist Task Map</h2><article class="surface-card artist-filters"><input data-artist-filter="name" placeholder="Filter by artist name" value="${artistFilter}" /><select data-artist-filter="kind"><option value="all" ${artistKindFilter === 'all' ? 'selected' : ''}>All types</option><option value="asset" ${artistKindFilter === 'asset' ? 'selected' : ''}>Asset</option><option value="shot" ${artistKindFilter === 'shot' ? 'selected' : ''}>Shot</option><option value="set" ${artistKindFilter === 'set' ? 'selected' : ''}>Set</option></select><select data-artist-filter="status"><option value="all" ${artistStatusFilter === 'all' ? 'selected' : ''}>All statuses</option><option value="not_started" ${artistStatusFilter === 'not_started' ? 'selected' : ''}>Not started</option><option value="in_progress" ${artistStatusFilter === 'in_progress' ? 'selected' : ''}>In progress</option><option value="published" ${artistStatusFilter === 'published' ? 'selected' : ''}>Published</option></select><button data-apply-artist-filters="1">Apply</button></article><article class="surface-card"><table class="simple-table"><thead><tr><th>Artist</th><th>Type</th><th>Entity</th><th>Step</th><th>Status</th><th>HIP</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No artist assignments match current filters.</td></tr>'}</tbody></table></article></section>`
+  const grouped = new Map<string, ArtistTask[]>()
+  tasks.forEach((task) => {
+    const group = grouped.get(task.artist) ?? []
+    group.push(task)
+    grouped.set(task.artist, group)
+  })
+
+  let groupedRows = ''
+  for (const [artist, artistTasks] of grouped.entries()) {
+    groupedRows += `<tr class="group-row"><td colspan="5">${artist}</td></tr>`
+    groupedRows += artistTasks
+      .map((task) => `<tr><td>${task.kind}</td><td>${task.entity}</td><td>${task.step}</td><td>${statusPill(task.status)}</td><td>${task.hip ?? '-'}</td></tr>`)
+      .join('')
+  }
+
+  return `<section class="section-block"><h2 class="section-title">Artist Task Map</h2><article class="surface-card artist-filters"><input data-artist-filter="name" placeholder="Filter by artist name" value="${artistFilter}" /><select data-artist-filter="kind"><option value="all" ${artistKindFilter === 'all' ? 'selected' : ''}>All types</option><option value="asset" ${artistKindFilter === 'asset' ? 'selected' : ''}>Asset</option><option value="shot" ${artistKindFilter === 'shot' ? 'selected' : ''}>Shot</option><option value="set" ${artistKindFilter === 'set' ? 'selected' : ''}>Set</option></select><select data-artist-filter="status"><option value="all" ${artistStatusFilter === 'all' ? 'selected' : ''}>All statuses</option><option value="not_started" ${artistStatusFilter === 'not_started' ? 'selected' : ''}>Not started</option><option value="in_progress" ${artistStatusFilter === 'in_progress' ? 'selected' : ''}>In progress</option><option value="published" ${artistStatusFilter === 'published' ? 'selected' : ''}>Published</option></select><button data-apply-artist-filters="1">Apply</button></article><article class="surface-card"><table class="simple-table"><thead><tr><th>Type</th><th>Entity</th><th>Step</th><th>Status</th><th>HIP</th></tr></thead><tbody>${groupedRows || '<tr><td colspan="5">No artist assignments match current filters.</td></tr>'}</tbody></table></article></section>`
 }
 
 function renderSettings(data: PipelineData) {
-  return `<section class="section-block"><h2 class="section-title">Project Settings</h2><article class="surface-card"><div class="settings-grid"><label>Houdini<input data-setting="software.houdini" value="${data.software.houdini}"/></label><p class="hint">Houdini tools will warn artists when their running version does not match this value.</p><label>Karma<input data-setting="software.karma" value="${data.software.karma}"/></label><label>USD<input data-setting="software.usd" value="${data.software.usd}"/></label><label>USD Default Format<select data-setting="conventions.usd_format_default"><option value="usda" ${data.conventions.usd_format_default === 'usda' ? 'selected' : ''}>usda</option><option value="usdc" ${data.conventions.usd_format_default === 'usdc' ? 'selected' : ''}>usdc</option></select></label><label>Shot Number Increment<input type="number" data-setting="conventions.shot_number_increment" value="${data.conventions.shot_number_increment}"/></label><p class="hint">Changing default USD format or shot increment does not affect already published files.</p><label>Version Padding<input type="number" data-setting="conventions.version_padding" value="${data.conventions.version_padding}"/></label></div></article></section>`
+  const teamRows = [...(data.team ?? [])]
+    .map((name, idx) => ({ name, idx }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((member) => `<li><input data-team="${member.idx}" value="${member.name}" /><button class="icon-btn" data-delete-team="${member.idx}">${iconSvg(Trash2, 14)}</button></li>`)
+    .join('')
+  return `<section class="section-block"><h2 class="section-title">Project Settings</h2><article class="surface-card"><h3>Software Versions</h3><div class="settings-grid"><label>Houdini<input data-setting="software.houdini" value="${data.software.houdini}"/></label><p class="hint">Houdini tools will warn artists when their running version does not match this value.</p><label>Karma<input data-setting="software.karma" value="${data.software.karma}"/></label><label>USD<input data-setting="software.usd" value="${data.software.usd}"/></label></div></article><article class="surface-card"><h3>Team</h3><ul class="material-list">${teamRows}</ul><button data-add-team="1">Add Member</button></article><article class="surface-card"><h3>Conventions</h3><div class="settings-grid"><label>USD Default Format<select data-setting="conventions.usd_format_default"><option value="usda" ${data.conventions.usd_format_default === 'usda' ? 'selected' : ''}>usda</option><option value="usdc" ${data.conventions.usd_format_default === 'usdc' ? 'selected' : ''}>usdc</option></select></label><label>Shot Number Increment<input type="number" data-setting="conventions.shot_number_increment" value="${data.conventions.shot_number_increment}"/></label><p class="hint">Changing default USD format or shot increment does not affect already published files.</p><label>Version Padding<input type="number" data-setting="conventions.version_padding" value="${data.conventions.version_padding}"/></label></div></article></section>`
 }
 
 function suggestShot(data: PipelineData, sequenceCode: string) {
@@ -328,7 +363,7 @@ function renderFirstRun() {
   document.querySelector<HTMLButtonElement>('#setup-create')?.addEventListener('click', async () => {
     const name = (document.querySelector<HTMLInputElement>('#setup-name')?.value || '').trim()
     const code = (document.querySelector<HTMLInputElement>('#setup-code')?.value || '').trim()
-    const newData: PipelineData = { project: { name, code, created: new Date().toISOString().slice(0, 10) }, software: { houdini: (document.querySelector<HTMLInputElement>('#setup-houdini')?.value || '').trim(), karma: (document.querySelector<HTMLInputElement>('#setup-karma')?.value || '').trim(), usd: (document.querySelector<HTMLInputElement>('#setup-usd')?.value || '').trim() }, conventions: { usd_format_default: 'usda', shot_number_increment: 10, version_padding: 3, valid_statuses: ['not_started', 'in_progress', 'published'] }, sequences: [], assets: [], sets: [], library: { materials: [] } }
+    const newData: PipelineData = { project: { name, code, created: new Date().toISOString().slice(0, 10) }, software: { houdini: (document.querySelector<HTMLInputElement>('#setup-houdini')?.value || '').trim(), karma: (document.querySelector<HTMLInputElement>('#setup-karma')?.value || '').trim(), usd: (document.querySelector<HTMLInputElement>('#setup-usd')?.value || '').trim() }, conventions: { usd_format_default: 'usda', shot_number_increment: 10, version_padding: 3, valid_statuses: ['not_started', 'in_progress', 'published'] }, team: [], sequences: [], assets: [], sets: [], library: { materials: [] } }
     try { await apiSaveData(newData); baselineData = cloneData(newData); currentData = cloneData(newData); serverError = ''; render() }
     catch { serverError = 'Could not create pipeline.json. Verify launch.py is running.'; render() }
   })
@@ -349,9 +384,9 @@ function render() {
     : currentPage === 'workspace'
       ? '<p class="inspector-title">Workspace</p><p class="inspector-note">Use section tabs to switch between Assets, Shots, Sets, and Library.</p>'
       : '<p class="inspector-title">Project Info</p><p class="inspector-note">Overview and settings are read directly from pipeline metadata.</p>'
-  const subToolbar = `<div class="sub-toolbar"><button class="tool-chip" data-load-json="1"><span>${iconSvg(Upload, 13)}</span>Load JSON</button><span class="tool-sep"></span><span class="tool-chip muted">pipeline.json active</span></div>`
+  const subToolbar = `<div class="sub-toolbar"><button class="tool-chip" data-load-json="1"><span>${iconSvg(Upload, 13)}</span>Load JSON</button><span class="tool-sep"></span><span class="tool-chip muted">${activeDataFileLabel}</span></div>`
 
-  app.innerHTML = `<div class="app-chrome"><header class="global-toolbar"><div class="toolbar-left"><span class="dot"></span><span>${data.project.name || 'USD Pipeline Toolkit'}</span></div><div class="toolbar-center">${activeLabel}</div><div class="toolbar-right">${headerUnsavedBar()}<button data-save="1">Save</button></div></header>${subToolbar}<div class="layout"><aside class="sidebar"><div class="brand"><p class="brand-title">${data.project.name || 'USD Pipeline Toolkit'}</p><p class="brand-sub">${data.project.code.toUpperCase() || 'PROJECT'}</p></div><nav class="side-nav">${nav.map((item) => `<button class="nav-btn ${item.key === currentPage ? 'active' : ''}" data-page="${item.key}"><span class="nav-icon">${iconSvg(item.icon)}</span><span>${item.label}</span></button>`).join('')}</nav></aside><main class="content"><header class="top-header"><h2>${activeLabel}</h2></header>${flashMessage ? `<p class="flash-message">${flashMessage}</p>` : ''}${saveError ? `<p class="save-error">${saveError}</p>` : ''}${pageContent}</main><aside class="inspector"><div class="inspector-panel"><p class="inspector-title">Actions</p><button data-load-json="1">Load JSON</button><button data-save="1">Save JSON</button><p class="inspector-note">Load replaces in-memory data and saves to pipeline.json.</p>${inspectorContent}</div></aside></div><footer class="status-bar"><span>Console</span><span>Problems</span><span>Changes</span><span>Timing</span><span>Audio</span></footer><input type="file" id="json-import-input" accept=".json,application/json" hidden /></div>${renderModal(data)}`
+  app.innerHTML = `<div class="app-chrome"><header class="global-toolbar"><div class="toolbar-left"><span class="dot"></span><span>${data.project.name || 'USD Pipeline Toolkit'}</span></div><div class="toolbar-center">${activeLabel}</div><div class="toolbar-right">${headerUnsavedBar()}<button data-save="1">Save</button></div></header>${subToolbar}<div class="layout"><aside class="sidebar"><div class="brand"><p class="brand-title">${data.project.name || 'USD Pipeline Toolkit'}</p><p class="brand-sub">${data.project.code.toUpperCase() || 'PROJECT'}</p></div><nav class="side-nav">${nav.map((item) => `<button class="nav-btn ${item.key === currentPage ? 'active' : ''}" data-page="${item.key}"><span class="nav-icon">${iconSvg(item.icon)}</span><span>${item.label}</span></button>`).join('')}</nav></aside><main class="content"><header class="top-header"><h2>${activeLabel}</h2></header>${flashMessage ? `<p class="flash-message">${flashMessage}</p>` : ''}${saveError ? `<p class="save-error">${saveError}</p>` : ''}${pageContent}</main><aside class="inspector"><div class="inspector-panel"><p class="inspector-title">Actions</p><button data-load-json="1">Load JSON</button><button data-save="1">Save JSON</button><p class="inspector-note">Load only updates memory. Save writes back to the currently active JSON file.</p>${inspectorContent}</div></aside></div><footer class="status-bar"><span>Console</span><span>Problems</span><span>Changes</span><span>Timing</span><span>Audio</span></footer><input type="file" id="json-import-input" accept=".json,application/json" hidden /></div>${renderModal(data)}`
 
   bindHandlers()
 }
@@ -390,9 +425,33 @@ function bindHandlers() {
     if (!currentData) return
     saveError = ''
     try {
-      await apiSaveData(currentData)
-      baselineData = cloneData(currentData)
-      flashMessage = 'Saved to pipeline.json'
+      const payload = cloneData(currentData)
+      payload.team = normalizeTeam(payload.team ?? [])
+      if (activeDataFileHandle) {
+        const writable = await activeDataFileHandle.createWritable()
+        await writable.write(JSON.stringify(payload, null, 2) + '\n')
+        await writable.close()
+      } else if (activeFileNeedsPickerSave) {
+        const windowWithPicker = window as Window & { showSaveFilePicker?: (options?: unknown) => Promise<FileSystemFileHandle> }
+        if (!windowWithPicker.showSaveFilePicker) {
+          throw new Error('No file system save picker support in this browser.')
+        }
+        const handle = await windowWithPicker.showSaveFilePicker({
+          suggestedName: activeDataFileLabel || 'pipeline.json',
+          types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+        })
+        const writable = await handle.createWritable()
+        await writable.write(JSON.stringify(payload, null, 2) + '\n')
+        await writable.close()
+        activeDataFileHandle = handle
+        activeDataFileLabel = handle.name
+        activeFileNeedsPickerSave = false
+      } else {
+        await apiSaveData(payload)
+      }
+      currentData = cloneData(payload)
+      baselineData = cloneData(payload)
+      flashMessage = `Saved to ${activeDataFileLabel}`
     } catch {
       saveError = 'Save failed. Your edits are still in memory.'
       flashMessage = ''
@@ -401,7 +460,33 @@ function bindHandlers() {
   }))
 
   const importInput = document.querySelector<HTMLInputElement>('#json-import-input')
-  const triggerImport = () => importInput?.click()
+  const triggerImport = async () => {
+    const windowWithPicker = window as Window & { showOpenFilePicker?: (options?: unknown) => Promise<FileSystemFileHandle[]> }
+    if (windowWithPicker.showOpenFilePicker) {
+      try {
+        const [handle] = await windowWithPicker.showOpenFilePicker({
+          multiple: false,
+          types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+        })
+        const file = await handle.getFile()
+        const text = await file.text()
+        const parsed = JSON.parse(text) as PipelineData
+        parsed.team = normalizeTeam(parsed.team ?? [])
+        currentData = cloneData(parsed)
+        baselineData = cloneData(parsed)
+        activeDataFileHandle = handle
+        activeDataFileLabel = file.name
+        activeFileNeedsPickerSave = false
+        flashMessage = `Loaded ${file.name} to memory`
+        saveError = ''
+        render()
+        return
+      } catch {
+        return
+      }
+    }
+    importInput?.click()
+  }
   document.querySelectorAll('[data-load-json="1"]').forEach((el) => el.addEventListener('click', triggerImport))
   importInput?.addEventListener('change', async () => {
     const file = importInput.files?.[0]
@@ -409,10 +494,13 @@ function bindHandlers() {
     try {
       const text = await file.text()
       const parsed = JSON.parse(text) as PipelineData
+      parsed.team = normalizeTeam(parsed.team ?? [])
       currentData = cloneData(parsed)
       baselineData = cloneData(parsed)
-      await apiSaveData(parsed)
-      flashMessage = `Loaded ${file.name} and saved to pipeline.json`
+      activeDataFileHandle = null
+      activeDataFileLabel = file.name
+      activeFileNeedsPickerSave = true
+      flashMessage = `Loaded ${file.name} to memory`
       saveError = ''
     } catch {
       saveError = 'Failed to load JSON file. Check schema/format.'
@@ -452,6 +540,24 @@ function bindHandlers() {
     const index = Number(input.dataset.material)
     setState((draft) => { draft.library.materials[index].name = input.value })
   }))
+
+  document.querySelectorAll<HTMLInputElement>('[data-team]').forEach((input) => input.addEventListener('change', () => {
+    const index = Number(input.dataset.team)
+    const value = input.value.trim().toLowerCase()
+    if (!Number.isInteger(index)) return
+    if (!value || !/^[a-z0-9]+$/.test(value)) { render(); return }
+    const draftTeam = (currentData?.team ?? []).map((x) => x.toLowerCase())
+    if (draftTeam.some((name, idx) => idx !== index && name === value)) { render(); return }
+    setState((draft) => { draft.team[index] = value })
+  }))
+  document.querySelectorAll<HTMLButtonElement>('[data-delete-team]').forEach((button) => button.addEventListener('click', () => {
+    const index = Number(button.dataset.deleteTeam)
+    if (!Number.isInteger(index)) return
+    setState((draft) => { draft.team.splice(index, 1) })
+  }))
+  document.querySelector('[data-add-team="1"]')?.addEventListener('click', () => {
+    setState((draft) => { draft.team.push('') })
+  })
 
   document.querySelector('[data-add-material="1"]')?.addEventListener('click', () => setState((draft) => { draft.library.materials.push({ name: 'new_material' }) }))
   document.querySelectorAll<HTMLButtonElement>('[data-delete-material]').forEach((button) => button.addEventListener('click', () => setState((draft) => { draft.library.materials.splice(Number(button.dataset.deleteMaterial), 1) })))
@@ -534,7 +640,15 @@ function bindHandlers() {
 }
 
 async function bootstrap() {
-  try { const data = await apiGetData(); baselineData = cloneData(data); currentData = cloneData(data) }
+  try {
+    const data = await apiGetData()
+    data.team = normalizeTeam(data.team ?? [])
+    baselineData = cloneData(data)
+    currentData = cloneData(data)
+    activeDataFileHandle = null
+    activeDataFileLabel = 'pipeline.json'
+    activeFileNeedsPickerSave = false
+  }
   catch (error) { serverError = error instanceof Error ? error.message : 'Unknown error' }
   render()
 }

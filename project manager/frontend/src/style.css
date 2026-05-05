@@ -139,10 +139,19 @@ button, input, select, textarea { font: inherit; }
 .kv-grid { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; }
 .kv-grid p { margin: 0; font-size: 0.7rem; }
 .kv-grid p:nth-child(odd) { color: var(--muted); }
+.team-overview-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.team-overview-list li { font-size: 0.7rem; color: #d7dbe5; }
 
 .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
 .toolbar h3 { margin: 0; font-size: 0.76rem; }
 .workspace-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.workspace-tab-divider {
+  width: 1px;
+  height: 18px;
+  background: #313846;
+  margin: 0 2px;
+  align-self: center;
+}
 .workspace-tab {
   border: 1px solid var(--border);
   background: #191d25;

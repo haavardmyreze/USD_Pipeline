@@ -1,11 +1,11 @@
 {
   "project": {
-    "name": "project_robot_short",
-    "code": "rbt",
-    "created": "2025-01-15"
+    "name": "kinetic_sculpture",
+    "code": "kin26",
+    "created": "2026-05-05"
   },
   "software": {
-    "houdini": "20.5.410",
+    "houdini": "21.0.32",
     "karma": "2.0",
     "usd": "24.08"
   },
@@ -19,25 +19,10 @@
       "published"
     ]
   },
-  "sequences": [
-    {"code": "neon", "name": "Neon District", "shots": [{"shot": "0010", "set": "set_warehouse", "created_at": "2025-01-10T09:00:00", "notes": "layout approved", "steps": {"layout": [{"artist": "ina", "hip": "neon_0010_layout_ina_v003.hip"}], "anim": [], "fx": [], "lighting": [], "assembly": []}}, {"shot": "0020", "set": "set_warehouse", "created_at": "2025-01-12T14:30:00", "notes": "finaled for edit", "steps": {"layout": [{"artist": "ina", "hip": "neon_0020_layout_ina_v002.hip"}], "anim": [{"artist": "kai", "hip": "neon_0020_anim_kai_v004.hip"}], "fx": [{"artist": "nova", "hip": "neon_0020_fx_nova_v002.hip"}], "lighting": [{"artist": "maria", "hip": "neon_0020_lighting_maria_v003.hip"}], "assembly": [{"artist": "maria", "hip": "neon_0020_assembly_maria_v001.hip"}]}}]},
-    {"code": "trmc", "name": "Tram Chase", "shots": [{"shot": "0010", "set": "set_tramline", "created_at": "2025-01-20T10:00:00", "notes": "", "steps": {"layout": [], "anim": [], "fx": [], "lighting": [], "assembly": []}}]}
-  ],
-  "assets": [
-    {"name": "char_robot", "type": "char", "notes": "materials split into separate USD layers (library + per-asset material files), then bound in lookdev/assembly", "steps": {"model": [{"artist": "alex", "hip": "char_robot_model_alex_v003.hip"}], "rig": [{"artist": "alex", "hip": "char_robot_rig_alex_v002.hip"}], "lookdev": [{"artist": "maria", "hip": "char_robot_lookdev_maria_v002.hip"}], "assembly": [{"artist": "maria", "hip": "char_robot_assembly_maria_v001.hip"}]}},
-    {"name": "prop_crate", "type": "prop", "notes": "materials embedded directly in the lookdev USD layer (no separate material-def file for this prop)", "steps": {"model": [{"artist": "alex", "hip": "prop_crate_model_alex_v001.hip"}], "rig": [], "lookdev": [{"artist": "ina", "hip": "prop_crate_lookdev_ina_v001.hip"}], "assembly": [{"artist": "ina", "hip": "prop_crate_assembly_ina_v001.hip"}]}},
-    {"name": "veh_utility_cart", "type": "veh", "notes": "entire asset composed in assembly USD (geometry/material opinions authored upstream, final publish happens as assembly layer)", "steps": {"model": [{"artist": "sam", "hip": "veh_utility_cart_model_sam_v002.hip"}], "rig": [], "lookdev": [], "assembly": [{"artist": "sam", "hip": "veh_utility_cart_assembly_sam_v001.hip"}]}},
-    {"name": "char_bird", "type": "char", "notes": "", "steps": {"model": [], "rig": [], "lookdev": [], "assembly": []}}
-  ],
-  "sets": [
-    {"name": "set_warehouse", "created_at": "2025-01-05T08:00:00", "notes": "main hub", "steps": {"dressing": [{"artist": "ina", "hip": "set_warehouse_dressing_ina_v002.hip"}], "lighting": [], "lookdev": [], "fx": [], "assembly": []}},
-    {"name": "set_tramline", "created_at": "2025-01-09T12:00:00", "notes": "", "steps": {"dressing": [{"artist": "sam", "hip": "set_tramline_dressing_sam_v001.hip"}], "lighting": [{"artist": "maria", "hip": "set_tramline_lighting_maria_v001.hip"}], "lookdev": [{"artist": "maria", "hip": "set_tramline_lookdev_maria_v001.hip"}], "fx": [{"artist": "nova", "hip": "set_tramline_fx_nova_v001.hip"}], "assembly": [{"artist": "maria", "hip": "set_tramline_assembly_maria_v001.hip"}]}}
-  ],
+  "sequences": [],
+  "assets": [],
+  "sets": [],
   "library": {
-    "materials": [
-      {"name": "metal_bare"},
-      {"name": "plastic"},
-      {"name": "glass"}
-    ]
+    "materials": []
   }
 }
