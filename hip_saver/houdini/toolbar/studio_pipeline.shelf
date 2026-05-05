@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <toolshelf name="studio_pipeline" label="Studio Pipeline">
+    <memberTool name="studio_save_tool"/>
+  </toolshelf>
+
+  <tool name="studio_save_tool" label="Studio Save" icon="BUTTONS_save">
+    <helpText>Studio-managed HIP save dialog.</helpText>
+    <script scriptType="python"><![CDATA[
+import runpy
+
+module_globals = runpy.run_path(r"V:/Projects_Havard/USD_RND/USD_Pipeline/hip_saver/tools/hip_saver.py")
+module_globals["run_from_shelf"]()
+]]></script>
+  </tool>
+</shelfDocument>
