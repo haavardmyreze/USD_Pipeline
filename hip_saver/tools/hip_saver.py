@@ -173,14 +173,21 @@ def _load_pipeline_data(project_root: str) -> PipelineData:
     assets = [entry["name"] for entry in data.get("assets", []) if "name" in entry]
     sets = [entry["name"] for entry in data.get("sets", []) if "name" in entry]
     shots: List[str] = []
-    for sequence in data.get("sequences", []):
-        seq_code = sequence.get("code")
-        if not seq_code:
-            continue
-        for shot in sequence.get("shots", []):
+    if isinstance(data.get("shots"), list):
+        for shot in data.get("shots", []):
+            seq_code = shot.get("sequence")
             shot_number = shot.get("shot")
-            if shot_number:
+            if seq_code and shot_number:
                 shots.append(f"{seq_code}_{shot_number}")
+    else:
+        for sequence in data.get("sequences", []):
+            seq_code = sequence.get("code")
+            if not seq_code:
+                continue
+            for shot in sequence.get("shots", []):
+                shot_number = shot.get("shot")
+                if shot_number:
+                    shots.append(f"{seq_code}_{shot_number}")
 
     software = data.get("software", {})
     return PipelineData(

@@ -1,44 +1,76 @@
 ﻿import { createTable, getCoreRowModel, type ColumnDef, type RowData } from '@tanstack/table-core'
-import { Boxes, Clapperboard, MessageSquare, Settings, Trash2, Upload, Users, createElement } from 'lucide'
+import { Boxes, Clapperboard, Settings, Trash2, Upload, Users, createElement } from 'lucide'
 import './style.css'
 
-type Status = 'not_started' | 'in_progress' | 'published'
 type PageKey = 'overview' | 'workspace' | 'artists' | 'settings'
 type WorkspaceSection = 'assets' | 'shots' | 'sets' | 'library'
 
-const FINAL_STEPS = { asset: 'assembly', shot: 'assembly', set: 'assembly' } as const
-
-interface PublishRecord { artist: string | null; hip: string | null }
+interface PublishRecord { artist: string | null; hip?: string | null; hip_file?: string | null; published_at?: string | null }
 interface Project { name: string; code: string; created: string }
 interface Software { houdini: string; karma: string; usd: string }
 interface Conventions { usd_format_default: 'usda' | 'usdc'; shot_number_increment: number; version_padding: number; valid_statuses: string[] }
-interface Asset { name: string; type: 'char' | 'prop' | 'veh' | 'fx'; notes: string; steps: { model: PublishRecord[]; rig: PublishRecord[]; lookdev: PublishRecord[]; assembly: PublishRecord[] } }
-interface Shot { shot: string; set: string; created_at: string; notes: string; steps: { layout: PublishRecord[]; anim: PublishRecord[]; fx: PublishRecord[]; lighting: PublishRecord[]; assembly: PublishRecord[] } }
-interface Sequence { code: string; name: string; shots: Shot[] }
-interface SetItem { name: string; created_at: string; notes: string; steps: { dressing: PublishRecord[]; lighting: PublishRecord[]; lookdev: PublishRecord[]; fx: PublishRecord[]; assembly: PublishRecord[] } }
+type TaskMap = Record<string, PublishRecord | null>
+type LegacyStepMap = Record<string, PublishRecord[]>
+interface Asset { name: string; type: 'char' | 'prop' | 'veh' | 'fx'; notes?: string; tasks?: TaskMap; steps?: LegacyStepMap }
+interface Shot { sequence: string; shot: string; set: string; created_at: string; notes?: string; tasks?: TaskMap; steps?: LegacyStepMap }
+interface Sequence { code: string; name: string; shots: Array<Omit<Shot, 'sequence'>> }
+interface SetItem { name: string; created_at: string; notes?: string; tasks?: TaskMap; steps?: LegacyStepMap }
 interface LibraryMaterial { name: string }
-interface PipelineData { project: Project; software: Software; conventions: Conventions; team: string[]; sequences: Sequence[]; assets: Asset[]; sets: SetItem[]; library: { materials: LibraryMaterial[] } }
+interface PipelineData { project: Project; software: Software; conventions: Conventions; team: string[]; shots: Shot[]; assets: Asset[]; sets: SetItem[]; library: { materials: LibraryMaterial[] }; sequences?: Sequence[] }
 
 interface ArtistTask {
   artist: string
   kind: 'asset' | 'shot' | 'set'
   entity: string
   step: string
-  status: Status
   hip: string | null
 }
 
 type ShotRow = Shot & { sequence: string }
 
-function deriveStatus(steps: Record<string, PublishRecord[]>, finalStep: string): Status {
-  const values = Object.values(steps)
-  if (values.every((entries) => entries.length === 0)) return 'not_started'
-  if ((steps[finalStep] ?? []).length > 0) return 'published'
-  return 'in_progress'
+function latestArtist(record: PublishRecord | null | undefined) { return record?.artist ?? '-' }
+function latestHip(record: PublishRecord | null | undefined) { return record?.hip_file ?? record?.hip ?? '-' }
+
+function toTaskMap(entity: { tasks?: TaskMap; steps?: LegacyStepMap }, taskNames: string[]): TaskMap {
+  const out: TaskMap = {}
+  taskNames.forEach((name) => {
+    const taskValue = entity.tasks?.[name]
+    if (taskValue && (taskValue.artist || taskValue.hip)) {
+      out[name] = taskValue
+      return
+    }
+    const legacy = entity.steps?.[name]
+    out[name] = legacy && legacy.length ? legacy[legacy.length - 1] : null
+  })
+  return out
 }
 
-function latestRecord(records: PublishRecord[]) { return records.length ? records[records.length - 1] : null }
-function latestArtist(records: PublishRecord[]) { return latestRecord(records)?.artist ?? '-' }
+function normalizePipelineData(data: PipelineData): PipelineData {
+  const fromLegacyShots = (data.sequences ?? []).flatMap((sequence) =>
+    sequence.shots.map((shot) => ({ ...shot, sequence: sequence.code })),
+  )
+  const normalizedShots = (data.shots && data.shots.length ? data.shots : fromLegacyShots).map((shot) => ({
+    ...shot,
+    tasks: toTaskMap(shot, ['layout', 'anim', 'fx', 'lighting', 'assembly']),
+  }))
+  return {
+    ...data,
+    assets: (data.assets ?? []).map((asset) => ({
+      ...asset,
+      type: asset.type ?? 'prop',
+      tasks: toTaskMap(asset, ['model', 'rig', 'lookdev', 'assembly']),
+    })),
+    sets: (data.sets ?? []).map((setItem) => ({
+      ...setItem,
+      created_at: setItem.created_at ?? '',
+      tasks: toTaskMap(setItem, ['dressing', 'lighting', 'lookdev', 'fx', 'assembly']),
+    })),
+    shots: normalizedShots.map((shot) => ({
+      ...shot,
+      created_at: shot.created_at ?? '',
+    })),
+  }
+}
 
 const appElement = document.querySelector<HTMLDivElement>('#app')
 if (!appElement) throw new Error('App root missing')
@@ -56,13 +88,11 @@ let showSetModal = false
 let workspaceSection: WorkspaceSection = 'assets'
 let artistFilter = ''
 let artistKindFilter: 'all' | 'asset' | 'shot' | 'set' = 'all'
-let artistStatusFilter: 'all' | Status = 'all'
 let flashMessage = ''
 let activeDataFileLabel = 'pipeline.json'
 let activeDataFileHandle: FileSystemFileHandle | null = null
 let activeFileNeedsPickerSave = false
 
-const statusColor: Record<Status, string> = { not_started: '#6b7280', in_progress: '#f59e0b', published: '#22c55e' }
 const nav: Array<{ key: PageKey; label: string; icon: unknown }> = [
   { key: 'overview', label: 'Overview', icon: Clapperboard },
   { key: 'workspace', label: 'Pipeline Workspace', icon: Boxes },
@@ -71,33 +101,30 @@ const nav: Array<{ key: PageKey; label: string; icon: unknown }> = [
 ]
 
 function getAllShots(data: PipelineData): ShotRow[] {
-  return data.sequences.flatMap((sequence) => sequence.shots.map((shot) => ({ ...shot, sequence: sequence.code })))
+  return data.shots
 }
 
 function getArtistTasks(data: PipelineData): ArtistTask[] {
   const tasks: ArtistTask[] = []
 
   data.assets.forEach((asset) => {
-    const status = deriveStatus(asset.steps, FINAL_STEPS.asset)
-    Object.entries(asset.steps).forEach(([step, records]) => {
-      const record = latestRecord(records)
-      if (record?.artist) tasks.push({ artist: record.artist, kind: 'asset', entity: asset.name, step, status, hip: record.hip })
+    const tasksByStep = toTaskMap(asset, ['model', 'rig', 'lookdev', 'assembly'])
+    Object.entries(tasksByStep).forEach(([step, record]) => {
+      if (record?.artist) tasks.push({ artist: record.artist, kind: 'asset', entity: asset.name, step, hip: latestHip(record) })
     })
   })
 
   getAllShots(data).forEach((shot) => {
-    const status = deriveStatus(shot.steps, FINAL_STEPS.shot)
-    Object.entries(shot.steps).forEach(([step, records]) => {
-      const record = latestRecord(records)
-      if (record?.artist) tasks.push({ artist: record.artist, kind: 'shot', entity: `${shot.sequence}_${shot.shot}`, step, status, hip: record.hip })
+    const tasksByStep = toTaskMap(shot, ['layout', 'anim', 'fx', 'lighting', 'assembly'])
+    Object.entries(tasksByStep).forEach(([step, record]) => {
+      if (record?.artist) tasks.push({ artist: record.artist, kind: 'shot', entity: `${shot.sequence}_${shot.shot}`, step, hip: latestHip(record) })
     })
   })
 
   data.sets.forEach((setItem) => {
-    const status = deriveStatus(setItem.steps, FINAL_STEPS.set)
-    Object.entries(setItem.steps).forEach(([step, records]) => {
-      const record = latestRecord(records)
-      if (record?.artist) tasks.push({ artist: record.artist, kind: 'set', entity: setItem.name, step, status, hip: record.hip })
+    const tasksByStep = toTaskMap(setItem, ['dressing', 'lighting', 'lookdev', 'fx', 'assembly'])
+    Object.entries(tasksByStep).forEach(([step, record]) => {
+      if (record?.artist) tasks.push({ artist: record.artist, kind: 'set', entity: setItem.name, step, hip: latestHip(record) })
     })
   })
 
@@ -146,8 +173,6 @@ function normalizeTeam(input: string[]) {
   return out
 }
 
-function statusPill(status: Status) { return `<span class="status-pill" style="--status:${statusColor[status]};">${status.replace('_', ' ')}</span>` }
-function notesIcon(notes: string) { return notes.trim() ? `<span class="notes-icon" title="Has notes">${iconSvg(MessageSquare, 14)}</span>` : '' }
 function headerUnsavedBar() { return isDirty() ? '<span class="unsaved-badge">Unsaved changes</span>' : '' }
 
 function buildTable<TData extends RowData>(data: TData[], columns: ColumnDef<TData>[]) {
@@ -190,21 +215,15 @@ function renderDataTable<T>(type: 'assets' | 'shots' | 'sets', rows: T[], column
 
 function renderOverview(data: PipelineData) {
   const shots = getAllShots(data)
-  const entityStats = [
-    { label: 'Assets', values: data.assets.map((a) => deriveStatus(a.steps, FINAL_STEPS.asset)) },
-    { label: 'Shots', values: shots.map((s) => deriveStatus(s.steps, FINAL_STEPS.shot)) },
-    { label: 'Sets', values: data.sets.map((s) => deriveStatus(s.steps, FINAL_STEPS.set)) },
+  const entityCounts = [
+    { label: 'Assets', value: data.assets.length },
+    { label: 'Shots', value: shots.length },
+    { label: 'Sets', value: data.sets.length },
   ]
 
-  const cards = entityStats.map((entry) => {
-    const counts = {
-      not_started: entry.values.filter((x) => x === 'not_started').length,
-      in_progress: entry.values.filter((x) => x === 'in_progress').length,
-      published: entry.values.filter((x) => x === 'published').length,
-    }
-
-    return `<article class="surface-card metric-card"><h3>${entry.label}</h3><p class="count">${entry.values.length}</p><div class="dots"><span style="color:${statusColor.not_started}">● ${counts.not_started}</span><span style="color:${statusColor.in_progress}">● ${counts.in_progress}</span><span style="color:${statusColor.published}">● ${counts.published}</span></div></article>`
-  }).join('')
+  const cards = entityCounts
+    .map((entry) => `<article class="surface-card metric-card"><h3>${entry.label}</h3><p class="count">${entry.value}</p></article>`)
+    .join('')
 
   const setRows = data.sets.map((setItem) => {
     const related = shots.filter((shot) => shot.set === setItem.name).map((shot) => `${shot.sequence}_${shot.shot}`).join(', ') || '-'
@@ -216,66 +235,63 @@ function renderOverview(data: PipelineData) {
 }
 
 function renderAssetsSection(data: PipelineData) {
+  const taskNames = ['model', 'rig', 'lookdev', 'assembly']
   const columns: ColumnDef<Asset>[] = [
     { header: 'Name', accessorKey: 'name' },
     { header: 'Type', cell: ({ row }) => `<span class="type-badge">${row.original.type}</span>` },
-    { header: 'Status', cell: ({ row }) => `${statusPill(deriveStatus(row.original.steps, FINAL_STEPS.asset))} ${notesIcon(row.original.notes)}` },
-    { header: 'Model', cell: ({ row }) => latestArtist(row.original.steps.model) },
-    { header: 'Rig', cell: ({ row }) => latestArtist(row.original.steps.rig) },
-    { header: 'Lookdev', cell: ({ row }) => latestArtist(row.original.steps.lookdev) },
-    { header: 'Assembly', cell: ({ row }) => latestArtist(row.original.steps.assembly) },
-    { header: 'Notes', cell: ({ row }) => `<span class="truncate" title="${row.original.notes}">${row.original.notes || '-'}</span>` },
+    { header: 'Model', cell: ({ row }) => latestArtist(toTaskMap(row.original, taskNames).model) },
+    { header: 'Rig', cell: ({ row }) => latestArtist(toTaskMap(row.original, taskNames).rig) },
+    { header: 'Lookdev', cell: ({ row }) => latestArtist(toTaskMap(row.original, taskNames).lookdev) },
+    { header: 'Assembly', cell: ({ row }) => latestArtist(toTaskMap(row.original, taskNames).assembly) },
   ]
 
-  const expand = (asset: Asset, idx: number) => `<div class="expanded-grid"><div>${Object.entries(asset.steps).map(([step, records]) => `<p><strong>${step}</strong>: ${latestArtist(records)} (${latestRecord(records)?.hip ?? '-'})</p>`).join('')}</div><div><label>Notes</label><textarea data-edit-notes="asset-${idx}">${asset.notes}</textarea></div></div>`
+  const expand = (asset: Asset) => {
+    const tasksByStep = toTaskMap(asset, taskNames)
+    return `<div class="expanded-grid"><div>${Object.entries(tasksByStep).map(([step, record]) => `<p><strong>${step}</strong>: ${latestArtist(record)} (${latestHip(record)})</p>`).join('')}</div></div>`
+  }
   return `<article class="surface-card"><div class="toolbar"><h3>Assets</h3><button data-open-modal="asset">Add Asset</button></div>${renderDataTable('assets', data.assets, columns, expand)}</article>`
 }
 
 function renderShotsSection(data: PipelineData) {
-  const colCount = 10
-  let html = '<article class="surface-card"><div class="toolbar"><h3>Shots</h3><button data-open-modal="shot">Add Shot</button></div><table class="data-table"><thead><tr><th>Sequence</th><th>Shot</th><th>Set</th><th>Status</th><th>Layout</th><th>Anim</th><th>FX</th><th>Lighting</th><th>Assembly</th><th>Notes</th></tr></thead><tbody>'
-  let flatIndex = 0
-  data.sequences.forEach((sequence) => {
-    html += `<tr class="group-row"><td colspan="${colCount}">Sequence ${sequence.code} - ${sequence.name}</td></tr>`
-    sequence.shots.forEach((shot) => {
-      const row = { ...shot, sequence: sequence.code }
-      const rowId = `shots-${flatIndex}`
-      const expanded = expandedRowId === rowId
-      html += `<tr class="table-row-clickable" data-expand="${rowId}">`
-      html += `<td>${row.sequence}</td>`
-      html += `<td>${row.shot}</td>`
-      html += `<td><select data-shot-set="${flatIndex}">${data.sets.map((s) => `<option value="${s.name}" ${row.set === s.name ? 'selected' : ''}>${s.name}</option>`).join('')}</select></td>`
-      html += `<td>${statusPill(deriveStatus(row.steps, FINAL_STEPS.shot))} ${notesIcon(row.notes)}</td>`
-      html += `<td>${latestArtist(row.steps.layout)}</td>`
-      html += `<td>${latestArtist(row.steps.anim)}</td>`
-      html += `<td>${latestArtist(row.steps.fx)}</td>`
-      html += `<td>${latestArtist(row.steps.lighting)}</td>`
-      html += `<td>${latestArtist(row.steps.assembly)}</td>`
-      html += `<td><span class="truncate" title="${row.notes}">${row.notes || '-'}</span></td>`
-      html += '</tr>'
-      if (expanded) {
-        html += `<tr class="expanded-row"><td colspan="${colCount}"><div class="expanded-grid"><div>${Object.entries(shot.steps).map(([step, records]) => `<p><strong>${step}</strong>: ${latestArtist(records)} (${latestRecord(records)?.hip ?? '-'})</p>`).join('')}</div><div><label>Notes</label><textarea data-edit-notes="shot-${flatIndex}">${shot.notes}</textarea></div></div></td></tr>`
-      }
-      flatIndex += 1
-    })
+  const colCount = 8
+  let html = '<article class="surface-card"><div class="toolbar"><h3>Shots</h3><button data-open-modal="shot">Add Shot</button></div><table class="data-table"><thead><tr><th>Sequence</th><th>Shot</th><th>Set</th><th>Layout</th><th>Anim</th><th>FX</th><th>Lighting</th><th>Assembly</th></tr></thead><tbody>'
+  data.shots.forEach((row, flatIndex) => {
+    const tasksByStep = toTaskMap(row, ['layout', 'anim', 'fx', 'lighting', 'assembly'])
+    const rowId = `shots-${flatIndex}`
+    const expanded = expandedRowId === rowId
+    html += `<tr class="table-row-clickable" data-expand="${rowId}">`
+    html += `<td>${row.sequence}</td>`
+    html += `<td>${row.shot}</td>`
+    html += `<td><select data-shot-set="${flatIndex}">${data.sets.map((s) => `<option value="${s.name}" ${row.set === s.name ? 'selected' : ''}>${s.name}</option>`).join('')}</select></td>`
+    html += `<td>${latestArtist(tasksByStep.layout)}</td>`
+    html += `<td>${latestArtist(tasksByStep.anim)}</td>`
+    html += `<td>${latestArtist(tasksByStep.fx)}</td>`
+    html += `<td>${latestArtist(tasksByStep.lighting)}</td>`
+    html += `<td>${latestArtist(tasksByStep.assembly)}</td>`
+    html += '</tr>'
+    if (expanded) {
+      html += `<tr class="expanded-row"><td colspan="${colCount}"><div class="expanded-grid"><div>${Object.entries(tasksByStep).map(([step, record]) => `<p><strong>${step}</strong>: ${latestArtist(record)} (${latestHip(record)})</p>`).join('')}</div></div></td></tr>`
+    }
   })
   html += '</tbody></table></article>'
   return html
 }
 
 function renderSetsSection(data: PipelineData) {
+  const taskNames = ['dressing', 'lighting', 'lookdev', 'fx', 'assembly']
   const columns: ColumnDef<SetItem>[] = [
     { header: 'Name', accessorKey: 'name' },
-    { header: 'Status', cell: ({ row }) => `${statusPill(deriveStatus(row.original.steps, FINAL_STEPS.set))} ${notesIcon(row.original.notes)}` },
-    { header: 'Dressing', cell: ({ row }) => latestArtist(row.original.steps.dressing) },
-    { header: 'Lighting', cell: ({ row }) => latestArtist(row.original.steps.lighting) },
-    { header: 'Lookdev', cell: ({ row }) => latestArtist(row.original.steps.lookdev) },
-    { header: 'FX', cell: ({ row }) => latestArtist(row.original.steps.fx) },
-    { header: 'Assembly', cell: ({ row }) => latestArtist(row.original.steps.assembly) },
-    { header: 'Notes', cell: ({ row }) => `<span class="truncate" title="${row.original.notes}">${row.original.notes || '-'}</span>` },
+    { header: 'Dressing', cell: ({ row }) => latestArtist(toTaskMap(row.original, taskNames).dressing) },
+    { header: 'Lighting', cell: ({ row }) => latestArtist(toTaskMap(row.original, taskNames).lighting) },
+    { header: 'Lookdev', cell: ({ row }) => latestArtist(toTaskMap(row.original, taskNames).lookdev) },
+    { header: 'FX', cell: ({ row }) => latestArtist(toTaskMap(row.original, taskNames).fx) },
+    { header: 'Assembly', cell: ({ row }) => latestArtist(toTaskMap(row.original, taskNames).assembly) },
   ]
 
-  const expand = (setItem: SetItem, idx: number) => `<div class="expanded-grid"><div>${Object.entries(setItem.steps).map(([step, records]) => `<p><strong>${step}</strong>: ${latestArtist(records)} (${latestRecord(records)?.hip ?? '-'})</p>`).join('')}</div><div><label>Notes</label><textarea data-edit-notes="set-${idx}">${setItem.notes}</textarea></div></div>`
+  const expand = (setItem: SetItem) => {
+    const tasksByStep = toTaskMap(setItem, taskNames)
+    return `<div class="expanded-grid"><div>${Object.entries(tasksByStep).map(([step, record]) => `<p><strong>${step}</strong>: ${latestArtist(record)} (${latestHip(record)})</p>`).join('')}</div></div>`
+  }
   return `<article class="surface-card"><div class="toolbar"><h3>Sets</h3><button data-open-modal="set">Add Set</button></div>${renderDataTable('sets', data.sets, columns, expand)}</article>`
 }
 
@@ -306,8 +322,7 @@ function renderArtists(data: PipelineData) {
   const tasks = getArtistTasks(data).filter((task) => {
     const artistMatch = task.artist.toLowerCase().includes(artistFilter.toLowerCase())
     const kindMatch = artistKindFilter === 'all' || task.kind === artistKindFilter
-    const statusMatch = artistStatusFilter === 'all' || task.status === artistStatusFilter
-    return artistMatch && kindMatch && statusMatch
+    return artistMatch && kindMatch
   })
   const grouped = new Map<string, ArtistTask[]>()
   tasks.forEach((task) => {
@@ -318,13 +333,13 @@ function renderArtists(data: PipelineData) {
 
   let groupedRows = ''
   for (const [artist, artistTasks] of grouped.entries()) {
-    groupedRows += `<tr class="group-row"><td colspan="5">${artist}</td></tr>`
+    groupedRows += `<tr class="group-row"><td colspan="4">${artist}</td></tr>`
     groupedRows += artistTasks
-      .map((task) => `<tr><td>${task.kind}</td><td>${task.entity}</td><td>${task.step}</td><td>${statusPill(task.status)}</td><td>${task.hip ?? '-'}</td></tr>`)
+      .map((task) => `<tr><td>${task.kind}</td><td>${task.entity}</td><td>${task.step}</td><td>${task.hip ?? '-'}</td></tr>`)
       .join('')
   }
 
-  return `<section class="section-block"><h2 class="section-title">Artist Task Map</h2><article class="surface-card artist-filters"><input data-artist-filter="name" placeholder="Filter by artist name" value="${artistFilter}" /><select data-artist-filter="kind"><option value="all" ${artistKindFilter === 'all' ? 'selected' : ''}>All types</option><option value="asset" ${artistKindFilter === 'asset' ? 'selected' : ''}>Asset</option><option value="shot" ${artistKindFilter === 'shot' ? 'selected' : ''}>Shot</option><option value="set" ${artistKindFilter === 'set' ? 'selected' : ''}>Set</option></select><select data-artist-filter="status"><option value="all" ${artistStatusFilter === 'all' ? 'selected' : ''}>All statuses</option><option value="not_started" ${artistStatusFilter === 'not_started' ? 'selected' : ''}>Not started</option><option value="in_progress" ${artistStatusFilter === 'in_progress' ? 'selected' : ''}>In progress</option><option value="published" ${artistStatusFilter === 'published' ? 'selected' : ''}>Published</option></select><button data-apply-artist-filters="1">Apply</button></article><article class="surface-card"><table class="simple-table"><thead><tr><th>Type</th><th>Entity</th><th>Step</th><th>Status</th><th>HIP</th></tr></thead><tbody>${groupedRows || '<tr><td colspan="5">No artist assignments match current filters.</td></tr>'}</tbody></table></article></section>`
+  return `<section class="section-block"><h2 class="section-title">Artist Task Map</h2><article class="surface-card artist-filters"><input data-artist-filter="name" placeholder="Filter by artist name" value="${artistFilter}" /><select data-artist-filter="kind"><option value="all" ${artistKindFilter === 'all' ? 'selected' : ''}>All types</option><option value="asset" ${artistKindFilter === 'asset' ? 'selected' : ''}>Asset</option><option value="shot" ${artistKindFilter === 'shot' ? 'selected' : ''}>Shot</option><option value="set" ${artistKindFilter === 'set' ? 'selected' : ''}>Set</option></select><button data-apply-artist-filters="1">Apply</button></article><article class="surface-card"><table class="simple-table"><thead><tr><th>Type</th><th>Entity</th><th>Step</th><th>HIP</th></tr></thead><tbody>${groupedRows || '<tr><td colspan="4">No artist assignments match current filters.</td></tr>'}</tbody></table></article></section>`
 }
 
 function renderSettings(data: PipelineData) {
@@ -337,9 +352,9 @@ function renderSettings(data: PipelineData) {
 }
 
 function suggestShot(data: PipelineData, sequenceCode: string) {
-  const sequence = data.sequences.find((s) => s.code === sequenceCode)
-  if (!sequence || sequence.shots.length === 0) return String(data.conventions.shot_number_increment).padStart(4, '0')
-  const maxShot = sequence.shots.reduce((acc, current) => Math.max(acc, Number(current.shot)), 0)
+  const shotsInSequence = data.shots.filter((shot) => shot.sequence === sequenceCode)
+  if (shotsInSequence.length === 0) return String(data.conventions.shot_number_increment).padStart(4, '0')
+  const maxShot = shotsInSequence.reduce((acc, current) => Math.max(acc, Number(current.shot)), 0)
   return String(maxShot + data.conventions.shot_number_increment).padStart(4, '0')
 }
 
@@ -351,8 +366,9 @@ function renderModal(data: PipelineData) {
   }
 
   if (showShotModal) {
-    const firstSeq = data.sequences[0]?.code ?? ''
-    return `<div class="modal"><div class="modal-body"><h3>Add Shot</h3><label>Sequence<select id="shot-seq">${data.sequences.map((s) => `<option value="${s.code}">${s.code}</option>`).join('')}</select></label><button data-inline-sequence="1">Add Sequence Inline</button><div id="inline-seq"></div><label>Shot Number<input id="shot-number" value="${suggestShot(data, firstSeq)}"/></label><label>Set<select id="shot-set">${data.sets.map((s) => `<option value="${s.name}">${s.name}</option>`).join('')}</select></label><div class="modal-actions"><button data-close-modal="1">Cancel</button><button data-create-shot="1">Create</button></div></div></div>`
+    const knownSequences = Array.from(new Set(data.shots.map((s) => s.sequence))).filter(Boolean)
+    const firstSeq = knownSequences[0] ?? ''
+    return `<div class="modal"><div class="modal-body"><h3>Add Shot</h3><label>Sequence<input id="shot-seq" list="shot-seq-options" value="${firstSeq}" /></label><datalist id="shot-seq-options">${knownSequences.map((code) => `<option value="${code}"></option>`).join('')}</datalist><label>Shot Number<input id="shot-number" value="${suggestShot(data, firstSeq)}"/></label><label>Set<select id="shot-set">${data.sets.map((s) => `<option value="${s.name}">${s.name}</option>`).join('')}</select></label><div class="modal-actions"><button data-close-modal="1">Cancel</button><button data-create-shot="1">Create</button></div></div></div>`
   }
 
   return `<div class="modal"><div class="modal-body"><h3>Add Set</h3><label>Name<input id="set-name" value="set_"/></label><div class="modal-actions"><button data-close-modal="1">Cancel</button><button data-create-set="1">Create</button></div></div></div>`
@@ -363,7 +379,7 @@ function renderFirstRun() {
   document.querySelector<HTMLButtonElement>('#setup-create')?.addEventListener('click', async () => {
     const name = (document.querySelector<HTMLInputElement>('#setup-name')?.value || '').trim()
     const code = (document.querySelector<HTMLInputElement>('#setup-code')?.value || '').trim()
-    const newData: PipelineData = { project: { name, code, created: new Date().toISOString().slice(0, 10) }, software: { houdini: (document.querySelector<HTMLInputElement>('#setup-houdini')?.value || '').trim(), karma: (document.querySelector<HTMLInputElement>('#setup-karma')?.value || '').trim(), usd: (document.querySelector<HTMLInputElement>('#setup-usd')?.value || '').trim() }, conventions: { usd_format_default: 'usda', shot_number_increment: 10, version_padding: 3, valid_statuses: ['not_started', 'in_progress', 'published'] }, team: [], sequences: [], assets: [], sets: [], library: { materials: [] } }
+    const newData: PipelineData = { project: { name, code, created: new Date().toISOString().slice(0, 10) }, software: { houdini: (document.querySelector<HTMLInputElement>('#setup-houdini')?.value || '').trim(), karma: (document.querySelector<HTMLInputElement>('#setup-karma')?.value || '').trim(), usd: (document.querySelector<HTMLInputElement>('#setup-usd')?.value || '').trim() }, conventions: { usd_format_default: 'usda', shot_number_increment: 10, version_padding: 3, valid_statuses: ['not_started', 'in_progress', 'published'] }, team: [], shots: [], assets: [], sets: [], library: { materials: [] } }
     try { await apiSaveData(newData); baselineData = cloneData(newData); currentData = cloneData(newData); serverError = ''; render() }
     catch { serverError = 'Could not create pipeline.json. Verify launch.py is running.'; render() }
   })
@@ -380,7 +396,7 @@ function render() {
   const pageContent = currentPage === 'overview' ? renderOverview(data) : currentPage === 'workspace' ? renderWorkspace(data) : currentPage === 'artists' ? renderArtists(data) : renderSettings(data)
   const activeLabel = nav.find((item) => item.key === currentPage)?.label ?? ''
   const inspectorContent = currentPage === 'artists'
-    ? '<p class="inspector-title">Artist Filters</p><p class="inspector-note">Use the controls in the main panel to filter by artist, type, and status.</p>'
+    ? '<p class="inspector-title">Artist Filters</p><p class="inspector-note">Use the controls in the main panel to filter by artist and type.</p>'
     : currentPage === 'workspace'
       ? '<p class="inspector-title">Workspace</p><p class="inspector-note">Use section tabs to switch between Assets, Shots, Sets, and Library.</p>'
       : '<p class="inspector-title">Project Info</p><p class="inspector-note">Overview and settings are read directly from pipeline metadata.</p>'
@@ -392,13 +408,8 @@ function render() {
 }
 
 function updateShotByFlatIndex(draft: PipelineData, flatIndex: number, updater: (shot: Shot) => void) {
-  let cursor = 0
-  for (const sequence of draft.sequences) {
-    for (const shot of sequence.shots) {
-      if (cursor === flatIndex) { updater(shot); return }
-      cursor += 1
-    }
-  }
+  if (flatIndex < 0 || flatIndex >= draft.shots.length) return
+  updater(draft.shots[flatIndex])
 }
 
 function bindHandlers() {
@@ -417,7 +428,6 @@ function bindHandlers() {
   document.querySelector('[data-apply-artist-filters="1"]')?.addEventListener('click', () => {
     artistFilter = document.querySelector<HTMLInputElement>('[data-artist-filter="name"]')?.value ?? ''
     artistKindFilter = (document.querySelector<HTMLSelectElement>('[data-artist-filter="kind"]')?.value ?? 'all') as 'all' | 'asset' | 'shot' | 'set'
-    artistStatusFilter = (document.querySelector<HTMLSelectElement>('[data-artist-filter="status"]')?.value ?? 'all') as 'all' | Status
     render()
   })
 
@@ -470,7 +480,7 @@ function bindHandlers() {
         })
         const file = await handle.getFile()
         const text = await file.text()
-        const parsed = JSON.parse(text) as PipelineData
+    const parsed = normalizePipelineData(JSON.parse(text) as PipelineData)
         parsed.team = normalizeTeam(parsed.team ?? [])
         currentData = cloneData(parsed)
         baselineData = cloneData(parsed)
@@ -493,7 +503,7 @@ function bindHandlers() {
     if (!file) return
     try {
       const text = await file.text()
-      const parsed = JSON.parse(text) as PipelineData
+      const parsed = normalizePipelineData(JSON.parse(text) as PipelineData)
       parsed.team = normalizeTeam(parsed.team ?? [])
       currentData = cloneData(parsed)
       baselineData = cloneData(parsed)
@@ -513,17 +523,6 @@ function bindHandlers() {
   document.querySelectorAll<HTMLTableRowElement>('[data-expand]').forEach((row) => row.addEventListener('click', () => {
     expandedRowId = expandedRowId === row.dataset.expand ? null : row.dataset.expand ?? null
     render()
-  }))
-
-  document.querySelectorAll<HTMLTextAreaElement>('[data-edit-notes]').forEach((el) => el.addEventListener('change', () => {
-    const [kind, indexText] = (el.dataset.editNotes ?? '').split('-')
-    const index = Number(indexText)
-    if (!Number.isInteger(index)) return
-    setState((draft) => {
-      if (kind === 'asset') draft.assets[index].notes = el.value
-      if (kind === 'set') draft.sets[index].notes = el.value
-      if (kind === 'shot') updateShotByFlatIndex(draft, index, (shot) => { shot.notes = el.value })
-    })
   }))
 
   document.querySelectorAll<HTMLSelectElement>('[data-shot-set]').forEach((select) => select.addEventListener('change', () => {
@@ -599,7 +598,7 @@ function bindHandlers() {
     const type = (document.querySelector<HTMLSelectElement>('#asset-type')?.value ?? 'char') as Asset['type']
     const name = (document.querySelector<HTMLInputElement>('#asset-name')?.value ?? '').trim()
     if (!/^[a-z0-9_]+$/.test(name) || name.includes('__')) return
-    const entry: Asset = { name, type, notes: '', steps: { model: [], rig: [], lookdev: [], assembly: [] } }
+    const entry: Asset = { name, type, tasks: { model: null, rig: null, lookdev: null, assembly: null } }
     const data = await apiCreate('asset', entry)
     baselineData = cloneData(data)
     currentData = cloneData(data)
@@ -608,29 +607,21 @@ function bindHandlers() {
   })
 
   document.querySelector('[data-create-shot="1"]')?.addEventListener('click', async () => {
-    const sequence = document.querySelector<HTMLSelectElement>('#shot-seq')?.value ?? ''
+    const sequence = (document.querySelector<HTMLInputElement>('#shot-seq')?.value ?? '').trim()
     const shotNumber = (document.querySelector<HTMLInputElement>('#shot-number')?.value ?? '').padStart(4, '0')
     const setName = document.querySelector<HTMLSelectElement>('#shot-set')?.value ?? ''
-    const seqCode = (document.querySelector<HTMLInputElement>('#new-seq-code')?.value ?? '').trim()
-    const seqName = (document.querySelector<HTMLInputElement>('#new-seq-name')?.value ?? '').trim()
-    if (seqCode) setState((draft) => draft.sequences.push({ code: seqCode, name: seqName || seqCode, shots: [] }))
-    const effectiveSequence = seqCode || sequence
-    const entry: Shot = { shot: shotNumber, set: setName, created_at: new Date().toISOString(), notes: '', steps: { layout: [], anim: [], fx: [], lighting: [], assembly: [] } }
-    const data = await apiCreate('shot', entry, effectiveSequence)
+    if (!sequence) return
+    const entry: Shot = { sequence, shot: shotNumber, set: setName, created_at: new Date().toISOString(), tasks: { layout: null, anim: null, fx: null, lighting: null, assembly: null } }
+    const data = await apiCreate('shot', entry, sequence)
     baselineData = cloneData(data)
     currentData = cloneData(data)
     showShotModal = false
     render()
   })
 
-  document.querySelector('[data-inline-sequence="1"]')?.addEventListener('click', () => {
-    const holder = document.querySelector<HTMLDivElement>('#inline-seq')
-    if (holder) holder.innerHTML = '<label>New Sequence Code<input id="new-seq-code" /></label><label>New Sequence Name<input id="new-seq-name" /></label>'
-  })
-
   document.querySelector('[data-create-set="1"]')?.addEventListener('click', async () => {
     const name = (document.querySelector<HTMLInputElement>('#set-name')?.value ?? '').trim()
-    const entry: SetItem = { name, created_at: new Date().toISOString(), notes: '', steps: { dressing: [], lighting: [], lookdev: [], fx: [], assembly: [] } }
+    const entry: SetItem = { name, created_at: new Date().toISOString(), tasks: { dressing: null, lighting: null, lookdev: null, fx: null, assembly: null } }
     const data = await apiCreate('set', entry)
     baselineData = cloneData(data)
     currentData = cloneData(data)
@@ -641,7 +632,7 @@ function bindHandlers() {
 
 async function bootstrap() {
   try {
-    const data = await apiGetData()
+    const data = normalizePipelineData(await apiGetData())
     data.team = normalizeTeam(data.team ?? [])
     baselineData = cloneData(data)
     currentData = cloneData(data)

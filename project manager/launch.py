@@ -8,6 +8,7 @@ import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from datetime import datetime
 
 PORT = 47312
 ROOT = Path(__file__).resolve().parent
@@ -30,7 +31,7 @@ def format_pipeline_json(payload):
     lines.append('  "software": ' + json.dumps(payload["software"], indent=2).replace("\n", "\n  ") + ",")
     lines.append('  "conventions": ' + json.dumps(payload["conventions"], indent=2).replace("\n", "\n  ") + ",")
     lines.append(f'  "team": {_array_one_object_per_line(payload.get("team", []), 2)},')
-    lines.append(f'  "sequences": {_array_one_object_per_line(payload["sequences"], 2)},')
+    lines.append(f'  "shots": {_array_one_object_per_line(payload.get("shots", []), 2)},')
     lines.append(f'  "assets": {_array_one_object_per_line(payload["assets"], 2)},')
     lines.append(f'  "sets": {_array_one_object_per_line(payload["sets"], 2)},')
     lines.append('  "library": {')
@@ -68,10 +69,19 @@ class PipelineServer(BaseHTTPRequestHandler):
         if entity_type == "shot":
             sequence_code = target.get("sequence")
             shot_code = target.get("shot")
-            sequence = next((seq for seq in data["sequences"] if seq["code"] == sequence_code), None)
+            if "shots" in data:
+                return next(
+                    (
+                        shot
+                        for shot in data.get("shots", [])
+                        if shot.get("sequence") == sequence_code and shot.get("shot") == shot_code
+                    ),
+                    None,
+                )
+            sequence = next((seq for seq in data.get("sequences", []) if seq["code"] == sequence_code), None)
             if sequence is None:
                 return None
-            return next((shot for shot in sequence.get("shots", []) if shot["shot"] == shot_code), None)
+            return next((shot for shot in sequence.get("shots", []) if shot.get("shot") == shot_code), None)
         return None
 
     def _send_json(self, payload, status=HTTPStatus.OK):
@@ -114,11 +124,11 @@ class PipelineServer(BaseHTTPRequestHandler):
         elif entity_type == "set":
             data["sets"].append(entry)
         elif entity_type == "shot":
-            sequence = next((seq for seq in data["sequences"] if seq["code"] == sequence_code), None)
-            if sequence is None:
-                sequence = {"code": sequence_code, "name": sequence_code, "shots": []}
-                data["sequences"].append(sequence)
-            sequence.setdefault("shots", []).append(entry)
+            data.setdefault("shots", [])
+            shot_entry = dict(entry)
+            if not shot_entry.get("sequence") and sequence_code:
+                shot_entry["sequence"] = sequence_code
+            data["shots"].append(shot_entry)
 
     def _create_asset_folders(self, name):
         base = ROOT / "assets" / name
@@ -241,7 +251,7 @@ class PipelineServer(BaseHTTPRequestHandler):
                 self._create_set_folders(entry["name"])
                 self._append_entry(data, entity_type, entry)
             else:
-                sequence_code = payload.get("sequence") or payload.get("sequence_code")
+                sequence_code = payload.get("sequence") or payload.get("sequence_code") or entry.get("sequence")
                 if not sequence_code:
                     self._send_json({"error": "Shot creation requires sequence code in request body"}, status=HTTPStatus.BAD_REQUEST)
                     return
@@ -277,25 +287,36 @@ class PipelineServer(BaseHTTPRequestHandler):
                 self._send_json({"error": "Publish target not found"}, status=HTTPStatus.NOT_FOUND)
                 return
 
-            steps = target_item.get("steps", {})
-            if step not in steps or not isinstance(steps[step], list):
+            task_map = target_item.get("tasks")
+            if not isinstance(task_map, dict):
+                # Backward compatibility with older schema
+                task_map = target_item.get("steps", {})
+            if step not in task_map:
                 self._send_json({"error": "Invalid publish step for target"}, status=HTTPStatus.BAD_REQUEST)
                 return
 
-            hip_value = payload.get("hip")
+            hip_value = payload.get("hip_file") or payload.get("hip")
             record_artist = payload.get("artist")
             if not isinstance(record_artist, str) and isinstance(payload.get("record"), dict):
                 record_artist = payload["record"].get("artist")
             if not isinstance(hip_value, str) and isinstance(payload.get("record"), dict):
-                hip_value = payload["record"].get("hip")
+                hip_value = payload["record"].get("hip_file") or payload["record"].get("hip")
 
             publish_record = {
                 "artist": record_artist.lower() if isinstance(record_artist, str) and record_artist.strip() else None,
-                "hip": hip_value if isinstance(hip_value, str) and hip_value.strip() else None,
+                "hip_file": hip_value if isinstance(hip_value, str) and hip_value.strip() else None,
+                "published_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
-            steps[step].append(publish_record)
+            if isinstance(target_item.get("tasks"), dict):
+                target_item.setdefault("tasks", {})
+                target_item["tasks"][step] = publish_record
+            else:
+                target_item.setdefault("steps", {})
+                if not isinstance(target_item["steps"].get(step), list):
+                    target_item["steps"][step] = []
+                target_item["steps"][step].append(publish_record)
 
-            parsed_artist = self._parse_artist_from_hip(publish_record["hip"])
+            parsed_artist = self._parse_artist_from_hip(publish_record["hip_file"])
             if parsed_artist and parsed_artist not in data["team"]:
                 data["team"].append(parsed_artist)
 
