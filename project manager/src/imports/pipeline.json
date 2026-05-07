@@ -1,0 +1,271 @@
+{
+  "project": {
+    "name": "kinetic_sculpture",
+    "code": "kin26",
+    "created": "2026-05-05"
+  },
+
+  "software": {
+    "houdini": "21.0.32",
+    "karma": "2.0",
+    "usd": "24.08"
+  },
+
+  "conventions": {
+    "usd_format_default": "usda",
+    "shot_number_increment": 10,
+    "version_padding": 3,
+    "valid_statuses": ["wip", "ready", "final"]
+  },
+
+  "team": ["havard", "maria", "erik", "ina"],
+
+  "assets": [
+    {
+      "name": "kinetic_sculpture",
+      "tasks": {
+        "model": {
+          "artist": "havard",
+          "hip_file": "char_kinetic_sculpture_model_havard_v003",
+          "status": "final",
+          "notes": "High res model complete. All LODs done.",
+          "published_at": "2026-05-05 09:14:22"
+        },
+        "rig": {
+          "artist": "havard",
+          "hip_file": "char_kinetic_sculpture_rig_havard_v002",
+          "status": "ready",
+          "notes": "Rotation controls on all arms. Notify erik before making changes.",
+          "published_at": "2026-05-05 14:30:10"
+        },
+        "lookdev": {
+          "artist": "maria",
+          "hip_file": "char_kinetic_sculpture_lookdev_maria_v004",
+          "status": "final",
+          "notes": "Rust and painted metal variants approved by director.",
+          "published_at": "2026-05-06 10:05:44"
+        },
+        "assembly": {
+          "artist": "havard",
+          "hip_file": "char_kinetic_sculpture_assembly_havard_v002",
+          "status": "final",
+          "notes": "",
+          "published_at": "2026-05-06 11:22:08"
+        }
+      }
+    },
+    {
+      "name": "prop_base_plinth",
+      "tasks": {
+        "model": {
+          "artist": "ina",
+          "hip_file": "prop_base_plinth_model_ina_v001",
+          "status": "final",
+          "notes": "Simple concrete plinth. No LODs needed.",
+          "published_at": "2026-05-05 11:00:00"
+        },
+        "lookdev": {
+          "artist": "maria",
+          "hip_file": "prop_base_plinth_lookdev_maria_v001",
+          "status": "final",
+          "notes": "Concrete material from library.",
+          "published_at": "2026-05-05 13:45:00"
+        },
+        "assembly": {
+          "artist": "ina",
+          "hip_file": "prop_base_plinth_assembly_ina_v001",
+          "status": "final",
+          "notes": "",
+          "published_at": "2026-05-05 14:00:00"
+        }
+      }
+    },
+    {
+      "name": "prop_display_light",
+      "tasks": {
+        "model": {
+          "artist": "ina",
+          "hip_file": "prop_display_light_model_ina_v002",
+          "status": "ready",
+          "notes": "Spot light fixture. Two variants: on and off.",
+          "published_at": "2026-05-05 15:30:00"
+        },
+        "lookdev": {
+          "artist": "maria",
+          "hip_file": "prop_display_light_lookdev_maria_v001",
+          "status": "wip",
+          "notes": "Emissive material still being tuned.",
+          "published_at": "2026-05-06 08:20:00"
+        }
+      }
+    },
+    {
+      "name": "prop_rope_barrier",
+      "tasks": {
+        "model": {
+          "artist": "ina",
+          "hip_file": "prop_rope_barrier_model_ina_v001",
+          "status": "final",
+          "notes": "",
+          "published_at": "2026-05-04 16:00:00"
+        },
+        "lookdev": {
+          "artist": "maria",
+          "hip_file": "prop_rope_barrier_lookdev_maria_v001",
+          "status": "final",
+          "notes": "Red velvet rope and gold post.",
+          "published_at": "2026-05-04 17:10:00"
+        },
+        "assembly": {
+          "artist": "ina",
+          "hip_file": "prop_rope_barrier_assembly_ina_v001",
+          "status": "final",
+          "notes": "",
+          "published_at": "2026-05-04 17:30:00"
+        }
+      }
+    },
+    {
+      "name": "prop_visitors",
+      "tasks": {
+        "model": {
+          "artist": "havard",
+          "hip_file": "prop_visitors_model_havard_v001",
+          "status": "wip",
+          "notes": "Crowd asset. Three variants. Still working on silhouettes.",
+          "published_at": "2026-05-06 09:00:00"
+        }
+      }
+    }
+  ],
+
+  "sets": [
+    {
+      "name": "set_gallery_hall",
+      "tasks": {
+        "dressing": {
+          "artist": "ina",
+          "hip_file": "set_gallery_hall_dressing_ina_v003",
+          "status": "ready",
+          "notes": "All props placed. Awaiting final sculpture position sign-off.",
+          "published_at": "2026-05-06 10:30:00"
+        },
+        "lighting": {
+          "artist": "maria",
+          "hip_file": "set_gallery_hall_lighting_maria_v002",
+          "status": "ready",
+          "notes": "Practical ceiling lights and display spots. Warm evening mood.",
+          "published_at": "2026-05-06 11:00:00"
+        },
+        "lookdev": {
+          "artist": "maria",
+          "hip_file": "set_gallery_hall_lookdev_maria_v001",
+          "status": "final",
+          "notes": "Polished marble floor, white gallery walls.",
+          "published_at": "2026-05-05 16:00:00"
+        }
+      }
+    },
+    {
+      "name": "set_exterior_courtyard",
+      "tasks": {
+        "dressing": {
+          "artist": "ina",
+          "hip_file": "set_exterior_courtyard_dressing_ina_v001",
+          "status": "wip",
+          "notes": "Rough layout only. Trees and benches still to be placed.",
+          "published_at": "2026-05-06 08:00:00"
+        }
+      }
+    }
+  ],
+
+  "shots": [
+    {
+      "name": "kin_0010",
+      "tasks": {
+        "layout": {
+          "artist": "ina",
+          "hip_file": "kin_0010_layout_ina_v002",
+          "status": "ready",
+          "notes": "Wide establishing shot. Camera locked.",
+          "published_at": "2026-05-06 09:30:00"
+        },
+        "anim": {
+          "artist": "erik",
+          "hip_file": "kin_0010_anim_erik_v003",
+          "status": "ready",
+          "notes": "Sculpture arms cycling at 0.5x speed. Director approved.",
+          "published_at": "2026-05-06 11:45:00"
+        },
+        "lighting": {
+          "artist": "maria",
+          "hip_file": "kin_0010_lighting_maria_v002",
+          "status": "wip",
+          "notes": "Rim light pass still in progress.",
+          "published_at": "2026-05-06 13:00:00"
+        }
+      }
+    },
+    {
+      "name": "kin_0020",
+      "tasks": {
+        "layout": {
+          "artist": "ina",
+          "hip_file": "kin_0020_layout_ina_v001",
+          "status": "ready",
+          "notes": "Close up on upper arm mechanism.",
+          "published_at": "2026-05-06 10:00:00"
+        },
+        "anim": {
+          "artist": "erik",
+          "hip_file": "kin_0020_anim_erik_v001",
+          "status": "wip",
+          "notes": "Rough pass only. Timing not signed off.",
+          "published_at": "2026-05-06 12:30:00"
+        }
+      }
+    },
+    {
+      "name": "kin_0030",
+      "tasks": {
+        "layout": {
+          "artist": "ina",
+          "hip_file": "kin_0030_layout_ina_v001",
+          "status": "wip",
+          "notes": "Visitor reaction shot. Camera position not final.",
+          "published_at": "2026-05-06 10:15:00"
+        }
+      }
+    },
+    {
+      "name": "kin_0040",
+      "tasks": {
+        "layout": {
+          "artist": "ina",
+          "hip_file": "kin_0040_layout_ina_v002",
+          "status": "final",
+          "notes": "End title shot. Locked.",
+          "published_at": "2026-05-06 09:45:00"
+        },
+        "lighting": {
+          "artist": "maria",
+          "hip_file": "kin_0040_lighting_maria_v003",
+          "status": "final",
+          "notes": "Sunset practical look. Approved.",
+          "published_at": "2026-05-06 14:00:00"
+        }
+      }
+    }
+  ],
+
+  "library": {
+    "materials": [
+      "metal_bare",
+      "metal_painted_red",
+      "concrete",
+      "marble_white",
+      "glass_clear"
+    ]
+  }
+}
