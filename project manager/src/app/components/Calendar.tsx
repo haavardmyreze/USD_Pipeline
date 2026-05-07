@@ -23,7 +23,7 @@ interface Publication {
 }
 
 export function Calendar({ data }: CalendarProps) {
-  const [viewMode, setViewMode] = useState<'list' | 'month'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'month'>('month');
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -149,6 +149,10 @@ export function Calendar({ data }: CalendarProps) {
   };
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const today = new Date();
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth();
+  const todayDate = today.getDate();
 
   return (
     <div className="h-full overflow-auto p-4">
@@ -156,16 +160,16 @@ export function Calendar({ data }: CalendarProps) {
         <h2 className="text-xl font-medium text-white">Publication Timeline</h2>
         <div className="flex gap-1 bg-zinc-900 border border-zinc-800 p-0.5">
           <button
-            onClick={() => setViewMode('list')}
-            className={`px-3 py-1.5 text-xs transition-colors ${viewMode === 'list' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
-          >
-            <List size={14} />
-          </button>
-          <button
             onClick={() => setViewMode('month')}
             className={`px-3 py-1.5 text-xs transition-colors ${viewMode === 'month' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
             <CalendarIcon size={14} />
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-1.5 text-xs transition-colors ${viewMode === 'list' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
+          >
+            <List size={14} />
           </button>
         </div>
       </div>
@@ -243,7 +247,17 @@ export function Calendar({ data }: CalendarProps) {
                   >
                     {day.date > 0 && (
                       <>
-                        <div className="text-xs text-zinc-400 mb-1">{day.date}</div>
+                        <div className="mb-1">
+                          <span
+                            className={`inline-flex h-5 w-5 items-center justify-center text-xs ${
+                              monthView.year === todayYear && monthView.month === todayMonth && day.date === todayDate
+                                ? 'rounded-full border border-red-500 text-red-400'
+                                : 'text-zinc-400'
+                            }`}
+                          >
+                            {day.date}
+                          </span>
+                        </div>
                         <div className="space-y-1">
                           {day.publications.map((pub, pubIndex) => (
                             <div

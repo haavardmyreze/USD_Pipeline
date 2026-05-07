@@ -52,6 +52,16 @@ export function Overview({ data }: OverviewProps) {
   };
 
   const dependencies = getShotDependencies();
+  const shotsBySequence = data.shots.reduce((acc: Record<string, any[]>, shot: any) => {
+    const sequenceMatch = shot.name?.match(/^([a-zA-Z0-9]+)_/);
+    const sequenceName = sequenceMatch ? sequenceMatch[1] : 'misc';
+    if (!acc[sequenceName]) {
+      acc[sequenceName] = [];
+    }
+    acc[sequenceName].push(shot);
+    return acc;
+  }, {});
+  const sortedSequences = Object.entries(shotsBySequence).sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <div className="p-4 overflow-auto">
@@ -122,6 +132,33 @@ export function Overview({ data }: OverviewProps) {
               {member}
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded p-3 mb-3">
+        <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Shots & Sequences</h3>
+        <div className="space-y-2">
+          {sortedSequences.map(([sequence, sequenceShots]) => (
+            <div key={sequence} className="border border-zinc-800 rounded bg-zinc-950/70 p-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-xs text-zinc-300 uppercase tracking-wide font-medium">{sequence}</div>
+                <div className="text-xs text-zinc-500">{sequenceShots.length} shots</div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {sequenceShots.map((shot: any) => (
+                  <span
+                    key={shot.name}
+                    className="px-2 py-0.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-400 font-mono"
+                  >
+                    {shot.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+          {sortedSequences.length === 0 && (
+            <div className="text-xs text-zinc-600">No shots found.</div>
+          )}
         </div>
       </div>
 

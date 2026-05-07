@@ -104,6 +104,16 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
 
     return (
       <div>
+        <div
+          className="grid px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-xs font-medium text-zinc-500 uppercase tracking-wide"
+          style={{ gridTemplateColumns: `minmax(200px, 1fr) repeat(${taskColumns.length}, minmax(120px, 1fr))` }}
+        >
+          <div>Entity</div>
+          {taskColumns.map((task) => (
+            <div key={task}>{task}</div>
+          ))}
+        </div>
+
         {Object.entries(groupedEntities).map(([groupName, groupEntities]) => (
           <div key={groupName}>
             {groupName !== 'all' && (
@@ -111,13 +121,6 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
                 {groupName}
               </div>
             )}
-
-            <div className="grid px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-xs font-medium text-zinc-500 uppercase tracking-wide" style={{ gridTemplateColumns: `minmax(200px, 1fr) repeat(${taskColumns.length}, minmax(120px, 1fr))` }}>
-              <div>Entity</div>
-              {taskColumns.map((task) => (
-                <div key={task}>{task}</div>
-              ))}
-            </div>
 
             {groupEntities.map((entity: any, entityIndex: number) => {
               const isExpanded = expandedEntity === entity.name;
