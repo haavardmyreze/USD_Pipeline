@@ -109,7 +109,7 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
     }
 
     return (
-      <div>
+      <div className="p-3">
         <div
           className="grid px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-xs font-medium text-zinc-500 uppercase tracking-wide"
           style={{ gridTemplateColumns: `minmax(200px, 1fr) repeat(${taskColumns.length}, minmax(120px, 1fr))` }}
@@ -121,10 +121,12 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
         </div>
 
         {Object.entries(groupedEntities).map(([groupName, groupEntities]) => (
-          <div key={groupName}>
+          <div key={groupName} className="mt-3 first:mt-0 border border-zinc-800 rounded overflow-hidden bg-zinc-950/40">
             {groupName !== 'all' && (
-              <div className="px-3 py-2 bg-zinc-800 border-b border-zinc-700 text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                {groupName}
+              <div className="px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-xs uppercase tracking-wide">
+                <span className="inline-flex px-2 py-0.5 rounded border text-xs bg-zinc-800 text-zinc-300 border-zinc-700">
+                  {groupName}
+                </span>
               </div>
             )}
 
@@ -135,17 +137,17 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
                 <div key={entity.name}>
                   <button
                     onClick={() => toggleEntity(entity.name)}
-                    className={`group w-full grid gap-3 px-3 py-2 hover:bg-zinc-850 border-b border-zinc-800 text-sm text-left transition-colors ${
-                      entityIndex % 2 === 0 ? 'bg-zinc-900' : 'bg-zinc-900/50'
+                    className={`group w-full grid gap-3 px-3 py-2 hover:bg-zinc-900 border-b border-zinc-800 text-sm text-left transition-colors ${
+                      entityIndex % 2 === 0 ? 'bg-zinc-950' : 'bg-zinc-900/30'
                     } ${
                       expandedEntity && !isExpanded
-                        ? 'opacity-45 hover:opacity-70'
+                        ? 'opacity-55 hover:opacity-75'
                         : 'opacity-100'
                     }`}
                     style={{ gridTemplateColumns: `minmax(200px, 1fr) repeat(${taskColumns.length}, minmax(120px, 1fr))` }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-white font-medium truncate">{entity.name}</span>
+                      <span className="text-zinc-200 truncate">{entity.name}</span>
                       <span
                         className={`text-[10px] uppercase tracking-wide transition-opacity ${
                           isExpanded
@@ -170,7 +172,7 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
                   </button>
 
                   {isExpanded && (
-                    <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-3 rounded-sm">
+                    <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-3">
                       <div className="space-y-3">
                         {taskColumns.map((taskName) => {
                           const task = entity.tasks?.[taskName];
