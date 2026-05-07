@@ -1,5 +1,4 @@
-import { useState, useMemo } from 'react';
-import { Search } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 import { StatusBadge } from './StatusBadge';
 
 interface PipelineData {
@@ -24,10 +23,8 @@ interface TaskEntry {
 }
 
 export function Artists({ data }: ArtistsProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilters, setStatusFilters] = useState<Set<'wip' | 'ready' | 'final'>>(new Set(['wip', 'ready', 'final']));
-  const [expandedArtist, setExpandedArtist] = useState<string | null>(null);
+  const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
 
   if (!data) {
     return (
@@ -36,10 +33,6 @@ export function Artists({ data }: ArtistsProps) {
       </div>
     );
   }
-
-  const toggleArtist = (artist: string) => {
-    setExpandedArtist(expandedArtist === artist ? null : artist);
-  };
 
   const toggleStatusFilter = (status: 'wip' | 'ready' | 'final') => {
     const newFilters = new Set(statusFilters);
@@ -99,35 +92,75 @@ export function Artists({ data }: ArtistsProps) {
     return tasks;
   }, [data]);
 
-  const filteredTasks = useMemo(() => {
-    return allTasks.filter((task) => {
-      const matchesSearch =
-        searchQuery === '' ||
-        task.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.entity.toLowerCase().includes(searchQuery.toLowerCase());
+  const artistOptions = useMemo(() => {
+    return Array.from(new Set(allTasks.map((task) => task.artist))).sort((a, b) => a.localeCompare(b));
+  }, [allTasks]);
 
-      const matchesType = typeFilter === 'all' || task.type === typeFilter;
+  useEffect(() => {
+    if (artistOptions.length === 0) {
+      setSelectedArtist(null);
+      return;
+    }
+
+    if (!selectedArtist || !artistOptions.includes(selectedArtist)) {
+      setSelectedArtist(artistOptions[0]);
+    }
+  }, [artistOptions, selectedArtist]);
+
+  const selectedArtistTasks = useMemo(() => {
+    if (!selectedArtist) return [];
+    return allTasks.filter((task) => task.artist === selectedArtist);
+  }, [allTasks, selectedArtist]);
+
+  const filteredTasks = useMemo(() => {
+    if (!selectedArtist) return [];
+
+    return allTasks.filter((task) => {
+      if (task.artist !== selectedArtist) return false;
+
       const matchesStatus = statusFilters.has(task.status);
 
-      return matchesSearch && matchesType && matchesStatus;
+      return matchesStatus;
     });
-  }, [allTasks, searchQuery, typeFilter, statusFilters]);
+  }, [allTasks, selectedArtist, statusFilters]);
 
-  const tasksByArtist = useMemo(() => {
-    const grouped: Record<string, TaskEntry[]> = {};
+  const groupedFilteredTasks = useMemo(() => {
+    const grouped: Record<'asset' | 'set' | 'shot', TaskEntry[]> = {
+      asset: [],
+      set: [],
+      shot: [],
+    };
+
     filteredTasks.forEach((task) => {
-      if (!grouped[task.artist]) {
-        grouped[task.artist] = [];
-      }
-      grouped[task.artist].push(task);
+      grouped[task.type].push(task);
     });
+
     return grouped;
   }, [filteredTasks]);
 
+  const selectedArtistSummary = useMemo(() => {
+    const summary = {
+      total: selectedArtistTasks.length,
+      wip: 0,
+      ready: 0,
+      final: 0,
+      asset: 0,
+      set: 0,
+      shot: 0,
+    };
+
+    selectedArtistTasks.forEach((task) => {
+      summary[task.status] += 1;
+      summary[task.type] += 1;
+    });
+
+    return summary;
+  }, [selectedArtistTasks]);
+
   const typeColors = {
-    asset: 'bg-purple-50 text-purple-700 border-purple-200',
-    set: 'bg-cyan-50 text-cyan-700 border-cyan-200',
-    shot: 'bg-orange-50 text-orange-700 border-orange-200',
+    asset: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+    set: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+    shot: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
   };
 
   const statusConfig = {
@@ -139,29 +172,19 @@ export function Artists({ data }: ArtistsProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-zinc-800 bg-zinc-900">
-        <h2 className="text-xl font-medium text-white mb-3">Artist Tasks</h2>
+        <h2 className="text-xl font-medium text-white mb-3">Artist Focus</h2>
 
         <div className="flex gap-3 mb-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
-            <input
-              type="text"
-              placeholder="Search by artist name or entity..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-600"
-            />
-          </div>
-
           <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-zinc-600"
+            value={selectedArtist || ''}
+            onChange={(e) => setSelectedArtist(e.target.value || null)}
+            className="min-w-56 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-zinc-600"
           >
-            <option value="all">All Types</option>
-            <option value="asset">Assets</option>
-            <option value="set">Sets</option>
-            <option value="shot">Shots</option>
+            {artistOptions.map((artist) => (
+              <option key={artist} value={artist}>
+                {artist}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -188,23 +211,37 @@ export function Artists({ data }: ArtistsProps) {
       </div>
 
       <div className="flex-1 overflow-auto bg-zinc-950">
-        {Object.entries(tasksByArtist).map(([artist, tasks]) => {
-          const isExpanded = expandedArtist === artist;
+        {selectedArtist ? (
+          <div className="p-3">
+            <div className="bg-zinc-900 border border-zinc-800 rounded p-3 mb-3">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-white">{selectedArtist}</h3>
+                <span className="text-xs text-zinc-500">
+                  {filteredTasks.length} visible / {selectedArtistSummary.total} total tasks
+                </span>
+              </div>
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">WIP: <span className="text-amber-400">{selectedArtistSummary.wip}</span></div>
+                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Ready: <span className="text-blue-400">{selectedArtistSummary.ready}</span></div>
+                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Final: <span className="text-emerald-400">{selectedArtistSummary.final}</span></div>
+                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Assets: <span className="text-zinc-100">{selectedArtistSummary.asset}</span></div>
+                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Sets: <span className="text-zinc-100">{selectedArtistSummary.set}</span></div>
+                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Shots: <span className="text-zinc-100">{selectedArtistSummary.shot}</span></div>
+              </div>
+            </div>
 
-          return (
-            <div key={artist}>
-              <button
-                onClick={() => toggleArtist(artist)}
-                className="w-full px-3 py-2 bg-zinc-900 hover:bg-zinc-850 border-b border-zinc-800 text-left flex items-center gap-2 transition-colors text-sm"
-              >
-                <span className="font-medium text-white">{artist}</span>
-                <span className="text-zinc-500 text-xs">({tasks.length})</span>
-              </button>
+            {(['asset', 'set', 'shot'] as Array<'asset' | 'set' | 'shot'>).map((type) => {
+              const tasks = groupedFilteredTasks[type];
+              if (tasks.length === 0) return null;
 
-              {isExpanded && (
-                <div className="bg-zinc-950 px-3 py-2">
-                  <div className="grid grid-cols-6 gap-2 px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-xs font-medium text-zinc-500 uppercase tracking-wide rounded-t">
-                    <div>Type</div>
+              return (
+                <div key={type} className="mb-3 last:mb-0">
+                  <div className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-xs font-medium uppercase tracking-wide">
+                    <span className={`inline-flex px-2 py-0.5 rounded border text-xs font-medium ${typeColors[type]}`}>
+                      {type}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-2 px-3 py-2 bg-zinc-900 border-x border-b border-zinc-800 text-xs font-medium text-zinc-500 uppercase tracking-wide">
                     <div>Entity</div>
                     <div>Step</div>
                     <div>HIP File</div>
@@ -214,12 +251,10 @@ export function Artists({ data }: ArtistsProps) {
                   {tasks.map((task, index) => {
                     const hasNotes = task.notes.trim() !== '';
                     return (
-                      <div key={index} className={`grid grid-cols-6 gap-2 px-3 py-2 border-b border-zinc-800 text-xs hover:bg-zinc-900 transition-colors ${index % 2 === 0 ? 'bg-zinc-950' : 'bg-zinc-900/30'}`}>
-                        <div>
-                          <span className={`inline-flex px-2 py-0.5 rounded border text-xs font-medium ${typeColors[task.type]}`}>
-                            {task.type}
-                          </span>
-                        </div>
+                      <div
+                        key={`${task.entity}-${task.step}-${index}`}
+                        className={`grid grid-cols-5 gap-2 px-3 py-2 border-x border-b border-zinc-800 text-xs hover:bg-zinc-900 transition-colors ${index % 2 === 0 ? 'bg-zinc-950' : 'bg-zinc-900/30'}`}
+                      >
                         <div className="text-zinc-300">{task.entity}</div>
                         <div className="text-zinc-300">{task.step}</div>
                         <div className="font-mono text-zinc-400 truncate">{task.hipFile}</div>
@@ -233,14 +268,12 @@ export function Artists({ data }: ArtistsProps) {
                     );
                   })}
                 </div>
-              )}
-            </div>
-          );
-        })}
-
-        {Object.keys(tasksByArtist).length === 0 && (
+              );
+            })}
+          </div>
+        ) : (
           <div className="flex items-center justify-center py-12 text-zinc-500">
-            <p>No tasks found matching your filters</p>
+            <p>No artists available</p>
           </div>
         )}
       </div>

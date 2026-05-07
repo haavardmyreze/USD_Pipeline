@@ -27,6 +27,12 @@ const taskDefinitions = {
   shots: ['layout', 'anim', 'lighting'],
 };
 
+const artistStatusColors = {
+  wip: 'text-amber-400',
+  ready: 'text-blue-400',
+  final: 'text-emerald-400',
+};
+
 export function PipelineWorkspace({ data }: WorkspaceProps) {
   const [activeTab, setActiveTab] = useState('assets');
   const [expandedEntity, setExpandedEntity] = useState<string | null>(null);
@@ -129,14 +135,34 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
                 <div key={entity.name}>
                   <button
                     onClick={() => toggleEntity(entity.name)}
-                    className={`w-full grid gap-3 px-3 py-2 hover:bg-zinc-850 border-b border-zinc-800 text-sm text-left transition-colors ${entityIndex % 2 === 0 ? 'bg-zinc-900' : 'bg-zinc-900/50'}`}
+                    className={`group w-full grid gap-3 px-3 py-2 hover:bg-zinc-850 border-b border-zinc-800 text-sm text-left transition-colors ${
+                      entityIndex % 2 === 0 ? 'bg-zinc-900' : 'bg-zinc-900/50'
+                    } ${
+                      expandedEntity && !isExpanded
+                        ? 'opacity-45 hover:opacity-70'
+                        : 'opacity-100'
+                    }`}
                     style={{ gridTemplateColumns: `minmax(200px, 1fr) repeat(${taskColumns.length}, minmax(120px, 1fr))` }}
                   >
-                    <div className="text-white font-medium">{entity.name}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-white font-medium truncate">{entity.name}</span>
+                      <span
+                        className={`text-[10px] uppercase tracking-wide transition-opacity ${
+                          isExpanded
+                            ? 'text-zinc-400 opacity-100'
+                            : 'text-zinc-500 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
+                        }`}
+                      >
+                        {isExpanded ? 'Hide details' : 'Expand'}
+                      </span>
+                    </div>
                     {taskColumns.map((taskName) => {
                       const task = entity.tasks?.[taskName];
+                      const artistClass = task?.status
+                        ? artistStatusColors[task.status as keyof typeof artistStatusColors] || 'text-zinc-300'
+                        : 'text-zinc-500';
                       return (
-                        <div key={taskName} className="text-zinc-400 truncate">
+                        <div key={taskName} className={`${artistClass} truncate`}>
                           {task ? task.artist : '—'}
                         </div>
                       );

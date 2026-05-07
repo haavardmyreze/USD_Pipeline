@@ -182,23 +182,33 @@ export function Calendar({ data }: CalendarProps) {
                 {date}
               </div>
 
+              <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-zinc-900/70 border border-zinc-800 rounded text-[10px] font-medium text-zinc-500 uppercase tracking-wide mb-1">
+                <div className="col-span-2">Time</div>
+                <div className="col-span-2">Category</div>
+                <div className="col-span-4">Task</div>
+                <div className="col-span-2">Artist</div>
+                <div className="col-span-2">Status</div>
+              </div>
+
               <div className="space-y-1">
                 {pubs.map((pub, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded hover:border-zinc-700 transition-colors text-xs"
+                    className="grid grid-cols-12 gap-2 items-center px-3 py-2 bg-zinc-900 border border-zinc-800 rounded hover:border-zinc-700 transition-colors text-xs"
                   >
-                    <div className="text-zinc-500 font-mono w-12">{pub.time}</div>
-                    <span className={`px-1.5 py-0.5 border text-xs font-medium ${typeColors[pub.type]}`}>
+                    <div className="col-span-2 text-zinc-500 font-mono">{pub.time}</div>
+                    <span className={`col-span-2 inline-flex w-fit px-1.5 py-0.5 border text-xs font-medium ${typeColors[pub.type]}`}>
                       {pub.type}
                     </span>
-                    <div className="flex-1 text-zinc-300">
+                    <div className="col-span-4 text-zinc-300 truncate">
                       <span className="font-medium">{pub.entity}</span>
                       <span className="text-zinc-500 mx-1.5">/</span>
                       <span>{pub.task}</span>
                     </div>
-                    <div className="text-zinc-400 text-xs">{pub.artist}</div>
-                    <StatusBadge status={pub.status} />
+                    <div className="col-span-2 text-zinc-400 text-xs truncate">{pub.artist}</div>
+                    <div className="col-span-2">
+                      <StatusBadge status={pub.status} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -265,6 +275,11 @@ export function Calendar({ data }: CalendarProps) {
                               className="text-xs px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 rounded truncate"
                               title={`${pub.entity} / ${pub.task} - ${pub.artist}`}
                             >
+                              <span className={`inline-flex px-1 py-0.5 rounded border text-[10px] leading-none mr-1 align-middle ${
+                                typeColors[pub.type]
+                              }`}>
+                                {pub.type}
+                              </span>
                               <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${
                                 pub.status === 'wip' ? 'bg-amber-500' :
                                 pub.status === 'ready' ? 'bg-blue-500' :
