@@ -230,41 +230,42 @@ export function Calendar({ data }: CalendarProps) {
           </div>
           {publications.length > 0 ? (
             <>
-            <div className="grid grid-cols-7 gap-px bg-zinc-800 border border-zinc-800 rounded overflow-hidden">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                <div key={day} className="bg-zinc-900 px-2 py-2 text-xs font-medium text-zinc-500 text-center">
-                  {day}
+              <div className="grid grid-cols-7 gap-px bg-zinc-800 border border-zinc-800 rounded overflow-hidden">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                  <div key={day} className="bg-zinc-900 px-2 py-2 text-xs font-medium text-zinc-500 text-center">
+                    {day}
+                  </div>
+                ))}
+                {monthView.days.map((day, index) => (
+                  <div
+                    key={index}
+                    className={`bg-zinc-950 min-h-24 p-2 ${day.date === 0 ? 'bg-zinc-900/30' : ''}`}
+                  >
+                    {day.date > 0 && (
+                      <>
+                        <div className="text-xs text-zinc-400 mb-1">{day.date}</div>
+                        <div className="space-y-1">
+                          {day.publications.map((pub, pubIndex) => (
+                            <div
+                              key={pubIndex}
+                              className="text-xs px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 rounded truncate"
+                              title={`${pub.entity} / ${pub.task} - ${pub.artist}`}
+                            >
+                              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${
+                                pub.status === 'wip' ? 'bg-amber-500' :
+                                pub.status === 'ready' ? 'bg-blue-500' :
+                                'bg-emerald-500'
+                              }`}></span>
+                              <span className="text-zinc-400">{pub.entity}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
                 </div>
-              ))}
-              {monthView.days.map((day, index) => (
-                <div
-                  key={index}
-                  className={`bg-zinc-950 min-h-24 p-2 ${day.date === 0 ? 'bg-zinc-900/30' : ''}`}
-                >
-                  {day.date > 0 && (
-                    <>
-                      <div className="text-xs text-zinc-400 mb-1">{day.date}</div>
-                      <div className="space-y-1">
-                        {day.publications.map((pub, pubIndex) => (
-                          <div
-                            key={pubIndex}
-                            className="text-xs px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 rounded truncate"
-                            title={`${pub.entity} / ${pub.task} - ${pub.artist}`}
-                          >
-                            <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${
-                              pub.status === 'wip' ? 'bg-amber-500' :
-                              pub.status === 'ready' ? 'bg-blue-500' :
-                              'bg-emerald-500'
-                            }`}></span>
-                            <span className="text-zinc-400">{pub.entity}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
+            </>
           ) : (
             <div className="flex items-center justify-center h-64 text-zinc-500">
               <p>No publications found</p>
