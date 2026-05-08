@@ -33,6 +33,31 @@ const artistStatusColors = {
   final: 'text-emerald-400',
 };
 
+const assetGroupColors: Record<string, string> = {
+  char: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  prop: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
+  env: 'bg-teal-500/15 text-teal-300 border-teal-500/30',
+  vehicle: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+  fx: 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30',
+  crowd: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  other: 'bg-zinc-800 text-zinc-300 border-zinc-700',
+};
+
+const sequencePalette = [
+  'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+  'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+  'bg-violet-500/15 text-violet-300 border-violet-500/30',
+  'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30',
+  'bg-pink-500/15 text-pink-300 border-pink-500/30',
+  'bg-rose-500/15 text-rose-300 border-rose-500/30',
+  'bg-orange-500/15 text-orange-300 border-orange-500/30',
+  'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  'bg-lime-500/15 text-lime-300 border-lime-500/30',
+  'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  'bg-sky-500/15 text-sky-300 border-sky-500/30',
+];
+
 export function PipelineWorkspace({ data }: WorkspaceProps) {
   const [activeTab, setActiveTab] = useState('assets');
   const [expandedEntity, setExpandedEntity] = useState<string | null>(null);
@@ -65,6 +90,27 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
   const getSequence = (shotName: string) => {
     const match = shotName.match(/^([a-z]+)_/);
     return match ? match[1] : 'other';
+  };
+
+  const getStableIndex = (value: string, size: number) => {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+    }
+    return hash % size;
+  };
+
+  const getGroupBadgeClass = (groupName: string) => {
+    if (activeTab === 'assets') {
+      return assetGroupColors[groupName] || assetGroupColors.other;
+    }
+
+    if (activeTab === 'shots') {
+      const paletteIndex = getStableIndex(groupName.toLowerCase(), sequencePalette.length);
+      return sequencePalette[paletteIndex];
+    }
+
+    return 'bg-zinc-800 text-zinc-300 border-zinc-700';
   };
 
   const renderContent = () => {
@@ -109,45 +155,44 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
     }
 
     return (
-      <div className="p-3">
-        <div
-          className="grid px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-xs font-medium text-zinc-500 uppercase tracking-wide"
-          style={{ gridTemplateColumns: `minmax(200px, 1fr) repeat(${taskColumns.length}, minmax(120px, 1fr))` }}
-        >
-          <div>Entity</div>
-          {taskColumns.map((task) => (
-            <div key={task}>{task}</div>
-          ))}
-        </div>
-
+      <div className="p-4">
+        <div className="space-y-4">
         {Object.entries(groupedEntities).map(([groupName, groupEntities]) => (
-          <div key={groupName} className="mt-3 first:mt-0 border border-zinc-800 rounded overflow-hidden bg-zinc-950/40">
+          <div key={groupName}>
             {groupName !== 'all' && (
-              <div className="px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-xs uppercase tracking-wide">
-                <span className="inline-flex px-2 py-0.5 rounded border text-xs bg-zinc-800 text-zinc-300 border-zinc-700">
+              <div className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-xs uppercase tracking-wide mb-1">
+                <span className={`inline-flex px-2 py-0.5 rounded border text-xs ${getGroupBadgeClass(groupName)}`}>
                   {groupName}
                 </span>
               </div>
             )}
+            <div
+              className="grid gap-3 px-3 py-1.5 bg-zinc-900/70 border border-zinc-800 rounded text-[10px] font-medium text-zinc-500 uppercase tracking-wide mb-1"
+              style={{ gridTemplateColumns: `minmax(200px, 1fr) repeat(${taskColumns.length}, minmax(120px, 1fr))` }}
+            >
+              <div>Entity</div>
+              {taskColumns.map((task) => (
+                <div key={task}>{task}</div>
+              ))}
+            </div>
 
-            {groupEntities.map((entity: any, entityIndex: number) => {
+            <div className="space-y-1">
+            {groupEntities.map((entity: any) => {
               const isExpanded = expandedEntity === entity.name;
 
               return (
                 <div key={entity.name}>
                   <button
                     onClick={() => toggleEntity(entity.name)}
-                    className={`group w-full grid gap-3 px-3 py-2 hover:bg-zinc-900 border-b border-zinc-800 text-sm text-left transition-colors ${
-                      entityIndex % 2 === 0 ? 'bg-zinc-950' : 'bg-zinc-900/30'
-                    } ${
+                    className={`group w-full grid gap-3 items-center px-3 py-2 border border-zinc-800 rounded text-xs text-left transition-colors bg-zinc-900 ${
                       expandedEntity && !isExpanded
-                        ? 'opacity-55 hover:opacity-75'
-                        : 'opacity-100'
+                        ? 'opacity-55 hover:opacity-75 hover:border-zinc-700'
+                        : 'opacity-100 hover:border-zinc-700'
                     }`}
                     style={{ gridTemplateColumns: `minmax(200px, 1fr) repeat(${taskColumns.length}, minmax(120px, 1fr))` }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-zinc-200 truncate">{entity.name}</span>
+                      <span className="text-zinc-300 truncate">{entity.name}</span>
                       <span
                         className={`text-[10px] uppercase tracking-wide transition-opacity ${
                           isExpanded
@@ -172,13 +217,13 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
                   </button>
 
                   {isExpanded && (
-                    <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-3">
+                    <div className="bg-zinc-950 border border-zinc-800 rounded mt-1 px-4 py-3">
                       <div className="space-y-3">
                         {taskColumns.map((taskName) => {
                           const task = entity.tasks?.[taskName];
                           return (
                             <div key={taskName} className="border-b border-zinc-900 pb-3 last:border-0 last:pb-0">
-                              <div className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">{taskName}</div>
+                              <div className="text-xs text-zinc-400 uppercase tracking-wide mb-2">{taskName}</div>
                               {task ? (
                                 <div className="space-y-1.5 text-xs">
                                   <div className="flex items-center gap-2">
@@ -218,8 +263,10 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
                 </div>
               );
             })}
+            </div>
           </div>
         ))}
+        </div>
       </div>
     );
   };

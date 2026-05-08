@@ -212,7 +212,7 @@ export function Artists({ data }: ArtistsProps) {
 
       <div className="flex-1 overflow-auto bg-zinc-950">
         {selectedArtist ? (
-          <div className="p-3">
+          <div className="p-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded p-3 mb-3">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-white">{selectedArtist}</h3>
@@ -230,46 +230,50 @@ export function Artists({ data }: ArtistsProps) {
               </div>
             </div>
 
-            {(['asset', 'set', 'shot'] as Array<'asset' | 'set' | 'shot'>).map((type) => {
-              const tasks = groupedFilteredTasks[type];
-              if (tasks.length === 0) return null;
+            <div className="space-y-4">
+              {(['asset', 'set', 'shot'] as Array<'asset' | 'set' | 'shot'>).map((type) => {
+                const tasks = groupedFilteredTasks[type];
+                if (tasks.length === 0) return null;
 
-              return (
-                <div key={type} className="mb-3 last:mb-0">
-                  <div className="px-3 py-2 bg-zinc-900 border border-zinc-800 text-xs font-medium uppercase tracking-wide">
+                return (
+                  <div key={type}>
+                  <div className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-xs font-medium uppercase tracking-wide mb-1">
                     <span className={`inline-flex px-2 py-0.5 rounded border text-xs font-medium ${typeColors[type]}`}>
                       {type}
                     </span>
                   </div>
-                  <div className="grid grid-cols-5 gap-2 px-3 py-2 bg-zinc-900 border-x border-b border-zinc-800 text-xs font-medium text-zinc-500 uppercase tracking-wide">
+                  <div className="grid grid-cols-5 gap-2 px-3 py-1.5 bg-zinc-900/70 border border-zinc-800 rounded text-[10px] font-medium text-zinc-500 uppercase tracking-wide mb-1">
                     <div>Entity</div>
                     <div>Step</div>
                     <div>HIP File</div>
                     <div>Status</div>
                     <div>Notes</div>
                   </div>
-                  {tasks.map((task, index) => {
-                    const hasNotes = task.notes.trim() !== '';
-                    return (
-                      <div
-                        key={`${task.entity}-${task.step}-${index}`}
-                        className={`grid grid-cols-5 gap-2 px-3 py-2 border-x border-b border-zinc-800 text-xs hover:bg-zinc-900 transition-colors ${index % 2 === 0 ? 'bg-zinc-950' : 'bg-zinc-900/30'}`}
-                      >
-                        <div className="text-zinc-300">{task.entity}</div>
-                        <div className="text-zinc-300">{task.step}</div>
-                        <div className="font-mono text-zinc-400 truncate">{task.hipFile}</div>
-                        <div>
-                          <StatusBadge status={task.status} />
+                  <div className="space-y-1">
+                    {tasks.map((task, index) => {
+                      const hasNotes = task.notes.trim() !== '';
+                      return (
+                        <div
+                          key={`${task.entity}-${task.step}-${index}`}
+                          className="grid grid-cols-5 gap-2 items-center px-3 py-2 border border-zinc-800 rounded hover:border-zinc-700 transition-colors text-xs bg-zinc-900"
+                        >
+                          <div className="text-zinc-300">{task.entity}</div>
+                          <div className="text-zinc-300">{task.step}</div>
+                          <div className="font-mono text-zinc-400 truncate">{task.hipFile}</div>
+                          <div>
+                            <StatusBadge status={task.status} />
+                          </div>
+                          <div className="text-zinc-400 truncate">
+                            {hasNotes ? task.notes : '—'}
+                          </div>
                         </div>
-                        <div className="text-zinc-400 truncate">
-                          {hasNotes ? task.notes : '—'}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+                      );
+                    })}
+                  </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-center py-12 text-zinc-500">
