@@ -64,9 +64,12 @@ export function Overview({ data }: OverviewProps) {
   const sortedSequences = Object.entries(shotsBySequence).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <div className="p-4 overflow-auto">
-      <h2 className="text-xl font-medium text-white mb-4">Project Overview</h2>
+    <div className="flex flex-col h-full">
+      <div className="p-4 border-b border-zinc-800 bg-zinc-900">
+        <h2 className="text-xl font-medium text-white">Project Overview</h2>
+      </div>
 
+      <div className="flex-1 overflow-auto p-4">
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className="bg-zinc-900 border border-zinc-800 rounded p-3">
           <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Project Info</h3>
@@ -185,6 +188,7 @@ export function Overview({ data }: OverviewProps) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

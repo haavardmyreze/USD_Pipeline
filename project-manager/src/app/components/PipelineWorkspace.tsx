@@ -227,6 +227,7 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 pt-4">
+        <h2 className="text-xl font-medium text-white mb-3">Pipeline Workspace</h2>
         <div className="flex gap-1">
           {tabs.map((tab) => {
             const count = getCount(tab.id);

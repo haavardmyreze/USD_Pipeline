@@ -1,4 +1,5 @@
 import { Home, Grid3x3, Users, Calendar } from 'lucide-react';
+import myrezeLogo from '../../assets/MyrezeLogoWhite.svg';
 
 interface SidebarProps {
   currentPage: string;
@@ -15,8 +16,8 @@ const navItems = [
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   return (
     <div className="w-56 bg-zinc-900 border-r border-zinc-800 flex flex-col">
-      <div className="p-4 border-b border-zinc-800">
-        <h1 className="font-semibold text-white">Pipeline Viewer</h1>
+      <div className="px-4 py-5 border-b border-zinc-800">
+        <img src={myrezeLogo} alt="Myreze" className="h-8 w-auto" />
       </div>
 
       <nav className="flex-1 p-2">

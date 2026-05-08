@@ -155,24 +155,27 @@ export function Calendar({ data }: CalendarProps) {
   const todayDate = today.getDate();
 
   return (
-    <div className="h-full overflow-auto p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-medium text-white">Publication Timeline</h2>
-        <div className="flex gap-1 bg-zinc-900 border border-zinc-800 p-0.5">
-          <button
-            onClick={() => setViewMode('month')}
-            className={`px-3 py-1.5 text-xs transition-colors ${viewMode === 'month' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
-          >
-            <CalendarIcon size={14} />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`px-3 py-1.5 text-xs transition-colors ${viewMode === 'list' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
-          >
-            <List size={14} />
-          </button>
+    <div className="flex flex-col h-full">
+      <div className="p-4 border-b border-zinc-800 bg-zinc-900">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-medium text-white">Publication Timeline</h2>
+          <div className="flex gap-1 bg-zinc-900 border border-zinc-800 p-0.5">
+            <button
+              onClick={() => setViewMode('month')}
+              className={`px-3 py-1.5 text-xs transition-colors ${viewMode === 'month' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
+            >
+              <CalendarIcon size={14} />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 text-xs transition-colors ${viewMode === 'list' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
+            >
+              <List size={14} />
+            </button>
+          </div>
         </div>
       </div>
+      <div className="flex-1 overflow-auto p-4">
 
       {viewMode === 'list' ? (
         <div className="space-y-4">
@@ -302,6 +305,7 @@ export function Calendar({ data }: CalendarProps) {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -6,12 +6,16 @@ interface TopBarProps {
 }
 
 export function TopBar({ onLoadJson, projectName }: TopBarProps) {
+  const displayProjectName = projectName?.replaceAll('_', ' ').toUpperCase();
+
   return (
     <div className="h-14 border-b border-zinc-800 bg-zinc-900 flex items-center justify-between px-6">
       <div className="flex items-center gap-3">
-        {projectName && (
-          <div className="text-sm text-zinc-500">
-            Project: <span className="font-medium text-white">{projectName}</span>
+        {displayProjectName && (
+          <div>
+            <span className="font-normal text-zinc-300 text-[14px] leading-none tracking-wide">
+              {displayProjectName}
+            </span>
           </div>
         )}
       </div>
