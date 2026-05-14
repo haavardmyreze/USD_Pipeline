@@ -289,6 +289,8 @@ export function Calendar({ data }: CalendarProps) {
                                 'bg-emerald-500'
                               }`}></span>
                               <span className="text-zinc-400">{pub.entity}</span>
+                              <span className="text-zinc-600 mx-0.5">/</span>
+                              <span className="text-zinc-500">{pub.task}</span>
                             </div>
                           ))}
                         </div>
