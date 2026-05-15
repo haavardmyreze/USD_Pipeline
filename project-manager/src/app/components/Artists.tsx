@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { StatusBadge } from './StatusBadge';
+import { iterateSetTasks } from '../lib/setTasks';
 
 interface PipelineData {
   assets: any[];
@@ -62,14 +63,14 @@ export function Artists({ data }: ArtistsProps) {
     });
 
     data.sets.forEach((set) => {
-      Object.entries(set.tasks || {}).forEach(([step, task]: [string, any]) => {
+      iterateSetTasks(set, (step, task) => {
         tasks.push({
           artist: task.artist,
           type: 'set',
           entity: set.name,
           step,
-          hipFile: task.hip_file,
-          status: task.status,
+          hipFile: task.hip_file || '',
+          status: task.status || 'wip',
           notes: task.notes || '',
         });
       });

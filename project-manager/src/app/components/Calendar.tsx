@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { List, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
+import { iterateSetTasks } from '../lib/setTasks';
 
 interface PipelineData {
   assets: any[];
@@ -52,7 +53,7 @@ export function Calendar({ data }: CalendarProps) {
     });
 
     data.sets.forEach((set) => {
-      Object.entries(set.tasks || {}).forEach(([taskName, task]: [string, any]) => {
+      iterateSetTasks(set, (taskName, task) => {
         if (task.published_at) {
           const [date, time] = task.published_at.split(' ');
           pubs.push({
@@ -62,7 +63,7 @@ export function Calendar({ data }: CalendarProps) {
             entity: set.name,
             task: taskName,
             artist: task.artist,
-            status: task.status,
+            status: task.status || 'wip',
           });
         }
       });

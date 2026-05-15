@@ -143,38 +143,42 @@
     {
       "name": "set_gallery_hall",
       "tasks": {
-        "dressing": {
+        "assembly": {
           "artist": "ina",
-          "hip_file": "set_gallery_hall_dressing_ina_v003",
+          "hip_file": "set_gallery_hall_assembly_ina_v002",
           "status": "ready",
-          "notes": "All props placed. Awaiting final sculpture position sign-off.",
-          "published_at": "2026-05-06 10:30:00"
-        },
-        "lighting": {
-          "artist": "maria",
-          "hip_file": "set_gallery_hall_lighting_maria_v002",
-          "status": "ready",
-          "notes": "Practical ceiling lights and display spots. Warm evening mood.",
-          "published_at": "2026-05-06 11:00:00"
-        },
-        "lookdev": {
-          "artist": "maria",
-          "hip_file": "set_gallery_hall_lookdev_maria_v001",
-          "status": "final",
-          "notes": "Polished marble floor, white gallery walls.",
+          "notes": "Base set assembly published.",
           "published_at": "2026-05-05 16:00:00"
+        },
+        "blocks": {
+          "fg-dressing": {
+            "artist": "ina",
+            "hip_file": "set_gallery_hall_fg-dressing_ina_v003",
+            "status": "ready",
+            "notes": "All props placed. Awaiting final sculpture position sign-off.",
+            "published_at": "2026-05-06 10:30:00"
+          },
+          "room-a-lighting": {
+            "artist": "maria",
+            "hip_file": "set_gallery_hall_room-a-lighting_maria_v002",
+            "status": "ready",
+            "notes": "Practical ceiling lights and display spots. Warm evening mood.",
+            "published_at": "2026-05-06 11:00:00"
+          }
         }
       }
     },
     {
       "name": "set_exterior_courtyard",
       "tasks": {
-        "dressing": {
-          "artist": "ina",
-          "hip_file": "set_exterior_courtyard_dressing_ina_v001",
-          "status": "wip",
-          "notes": "Rough layout only. Trees and benches still to be placed.",
-          "published_at": "2026-05-06 08:00:00"
+        "blocks": {
+          "fg-dressing": {
+            "artist": "ina",
+            "hip_file": "set_exterior_courtyard_fg-dressing_ina_v001",
+            "status": "wip",
+            "notes": "Rough layout only. Trees and benches still to be placed.",
+            "published_at": "2026-05-06 08:00:00"
+          }
         }
       }
     }

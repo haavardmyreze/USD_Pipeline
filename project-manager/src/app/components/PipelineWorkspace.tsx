@@ -1,5 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { StatusBadge } from './StatusBadge';
+import {
+  collectSetColumnKeys,
+  getSetTask,
+  SET_REQUIRED_FLAT_COLUMNS,
+  type PipelineTask,
+} from '../lib/setTasks';
 
 interface PipelineData {
   assets: any[];
@@ -23,9 +29,54 @@ const tabs = [
 
 const taskDefinitions = {
   assets: ['model', 'rig', 'lookdev', 'assembly'],
-  sets: ['dressing', 'lighting', 'lookdev'],
   shots: ['layout', 'anim', 'lighting'],
 };
+
+type TaskColumn =
+  | { key: string; label: string; kind: 'flat' }
+  | { key: string; label: string; kind: 'block' };
+
+function renderTaskDetails(task: PipelineTask) {
+  return (
+    <div className="space-y-1.5 text-xs">
+      <div className="flex items-center gap-2">
+        <span className="text-zinc-600 w-16">Artist:</span>
+        <span className="text-zinc-300">{task.artist}</span>
+      </div>
+      {task.status && (
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-600 w-16">Status:</span>
+          <StatusBadge status={task.status} />
+        </div>
+      )}
+      {task.hip_file && (
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-600 w-16">HIP File:</span>
+          <span className="font-mono text-zinc-400">{task.hip_file}</span>
+        </div>
+      )}
+      {task.published_at && (
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-600 w-16">Published:</span>
+          <span className="text-zinc-500">{task.published_at}</span>
+        </div>
+      )}
+      {task.notes && (
+        <div className="flex gap-2">
+          <span className="text-zinc-600 w-16">Notes:</span>
+          <span className="text-zinc-500 flex-1">{task.notes}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function resolveEntityTask(entity: any, column: TaskColumn, tab: string): PipelineTask | undefined {
+  if (tab === 'sets') {
+    return getSetTask(entity.tasks, column.key, column.kind);
+  }
+  return entity.tasks?.[column.key];
+}
 
 const artistStatusColors = {
   wip: 'text-amber-400',
@@ -130,9 +181,22 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
     }
 
     let entities = activeTab === 'assets' ? data.assets : activeTab === 'sets' ? data.sets : data.shots;
-    const taskColumns = taskDefinitions[activeTab as keyof typeof taskDefinitions] || [];
+    const setColumnKeys = activeTab === 'sets' ? collectSetColumnKeys(data.sets) : null;
+    const taskColumns: TaskColumn[] =
+      activeTab === 'sets' && setColumnKeys
+        ? [
+            ...setColumnKeys.flat
+              .filter((key) => key !== 'assembly')
+              .map((key) => ({ key, label: key, kind: 'flat' as const })),
+            ...setColumnKeys.blocks.map((key) => ({ key, label: key, kind: 'block' as const })),
+            ...SET_REQUIRED_FLAT_COLUMNS.map((key) => ({ key, label: key, kind: 'flat' as const })),
+          ]
+        : (taskDefinitions[activeTab as keyof typeof taskDefinitions] || []).map((key) => ({
+            key,
+            label: key,
+            kind: 'flat' as const,
+          }));
 
-    // Group assets by type
     let groupedEntities: Record<string, any[]> = {};
     if (activeTab === 'assets') {
       entities.forEach((entity: any) => {
@@ -171,8 +235,14 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
               style={{ gridTemplateColumns: `minmax(200px, 1fr) repeat(${taskColumns.length}, minmax(120px, 1fr))` }}
             >
               <div>Entity</div>
-              {taskColumns.map((task) => (
-                <div key={task}>{task}</div>
+              {taskColumns.map((column) => (
+                <div
+                  key={`${column.kind}-${column.key}`}
+                  className={column.kind === 'block' ? 'text-cyan-500/80' : undefined}
+                  title={column.kind === 'block' ? 'Block' : undefined}
+                >
+                  {column.label}
+                </div>
               ))}
             </div>
 
@@ -203,13 +273,13 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
                         {isExpanded ? 'Hide details' : 'Expand'}
                       </span>
                     </div>
-                    {taskColumns.map((taskName) => {
-                      const task = entity.tasks?.[taskName];
+                    {taskColumns.map((column) => {
+                      const task = resolveEntityTask(entity, column, activeTab);
                       const artistClass = task?.status
                         ? artistStatusColors[task.status as keyof typeof artistStatusColors] || 'text-zinc-300'
                         : 'text-zinc-500';
                       return (
-                        <div key={taskName} className={`${artistClass} truncate`}>
+                        <div key={`${column.kind}-${column.key}`} className={`${artistClass} truncate`}>
                           {task ? task.artist : '—'}
                         </div>
                       );
@@ -219,39 +289,13 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
                   {isExpanded && (
                     <div className="bg-zinc-950 border border-zinc-800 rounded mt-1 px-4 py-3">
                       <div className="space-y-3">
-                        {taskColumns.map((taskName) => {
-                          const task = entity.tasks?.[taskName];
+                        {taskColumns.map((column) => {
+                          const task = resolveEntityTask(entity, column, activeTab);
+                          const label = column.kind === 'block' ? `blocks / ${column.label}` : column.label;
                           return (
-                            <div key={taskName} className="border-b border-zinc-900 pb-3 last:border-0 last:pb-0">
-                              <div className="text-xs text-zinc-400 uppercase tracking-wide mb-2">{taskName}</div>
-                              {task ? (
-                                <div className="space-y-1.5 text-xs">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-zinc-600 w-16">Artist:</span>
-                                    <span className="text-zinc-300">{task.artist}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-zinc-600 w-16">Status:</span>
-                                    <StatusBadge status={task.status} />
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-zinc-600 w-16">HIP File:</span>
-                                    <span className="font-mono text-zinc-400">{task.hip_file}</span>
-                                  </div>
-                                  {task.published_at && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-zinc-600 w-16">Published:</span>
-                                      <span className="text-zinc-500">{task.published_at}</span>
-                                    </div>
-                                  )}
-                                  {task.notes && (
-                                    <div className="flex gap-2">
-                                      <span className="text-zinc-600 w-16">Notes:</span>
-                                      <span className="text-zinc-500 flex-1">{task.notes}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
+                            <div key={`${column.kind}-${column.key}`} className="border-b border-zinc-900 pb-3 last:border-0 last:pb-0">
+                              <div className="text-xs text-zinc-400 uppercase tracking-wide mb-2">{label}</div>
+                              {task ? renderTaskDetails(task) : (
                                 <div className="text-xs text-zinc-700">Not started</div>
                               )}
                             </div>
