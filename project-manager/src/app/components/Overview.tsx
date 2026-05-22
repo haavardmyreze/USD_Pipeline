@@ -1,3 +1,5 @@
+import { iterateEntityTasks } from '../lib/entityTasks';
+
 interface PipelineData {
   project: {
     name: string;
@@ -38,12 +40,11 @@ export function Overview({ data }: OverviewProps) {
       const shotName = shot.name;
       dependencies[shotName] = new Set();
 
-      Object.entries(shot.tasks || {}).forEach(([taskName, task]: [string, any]) => {
-        if (task.notes) {
-          const setMatches = task.notes.match(/set_\w+/g);
-          if (setMatches) {
-            setMatches.forEach((setName: string) => dependencies[shotName].add(setName));
-          }
+      iterateEntityTasks(shot, (_taskName, task) => {
+        if (!task.notes) return;
+        const setMatches = task.notes.match(/set[_-][\w-]+/g);
+        if (setMatches) {
+          setMatches.forEach((setName: string) => dependencies[shotName].add(setName));
         }
       });
     });

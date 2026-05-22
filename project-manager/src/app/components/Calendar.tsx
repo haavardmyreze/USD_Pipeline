@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { List, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
-import { iterateSetTasks } from '../lib/setTasks';
+import { iterateEntityTasks } from '../lib/entityTasks';
+import { normalizeStatus, statusStyles, type PipelineStatus } from '../lib/statuses';
 
 interface PipelineData {
   assets: any[];
@@ -20,7 +21,7 @@ interface Publication {
   entity: string;
   task: string;
   artist: string;
-  status: 'wip' | 'ready' | 'final';
+  status: PipelineStatus | 'unknown';
 }
 
 export function Calendar({ data }: CalendarProps) {
@@ -35,56 +36,25 @@ export function Calendar({ data }: CalendarProps) {
 
     const pubs: Publication[] = [];
 
-    data.assets.forEach((asset) => {
-      Object.entries(asset.tasks || {}).forEach(([taskName, task]: [string, any]) => {
-        if (task.published_at) {
-          const [date, time] = task.published_at.split(' ');
-          pubs.push({
-            date,
-            time,
-            type: 'asset',
-            entity: asset.name,
-            task: taskName,
-            artist: task.artist,
-            status: task.status,
-          });
-        }
+    const addPublications = (entity: any, type: 'asset' | 'set' | 'shot') => {
+      iterateEntityTasks(entity, (taskName, task) => {
+        if (!task.published_at) return;
+        const [date, time] = task.published_at.split(' ');
+        pubs.push({
+          date,
+          time,
+          type,
+          entity: entity.name,
+          task: taskName,
+          artist: task.artist,
+          status: normalizeStatus(task.status),
+        });
       });
-    });
+    };
 
-    data.sets.forEach((set) => {
-      iterateSetTasks(set, (taskName, task) => {
-        if (task.published_at) {
-          const [date, time] = task.published_at.split(' ');
-          pubs.push({
-            date,
-            time,
-            type: 'set',
-            entity: set.name,
-            task: taskName,
-            artist: task.artist,
-            status: task.status || 'wip',
-          });
-        }
-      });
-    });
-
-    data.shots.forEach((shot) => {
-      Object.entries(shot.tasks || {}).forEach(([taskName, task]: [string, any]) => {
-        if (task.published_at) {
-          const [date, time] = task.published_at.split(' ');
-          pubs.push({
-            date,
-            time,
-            type: 'shot',
-            entity: shot.name,
-            task: taskName,
-            artist: task.artist,
-            status: task.status,
-          });
-        }
-      });
-    });
+    data.assets.forEach((asset) => addPublications(asset, 'asset'));
+    data.sets.forEach((set) => addPublications(set, 'set'));
+    data.shots.forEach((shot) => addPublications(shot, 'shot'));
 
     return pubs.sort((a, b) => {
       const dateA = new Date(`${a.date} ${a.time}`);
@@ -284,11 +254,13 @@ export function Calendar({ data }: CalendarProps) {
                               }`}>
                                 {pub.type}
                               </span>
-                              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${
-                                pub.status === 'wip' ? 'bg-amber-500' :
-                                pub.status === 'ready' ? 'bg-blue-500' :
-                                'bg-emerald-500'
-                              }`}></span>
+                              <span
+                                className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${
+                                  pub.status in statusStyles
+                                    ? statusStyles[pub.status as keyof typeof statusStyles].dotClass
+                                    : 'bg-zinc-500'
+                                }`}
+                              ></span>
                               <span className="text-zinc-400">{pub.entity}</span>
                               <span className="text-zinc-600 mx-0.5">/</span>
                               <span className="text-zinc-500">{pub.task}</span>

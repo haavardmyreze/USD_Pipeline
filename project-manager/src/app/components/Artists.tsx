@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { StatusBadge } from './StatusBadge';
-import { iterateSetTasks } from '../lib/setTasks';
+import { iterateEntityTasks } from '../lib/entityTasks';
+import { normalizeStatus, PIPELINE_STATUSES, statusStyles, type PipelineStatus } from '../lib/statuses';
 
 interface PipelineData {
   assets: any[];
@@ -19,12 +20,42 @@ interface TaskEntry {
   entity: string;
   step: string;
   hipFile: string;
-  status: 'wip' | 'ready' | 'final';
+  status: PipelineStatus | 'unknown';
   notes: string;
 }
 
 export function Artists({ data }: ArtistsProps) {
-  const [statusFilters, setStatusFilters] = useState<Set<'wip' | 'ready' | 'final'>>(new Set(['wip', 'ready', 'final']));
+  const allTasks = useMemo(() => {
+    if (!data) return [];
+    const tasks: TaskEntry[] = [];
+
+    const addEntity = (entity: any, type: 'asset' | 'set' | 'shot') => {
+      iterateEntityTasks(entity, (step, task) => {
+        tasks.push({
+          artist: task.artist,
+          type,
+          entity: entity.name,
+          step,
+          hipFile: task.hip_file || '',
+          status: normalizeStatus(task.status),
+          notes: task.notes || '',
+        });
+      });
+    };
+
+    data.assets.forEach((asset) => addEntity(asset, 'asset'));
+    data.sets.forEach((set) => addEntity(set, 'set'));
+    data.shots.forEach((shot) => addEntity(shot, 'shot'));
+
+    return tasks;
+  }, [data]);
+
+  const statusOptions = PIPELINE_STATUSES;
+
+  const [statusFilters, setStatusFilters] = useState<Set<PipelineStatus>>(
+    () => new Set(PIPELINE_STATUSES),
+  );
+
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
 
   if (!data) {
@@ -35,7 +66,7 @@ export function Artists({ data }: ArtistsProps) {
     );
   }
 
-  const toggleStatusFilter = (status: 'wip' | 'ready' | 'final') => {
+  const toggleStatusFilter = (status: PipelineStatus) => {
     const newFilters = new Set(statusFilters);
     if (newFilters.has(status)) {
       newFilters.delete(status);
@@ -44,54 +75,6 @@ export function Artists({ data }: ArtistsProps) {
     }
     setStatusFilters(newFilters);
   };
-
-  const allTasks = useMemo(() => {
-    const tasks: TaskEntry[] = [];
-
-    data.assets.forEach((asset) => {
-      Object.entries(asset.tasks || {}).forEach(([step, task]: [string, any]) => {
-        tasks.push({
-          artist: task.artist,
-          type: 'asset',
-          entity: asset.name,
-          step,
-          hipFile: task.hip_file,
-          status: task.status,
-          notes: task.notes || '',
-        });
-      });
-    });
-
-    data.sets.forEach((set) => {
-      iterateSetTasks(set, (step, task) => {
-        tasks.push({
-          artist: task.artist,
-          type: 'set',
-          entity: set.name,
-          step,
-          hipFile: task.hip_file || '',
-          status: task.status || 'wip',
-          notes: task.notes || '',
-        });
-      });
-    });
-
-    data.shots.forEach((shot) => {
-      Object.entries(shot.tasks || {}).forEach(([step, task]: [string, any]) => {
-        tasks.push({
-          artist: task.artist,
-          type: 'shot',
-          entity: shot.name,
-          step,
-          hipFile: task.hip_file,
-          status: task.status,
-          notes: task.notes || '',
-        });
-      });
-    });
-
-    return tasks;
-  }, [data]);
 
   const artistOptions = useMemo(() => {
     return Array.from(new Set(allTasks.map((task) => task.artist))).sort((a, b) => a.localeCompare(b));
@@ -102,7 +85,6 @@ export function Artists({ data }: ArtistsProps) {
       setSelectedArtist(null);
       return;
     }
-
     if (!selectedArtist || !artistOptions.includes(selectedArtist)) {
       setSelectedArtist(artistOptions[0]);
     }
@@ -115,14 +97,9 @@ export function Artists({ data }: ArtistsProps) {
 
   const filteredTasks = useMemo(() => {
     if (!selectedArtist) return [];
-
-    return allTasks.filter((task) => {
-      if (task.artist !== selectedArtist) return false;
-
-      const matchesStatus = statusFilters.has(task.status);
-
-      return matchesStatus;
-    });
+    return allTasks.filter(
+      (task) => task.artist === selectedArtist && statusFilters.has(task.status),
+    );
   }, [allTasks, selectedArtist, statusFilters]);
 
   const groupedFilteredTasks = useMemo(() => {
@@ -131,27 +108,20 @@ export function Artists({ data }: ArtistsProps) {
       set: [],
       shot: [],
     };
-
     filteredTasks.forEach((task) => {
       grouped[task.type].push(task);
     });
-
     return grouped;
   }, [filteredTasks]);
 
   const selectedArtistSummary = useMemo(() => {
-    const summary = {
-      total: selectedArtistTasks.length,
-      wip: 0,
-      ready: 0,
-      final: 0,
-      asset: 0,
-      set: 0,
-      shot: 0,
-    };
+    const summary: Record<string, number> = { total: selectedArtistTasks.length, asset: 0, set: 0, shot: 0 };
+    PIPELINE_STATUSES.forEach((status) => {
+      summary[status] = 0;
+    });
 
     selectedArtistTasks.forEach((task) => {
-      summary[task.status] += 1;
+      if (task.status !== 'unknown') summary[task.status] += 1;
       summary[task.type] += 1;
     });
 
@@ -162,12 +132,6 @@ export function Artists({ data }: ArtistsProps) {
     asset: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
     set: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
     shot: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
-  };
-
-  const statusConfig = {
-    wip: { label: 'WIP', activeClass: 'bg-amber-500/20 text-amber-400 border-amber-500', inactiveClass: 'bg-zinc-800 text-zinc-600 border-zinc-700' },
-    ready: { label: 'Ready', activeClass: 'bg-blue-500/20 text-blue-400 border-blue-500', inactiveClass: 'bg-zinc-800 text-zinc-600 border-zinc-700' },
-    final: { label: 'Final', activeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500', inactiveClass: 'bg-zinc-800 text-zinc-600 border-zinc-700' },
   };
 
   return (
@@ -189,18 +153,18 @@ export function Artists({ data }: ArtistsProps) {
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-zinc-500 uppercase tracking-wide">Status:</span>
-          <div className="flex gap-1.5">
-            {(Object.keys(statusConfig) as Array<'wip' | 'ready' | 'final'>).map((status) => {
-              const config = statusConfig[status];
+          <div className="flex gap-1.5 flex-wrap">
+            {statusOptions.map((status) => {
+              const config = statusStyles[status];
               const isActive = statusFilters.has(status);
               return (
                 <button
                   key={status}
                   onClick={() => toggleStatusFilter(status)}
                   className={`px-2.5 py-1 rounded border text-xs font-medium transition-colors ${
-                    isActive ? config.activeClass : config.inactiveClass
+                    isActive ? config.filterActive : config.filterInactive
                   }`}
                 >
                   {config.label}
@@ -212,7 +176,7 @@ export function Artists({ data }: ArtistsProps) {
       </div>
 
       <div className="flex-1 overflow-auto bg-zinc-950">
-        {selectedArtist ? (
+        {selectedArtist && allTasks.length > 0 ? (
           <div className="p-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded p-3 mb-3">
               <div className="flex items-center justify-between mb-3">
@@ -222,12 +186,21 @@ export function Artists({ data }: ArtistsProps) {
                 </span>
               </div>
               <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs">
-                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">WIP: <span className="text-amber-400">{selectedArtistSummary.wip}</span></div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Ready: <span className="text-blue-400">{selectedArtistSummary.ready}</span></div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Final: <span className="text-emerald-400">{selectedArtistSummary.final}</span></div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Assets: <span className="text-zinc-100">{selectedArtistSummary.asset}</span></div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Sets: <span className="text-zinc-100">{selectedArtistSummary.set}</span></div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">Shots: <span className="text-zinc-100">{selectedArtistSummary.shot}</span></div>
+                {statusOptions.map((status) => (
+                  <div key={status} className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">
+                    {statusStyles[status].label}:{' '}
+                    <span className="text-zinc-100">{selectedArtistSummary[status] || 0}</span>
+                  </div>
+                ))}
+                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">
+                  Assets: <span className="text-zinc-100">{selectedArtistSummary.asset}</span>
+                </div>
+                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">
+                  Sets: <span className="text-zinc-100">{selectedArtistSummary.set}</span>
+                </div>
+                <div className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-zinc-300">
+                  Shots: <span className="text-zinc-100">{selectedArtistSummary.shot}</span>
+                </div>
               </div>
             </div>
 
@@ -238,39 +211,37 @@ export function Artists({ data }: ArtistsProps) {
 
                 return (
                   <div key={type}>
-                  <div className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-xs font-medium uppercase tracking-wide mb-1">
-                    <span className={`inline-flex px-2 py-0.5 rounded border text-xs font-medium ${typeColors[type]}`}>
-                      {type}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-5 gap-2 px-3 py-1.5 bg-zinc-900/70 border border-zinc-800 rounded text-[10px] font-medium text-zinc-500 uppercase tracking-wide mb-1">
-                    <div>Entity</div>
-                    <div>Step</div>
-                    <div>HIP File</div>
-                    <div>Status</div>
-                    <div>Notes</div>
-                  </div>
-                  <div className="space-y-1">
-                    {tasks.map((task, index) => {
-                      const hasNotes = task.notes.trim() !== '';
-                      return (
-                        <div
-                          key={`${task.entity}-${task.step}-${index}`}
-                          className="grid grid-cols-5 gap-2 items-center px-3 py-2 border border-zinc-800 rounded hover:border-zinc-700 transition-colors text-xs bg-zinc-900"
-                        >
-                          <div className="text-zinc-300">{task.entity}</div>
-                          <div className="text-zinc-300">{task.step}</div>
-                          <div className="font-mono text-zinc-400 truncate">{task.hipFile}</div>
-                          <div>
-                            <StatusBadge status={task.status} />
+                    <div className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-xs font-medium uppercase tracking-wide mb-1">
+                      <span className={`inline-flex px-2 py-0.5 rounded border text-xs font-medium ${typeColors[type]}`}>
+                        {type}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-2 px-3 py-1.5 bg-zinc-900/70 border border-zinc-800 rounded text-[10px] font-medium text-zinc-500 uppercase tracking-wide mb-1">
+                      <div>Entity</div>
+                      <div>Step</div>
+                      <div>HIP File</div>
+                      <div>Status</div>
+                      <div>Notes</div>
+                    </div>
+                    <div className="space-y-1">
+                      {tasks.map((task, index) => {
+                        const hasNotes = task.notes.trim() !== '';
+                        return (
+                          <div
+                            key={`${task.entity}-${task.step}-${index}`}
+                            className="grid grid-cols-5 gap-2 items-center px-3 py-2 border border-zinc-800 rounded hover:border-zinc-700 transition-colors text-xs bg-zinc-900"
+                          >
+                            <div className="text-zinc-300">{task.entity}</div>
+                            <div className="text-zinc-300">{task.step}</div>
+                            <div className="font-mono text-zinc-400 truncate">{task.hipFile}</div>
+                            <div>
+                              <StatusBadge status={task.status === 'unknown' ? undefined : task.status} />
+                            </div>
+                            <div className="text-zinc-400 truncate">{hasNotes ? task.notes : '—'}</div>
                           </div>
-                          <div className="text-zinc-400 truncate">
-                            {hasNotes ? task.notes : '—'}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
@@ -278,7 +249,7 @@ export function Artists({ data }: ArtistsProps) {
           </div>
         ) : (
           <div className="flex items-center justify-center py-12 text-zinc-500">
-            <p>No artists available</p>
+            <p>{allTasks.length === 0 ? 'No tasks in pipeline.json' : 'No artists available'}</p>
           </div>
         )}
       </div>
