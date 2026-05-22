@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StatusBadge } from './StatusBadge';
 import { ASSEMBLY_KEY, iterateEntityTasks, type PipelineTask } from '../lib/entityTasks';
+import { getShotSequence } from '../lib/shotCode';
 
 interface PipelineData {
   assets: any[];
@@ -119,10 +120,6 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
     return match ? match[1] : 'other';
   };
 
-  const getSequence = (shotName: string) => {
-    const match = shotName.match(/^([a-z]+)[_-]/);
-    return match ? match[1] : 'other';
-  };
 
   const getStableIndex = (value: string, size: number) => {
     let hash = 0;
@@ -170,7 +167,7 @@ export function PipelineWorkspace({ data }: WorkspaceProps) {
       });
     } else if (activeTab === 'shots') {
       entities.forEach((entity: any) => {
-        const seq = getSequence(entity.name);
+        const seq = getShotSequence(entity.name);
         if (!groupedEntities[seq]) groupedEntities[seq] = [];
         groupedEntities[seq].push(entity);
       });

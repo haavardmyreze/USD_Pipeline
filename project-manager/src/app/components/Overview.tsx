@@ -1,4 +1,5 @@
 import { iterateEntityTasks } from '../lib/entityTasks';
+import { compareShotCodes, getShotSequence } from '../lib/shotCode';
 
 interface PipelineData {
   project: {
@@ -54,14 +55,16 @@ export function Overview({ data }: OverviewProps) {
 
   const dependencies = getShotDependencies();
   const shotsBySequence = data.shots.reduce((acc: Record<string, any[]>, shot: any) => {
-    const sequenceMatch = shot.name?.match(/^([a-zA-Z0-9]+)_/);
-    const sequenceName = sequenceMatch ? sequenceMatch[1] : 'misc';
+    const sequenceName = getShotSequence(shot.name);
     if (!acc[sequenceName]) {
       acc[sequenceName] = [];
     }
     acc[sequenceName].push(shot);
     return acc;
   }, {});
+  Object.values(shotsBySequence).forEach((sequenceShots) => {
+    sequenceShots.sort((a, b) => compareShotCodes(a.name, b.name));
+  });
   const sortedSequences = Object.entries(shotsBySequence).sort(([a], [b]) => a.localeCompare(b));
 
   return (
