@@ -17,30 +17,15 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import { visit } from 'unist-util-visit'
 import './App.css'
+import {
+  getDocIdFromUrl,
+  getLibraryContent,
+  getLibraryDoc,
+  libraryDocs,
+  type LibraryDoc,
+} from './library'
 
-const defaultMarkdown = `# Quiet Reader
-
-Bring your own Markdown and read in a calm, focused layout.
-
-## What this viewer does
-
-- Loads local \`.md\` files
-- Renders clean typography
-- Lets you switch between continuous flow and paged mode
-
-> A good reading view disappears and lets the text lead.
-
-### Example checklist
-
-- [x] Beautiful spacing
-- [x] Comfortable line length
-- [x] A4-like page mode
-
-\`\`\`ts
-const mood = "Apple + Bear + Notion";
-console.log(mood);
-\`\`\`
-`
+const fallbackMarkdown = '# No document\n\nAdd `.md` files to `markdown-viewer/library/` or load a file from disk.'
 
 type TocEntry = {
   id: string
@@ -253,10 +238,46 @@ function getHeadingElement(id: string) {
   )
 }
 
+function resolveInitialDocument() {
+  const fromUrl = getDocIdFromUrl()
+  if (fromUrl) {
+    const doc = getLibraryDoc(fromUrl)
+    const content = getLibraryContent(fromUrl)
+    if (doc && content) {
+      return { content, fileName: doc.fileName, libraryId: doc.id }
+    }
+  }
+
+  try {
+    const stored = localStorage.getItem('mdv-library-doc')
+    if (stored) {
+      const doc = getLibraryDoc(stored)
+      const content = getLibraryContent(stored)
+      if (doc && content) {
+        return { content, fileName: doc.fileName, libraryId: doc.id }
+      }
+    }
+  } catch {
+    // ignore persistence errors (e.g. private mode)
+  }
+
+  const firstDoc = libraryDocs[0]
+  if (firstDoc) {
+    const content = getLibraryContent(firstDoc.id)
+    if (content) {
+      return { content, fileName: firstDoc.fileName, libraryId: firstDoc.id }
+    }
+  }
+
+  return { content: fallbackMarkdown, fileName: 'No library documents', libraryId: '' }
+}
+
 function App() {
-  const [markdown, setMarkdown] = useState(defaultMarkdown)
+  const initialDocument = useMemo(() => resolveInitialDocument(), [])
+  const [markdown, setMarkdown] = useState(initialDocument.content)
   const [isPaged, setIsPaged] = useState(false)
-  const [fileName, setFileName] = useState('Built-in sample')
+  const [fileName, setFileName] = useState(initialDocument.fileName)
+  const [activeLibraryId, setActiveLibraryId] = useState(initialDocument.libraryId)
   const [activeHeadingId, setActiveHeadingId] = useState<string>('')
   const [pageSize, setPageSize] = useState<PageSize>('A4')
   const [theme, setTheme] = useState<Theme>(() => {
@@ -270,12 +291,14 @@ function App() {
     }
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [pagedContent, setPagedContent] = useState<PageData[]>([
-    { content: markdown, header: '' },
+    { content: initialDocument.content, header: '' },
   ])
   const measureHostRef = useRef<HTMLDivElement | null>(null)
   const tocPanelRef = useRef<HTMLElement | null>(null)
   const settingsRef = useRef<HTMLDivElement | null>(null)
+  const libraryRef = useRef<HTMLDivElement | null>(null)
 
   const blocks = useMemo(() => splitMarkdownBlocks(markdown), [markdown])
   const blockMeta = useMemo(() => computeBlockMeta(blocks), [blocks])
@@ -485,6 +508,33 @@ function App() {
   }, [settingsOpen])
 
   useEffect(() => {
+    if (!libraryOpen) {
+      return
+    }
+
+    const onPointerDown = (event: Event) => {
+      if (
+        libraryRef.current &&
+        !libraryRef.current.contains(event.target as Node)
+      ) {
+        setLibraryOpen(false)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setLibraryOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [libraryOpen])
+
+  useEffect(() => {
     if (!activeHeadingId || !tocPanelRef.current) {
       return
     }
@@ -508,6 +558,32 @@ function App() {
     setActiveHeadingId(id)
   }
 
+  const loadLibraryDoc = (doc: LibraryDoc) => {
+    const content = getLibraryContent(doc.id)
+    if (!content) {
+      return
+    }
+
+    setMarkdown(content)
+    setFileName(doc.fileName)
+    setActiveLibraryId(doc.id)
+    setActiveHeadingId('')
+    setLibraryOpen(false)
+    setSettingsOpen(false)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+
+    const url = new URL(window.location.href)
+    url.searchParams.set('doc', doc.id)
+    url.hash = ''
+    window.history.replaceState(null, '', url)
+
+    try {
+      localStorage.setItem('mdv-library-doc', doc.id)
+    } catch {
+      // ignore persistence errors (e.g. private mode)
+    }
+  }
+
   const onFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) {
@@ -517,6 +593,16 @@ function App() {
     const content = await file.text()
     setMarkdown(content)
     setFileName(file.name)
+    setActiveLibraryId('')
+    setActiveHeadingId('')
+    window.scrollTo({ top: 0, behavior: 'auto' })
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('doc')
+    url.hash = ''
+    window.history.replaceState(null, '', url)
+
+    event.target.value = ''
   }
 
   return (
@@ -529,7 +615,52 @@ function App() {
             <p className="subtle">{fileName}</p>
           </div>
         </div>
-        <div className="controls" ref={settingsRef}>
+        <div className="controls">
+          <div className="library-control" ref={libraryRef}>
+            <button
+              type="button"
+              className={libraryOpen ? 'text-button active' : 'text-button'}
+              aria-label="Document library"
+              aria-expanded={libraryOpen}
+              onClick={() => {
+                setLibraryOpen((value) => !value)
+                setSettingsOpen(false)
+              }}
+            >
+              Library
+            </button>
+
+            {libraryOpen ? (
+              <div className="library-popover" role="dialog" aria-label="Document library">
+                <p className="settings-label">Library</p>
+                {libraryDocs.length === 0 ? (
+                  <p className="library-empty">
+                    Add `.md` files to <code>markdown-viewer/library/</code>
+                  </p>
+                ) : (
+                  <nav className="library-list">
+                    {libraryDocs.map((doc) => (
+                      <button
+                        type="button"
+                        key={doc.id}
+                        className={
+                          activeLibraryId === doc.id ? 'library-item active' : 'library-item'
+                        }
+                        onClick={() => loadLibraryDoc(doc)}
+                      >
+                        <span className="library-item-title">{doc.title}</span>
+                        {doc.id.includes('/') ? (
+                          <span className="library-item-path">{doc.id}</span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </nav>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="controls-actions" ref={settingsRef}>
           <label className="file-button">
             Load Markdown
             <input
@@ -543,7 +674,10 @@ function App() {
             className={settingsOpen ? 'icon-button active' : 'icon-button'}
             aria-label="Settings"
             aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen((value) => !value)}
+            onClick={() => {
+              setSettingsOpen((value) => !value)
+              setLibraryOpen(false)
+            }}
           >
             <svg
               width="18"
@@ -617,6 +751,7 @@ function App() {
               </div>
             </div>
           ) : null}
+          </div>
         </div>
       </header>
 

@@ -166,6 +166,108 @@
   flex: 0 0 auto;
 }
 
+.controls-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.library-control {
+  position: relative;
+}
+
+.text-button {
+  font-family: var(--font-ui);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.text-button:hover,
+.text-button.active {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+}
+
+.library-popover {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 40;
+  width: min(18rem, 80vw);
+  max-height: min(24rem, 60vh);
+  overflow: auto;
+  padding: 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.library-empty {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.library-empty code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78em;
+}
+
+.library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.45rem;
+}
+
+.library-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
+  width: 100%;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.library-item:hover {
+  background: color-mix(in srgb, var(--surface-raised) 80%, transparent);
+  color: var(--ink);
+}
+
+.library-item.active {
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.library-item-title {
+  line-height: 1.3;
+}
+
+.library-item-path {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 .file-button {
   font-family: var(--font-ui);
   border: 1px solid var(--line-strong);

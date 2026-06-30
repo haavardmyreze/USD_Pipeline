@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# Quiet Reader
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A calm, typography-focused Markdown viewer with table of contents, page mode, and themes.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Document library
+
+Add Markdown files to the `library/` folder in this project:
+
+```
+markdown-viewer/library/
+  welcome.md
+  your-guide.md
+  guides/naming-conventions.md
+```
+
+Every `.md` file is picked up automatically and listed in the **Library** menu — no configuration or file picker needed. Titles come from the document's first `#` heading.
+
+Subfolders are supported. Files named `README.md` or starting with `_` are ignored.
+
+You can still use **Load Markdown** to open a one-off file from disk.
+
+### Deep links
+
+Open a library document directly:
+
+```
+http://localhost:5173/?doc=welcome
+http://localhost:5173/?doc=guides/naming-conventions
+```
+
+The last opened library document is remembered in the browser.
