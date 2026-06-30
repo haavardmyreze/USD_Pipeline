@@ -1,0 +1,273 @@
+:root {
+  /* UI chrome — neutral grayscale only, no blue cast */
+  --bg: #0e0e0e;
+  --paper: #fafafa;
+  --surface: #2a2a2a;
+  --surface-raised: #363636;
+  --ink: #e8e8e8;
+  --ink-soft: #c4c4c4;
+  --muted: #8a8a8a;
+  --line: #3a3a3a;
+  --line-strong: #505050;
+  --ui-border: #d4d4d4;
+  --shadow-soft:
+    0 1px 2px rgba(0, 0, 0, 0.14),
+    0 16px 32px rgba(0, 0, 0, 0.32);
+
+  /* Document content on paper */
+  --content-ink: #1b2430;
+  --content-ink-soft: #374151;
+  --content-muted: #64748b;
+  --content-line: #d6dbe3;
+  --content-code-bg: #eef3f8;
+  --content-accent: #4b6b88;
+  --content-accent-strong: #2f5f8f;
+  --content-heading: #22374d;
+  --content-heading-soft: #36536f;
+  --content-table-head: #e8f0f8;
+  --content-highlight: #f4efe2;
+
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Times New Roman', serif;
+  --font-body: 'Charter', 'Georgia', 'Times New Roman', serif;
+  --font-ui: Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+[data-theme='crimson'] {
+  --bg: #100d0e;
+  --paper: #f7f3f3;
+  --surface: #2a2424;
+  --surface-raised: #3a3030;
+  --ink: #ece4e4;
+  --ink-soft: #c9bcbc;
+  --muted: #8f7e7e;
+  --line: #3c3232;
+  --line-strong: #574848;
+  --ui-border: #d3c6c6;
+
+  --content-ink: #271c1c;
+  --content-ink-soft: #3d2d2d;
+  --content-muted: #876b6b;
+  --content-line: #e1d2d2;
+  --content-code-bg: #f4e9e9;
+  --content-accent: #9a3b3b;
+  --content-accent-strong: #a52121;
+  --content-heading: #6e1f1f;
+  --content-heading-soft: #8a2e2e;
+  --content-table-head: #f2e1e1;
+  --content-highlight: #f6e8e3;
+
+  /* Bold slab/editorial serif — newspaper headline energy. */
+  --font-display: 'Rockwell', 'Roboto Slab', 'Bookman Old Style', Georgia, serif;
+  --font-body: Georgia, 'Times New Roman', 'Liberation Serif', serif;
+}
+
+[data-theme='sepia'] {
+  --bg: #1b1410;
+  --paper: #f3e7cd;
+  --surface: #382c20;
+  --surface-raised: #483a2a;
+  --ink: #f2e3c6;
+  --ink-soft: #dcc9a4;
+  --muted: #a8916c;
+  --line: #4c3d2b;
+  --line-strong: #65503a;
+  --ui-border: #c9af80;
+
+  --content-ink: #3a2c19;
+  --content-ink-soft: #4e3c23;
+  --content-muted: #927748;
+  --content-line: #d8c298;
+  --content-code-bg: #ecdcbb;
+  --content-accent: #9a6a26;
+  --content-accent-strong: #a85e17;
+  --content-heading: #5f3c12;
+  --content-heading-soft: #7a4f1e;
+  --content-table-head: #e9d6ad;
+  --content-highlight: #ecdfc3;
+}
+
+[data-theme='ink'] {
+  --bg: #000000;
+  --paper: #ffffff;
+  --surface: #161616;
+  --surface-raised: #242424;
+  --ink: #fafafa;
+  --ink-soft: #d2d2d2;
+  --muted: #8c8c8c;
+  --line: #2c2c2c;
+  --line-strong: #4a4a4a;
+  --ui-border: #000000;
+
+  --content-ink: #000000;
+  --content-ink-soft: #161616;
+  --content-muted: #4a4a4a;
+  --content-line: #8a8a8a;
+  --content-code-bg: #eeeeee;
+  --content-accent: #000000;
+  --content-accent-strong: #000000;
+  --content-heading: #000000;
+  --content-heading-soft: #111111;
+  --content-table-head: #e2e2e2;
+  --content-highlight: #efefef;
+
+  /* Stark, technical: monospace headings over a neutral grotesque body. */
+  --font-display: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-body: 'Helvetica Neue', Arial, system-ui, 'Segoe UI', sans-serif;
+}
+
+/* Notion — mirrors the Houdini Solaris / USD Pipeline Guide PDF:
+   white page, black sans-serif text, red monospace/code accents, gray code blocks. */
+[data-theme='notion'] {
+  --bg: #121212;
+  --paper: #ffffff;
+  --surface: #1d1d1d;
+  --surface-raised: #2a2a2a;
+  --ink: #ededed;
+  --ink-soft: #c2c2c2;
+  --muted: #8a8a8a;
+  --line: #333333;
+  --line-strong: #4d4d4d;
+  --ui-border: #d9d9d9;
+
+  --content-ink: #1a1a1a;
+  --content-ink-soft: #333333;
+  --content-muted: #8c8c8c;
+  --content-line: #e3e3e3;
+  --content-code-bg: #f2f2f2;
+  --content-accent: #c0341d;
+  --content-accent-strong: #b02d18;
+  --content-heading: #111111;
+  --content-heading-soft: #222222;
+  --content-table-head: #f0f0f0;
+  --content-highlight: #fbeae6;
+
+  --font-display: 'Helvetica Neue', 'Segoe UI', Arial, system-ui, sans-serif;
+  --font-body: 'Helvetica Neue', 'Segoe UI', Arial, system-ui, sans-serif;
+}
+
+/* Nord — cool arctic frost */
+[data-theme='nord'] {
+  --bg: #242933;
+  --paper: #eceff4;
+  --surface: #2e3440;
+  --surface-raised: #3b4252;
+  --ink: #e5e9f0;
+  --ink-soft: #c8d0de;
+  --muted: #7b8294;
+  --line: #3b4252;
+  --line-strong: #4c566a;
+  --ui-border: #d8dee9;
+
+  --content-ink: #2e3440;
+  --content-ink-soft: #3b4252;
+  --content-muted: #5b6679;
+  --content-line: #d8dee9;
+  --content-code-bg: #e2e8f1;
+  --content-accent: #5e81ac;
+  --content-accent-strong: #4a6f9c;
+  --content-heading: #2e3440;
+  --content-heading-soft: #434c5e;
+  --content-table-head: #e1e7f2;
+  --content-highlight: #e6eef7;
+
+  /* Clean humanist sans — crisp and technical, like the palette. */
+  --font-display: 'Avenir Next', 'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
+  --font-body: 'Avenir Next', 'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
+}
+
+/* Forest — botanical greens on warm paper */
+[data-theme='forest'] {
+  --bg: #0f1410;
+  --paper: #f4f6ef;
+  --surface: #1a221b;
+  --surface-raised: #262f27;
+  --ink: #e7ece6;
+  --ink-soft: #c5cdc3;
+  --muted: #828c7d;
+  --line: #2b342c;
+  --line-strong: #3f4a3f;
+  --ui-border: #cdd6c8;
+
+  --content-ink: #1c241c;
+  --content-ink-soft: #2f3a2f;
+  --content-muted: #6a7563;
+  --content-line: #d3dccd;
+  --content-code-bg: #e9efe3;
+  --content-accent: #46784f;
+  --content-accent-strong: #2f6b3e;
+  --content-heading: #1f4d2c;
+  --content-heading-soft: #356b41;
+  --content-table-head: #e6efe0;
+  --content-highlight: #eef3e4;
+
+  /* Warm old-style serif — bookish and organic. */
+  --font-display: 'Hoefler Text', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-body: 'Hoefler Text', 'Palatino Linotype', Palatino, Georgia, serif;
+}
+
+/* Dusk — violet twilight */
+[data-theme='dusk'] {
+  --bg: #14111c;
+  --paper: #f6f3fb;
+  --surface: #221d2e;
+  --surface-raised: #2f2840;
+  --ink: #ebe6f2;
+  --ink-soft: #cbc2da;
+  --muted: #877e98;
+  --line: #2f2940;
+  --line-strong: #463c59;
+  --ui-border: #d6cee6;
+
+  --content-ink: #241d33;
+  --content-ink-soft: #392f4d;
+  --content-muted: #786a8c;
+  --content-line: #ddd3ec;
+  --content-code-bg: #efe9f7;
+  --content-accent: #6d4fb0;
+  --content-accent-strong: #5a3ba0;
+  --content-heading: #3d2a66;
+  --content-heading-soft: #533c80;
+  --content-table-head: #ece4f6;
+  --content-highlight: #f0e9f9;
+
+  /* Elegant transitional serif — refined, slightly editorial. */
+  --font-display: 'Baskerville', 'Hoefler Text', 'Big Caslon', Georgia, serif;
+  --font-body: 'Baskerville', 'Hoefler Text', Georgia, serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink-soft);
+  font-family: var(--font-body);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Topbar / shell headings */
+.reader-shell > header h1,
+.reader-shell > header h2,
+.reader-shell > header h3,
+.reader-shell > header h4 {
+  font-family: var(--font-display);
+  margin-top: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.reader-shell > header h1 {
+  font-size: clamp(1.15rem, 1.8vw, 1.45rem);
+  margin: 0;
+  line-height: 1.1;
+}
