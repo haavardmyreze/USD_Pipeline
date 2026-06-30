@@ -39,6 +39,7 @@
 **Part IV — Putting It Together**
 
 24. Worked Example: Full Production Cycle
+25. Further Reading
 
 ---
 
@@ -511,6 +512,8 @@ The shot root (`neon-0010.usda`) is the shot's assembly file: a simple file that
 
 The set is not subLayered in the shot root directly — it enters the composition through the layout block, which subLayers it. This keeps the set's contribution in the correct position in the opinion stack.
 
+Note that this order is the **reverse** of the build order in 9.3. Earlier-listed layers are stronger (Section 5.1), so lighting — the last department to touch the shot — sits at the top and its overrides win over everything beneath, while layout sits at the bottom.
+
 This file is not hand-edited for daily work. Daily work belongs in the blocks.
 
 ### 9.5 Ownership
@@ -853,7 +856,7 @@ over "World" {
 }
 ```
 
-This opinion lives only in the layout layer. The asset file is unchanged.
+This opinion lives only in the overriding block (here, layout). The asset file is unchanged.
 
 ---
 
@@ -1191,7 +1194,7 @@ The descriptor is optional. When omitted, remove the token and its underscore en
 
 | Token | Meaning |
 | --- | --- |
-| `bc` | Base color (RGB) |
+| `bc` | Base colour (RGB) |
 | `n` | Normal (RGB) |
 | `aormt` | AO / Roughness / Metalness (R / G / B in that order) |
 | `m` | Mask (Grayscale) |
@@ -1378,11 +1381,13 @@ Assets, sets, and shots all share the same shape: a `blocks/` folder holding one
             - 📄 `studio-rig.usda`
     - 📁 houdini/
         - 📁 `otls/`
+        - 📁 ocio/
+            - 📄 `config.ocio` ← pinned colour config (Section 11.4)
         - 📄 `houdini.env`
     - 📁 docs/
         - 📄 `pipeline-guide.md`
 
-*For texture naming conventions, placement, and validation patterns, see Sections 16.11 and 17.*
+*For texture naming conventions and validation patterns, see Section 16.11.*
 
 ---
 
@@ -1464,9 +1469,9 @@ A file on disk that is not committed to SVN is not published — it exists only 
 Published USD filenames are stable. If you need versioned snapshots for rollback, use a `versions/` subfolder:
 
 ```
-/shots/neon/0010/blocks/anim/usd/neon-0010_anim.usda              ← stable, referenced by others
-/shots/neon/0010/blocks/anim/usd/versions/neon-0010_anim_v001.usda
-/shots/neon/0010/blocks/anim/usd/versions/neon-0010_anim_v002.usda
+$SHOTS/neon/0010/blocks/anim/usd/neon-0010_anim.usda              ← stable, referenced by others
+$SHOTS/neon/0010/blocks/anim/usd/versions/neon-0010_anim_v001.usda
+$SHOTS/neon/0010/blocks/anim/usd/versions/neon-0010_anim_v002.usda
 ```
 
 Nothing in the pipeline references the `versions/` folder.
@@ -1492,7 +1497,6 @@ Nothing in the pipeline references the `versions/` folder.
 - Personal scratch files
 
 Heavy simulation caches should be discussed with the team before committing — they may need external storage.
-
 
 ### 20.3 SVN and binary files
 
@@ -1880,6 +1884,32 @@ Other shots are unaffected. The coffee table remains in its original set positio
 
 The key point: **only republish if your layer’s content has actually changed or broken**. USD’s reference chain propagates updates automatically. Republishing unnecessarily creates noise and forces downstream artists to reload without reason.
 
+---
+
+## 25. Further Reading
+
+Authoritative references for going deeper. The OpenUSD links cover the standard itself; the SideFX links cover how Houdini implements it.
+
+**OpenUSD (the standard)**
+
+- [Introduction to OpenUSD](https://openusd.org/release/intro.html) — Pixar's overview of what USD is and why it exists.
+- [OpenUSD Glossary](https://openusd.org/release/glossary.html) — canonical definitions of stage, layer, prim, composition arc, LIVRPS, instancing, and the rest.
+- [Pixar OpenUSD](https://www.pixar.com/openusd) — the project's home page.
+- [Alliance for OpenUSD (AOUSD)](https://aousd.org) — the body standardising USD across vendors.
+
+**Houdini: Solaris, Karma, Husk**
+
+- [Solaris / LOPs documentation](https://www.sidefx.com/docs/houdini/solaris/) — the LOPs context this whole guide is built on.
+- [LOPs & USD Glossary](https://www.sidefx.com/docs/houdini/solaris/glossary.html) — USD terms mapped to Houdini's wording; useful where the two differ.
+- [Karma documentation](https://www.sidefx.com/docs/houdini/karma/) — the renderer, CPU and XPU.
+- [husk command-line renderer](https://www.sidefx.com/docs/houdini/ref/utils/husk.html) — the full, version-specific flag reference for farm rendering (Section 13.6).
+- [USD Render ROP](https://www.sidefx.com/docs/houdini/nodes/out/usdrender.html) — rendering the stage from inside Houdini.
+- [Colour management (OCIO) in Houdini](https://www.sidefx.com/docs/houdini/solaris/ocio.html) — the authoritative version of Section 11.4.
+
+**Shading and colour**
+
+- [MaterialX](https://materialx.org/) — the shading standard used for lookdev (Section 11.3).
+- [OpenColorIO](https://opencolorio.org/) — the colour-management system behind the OCIO config (Section 11.4).
 
 ---
 
