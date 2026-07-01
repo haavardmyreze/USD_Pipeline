@@ -1,91 +1,214 @@
-.reader-shell {
-  position: relative;
-  width: min(1500px, 100%);
-  margin: 0 auto;
-  padding: 1rem 1.25rem 3rem;
-}
-
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  margin-inline: -1.25rem;
-  padding: 0.85rem 1.25rem 1rem;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--bg) 96%, transparent) 0%,
-    color-mix(in srgb, var(--bg) 88%, transparent) 72%,
-    transparent 100%
-  );
-  backdrop-filter: blur(10px);
-}
-
 .eyebrow {
   font-family: var(--font-ui);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  font-size: 0.66rem;
   color: var(--muted);
   margin: 0;
 }
 
-.subtle {
-  font-family: var(--font-ui);
-  color: var(--muted);
+/* ================================================================== *
+ * Chrome header — Craft-style floating pill shared by home + reader.
+ * Lives OUTSIDE the themed canvas, so it never changes with the theme.
+ * ================================================================== */
+.topbar-shell {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: var(--topbar-shell-pad) var(--gutter);
+  pointer-events: none;
+}
+
+.topbar-shell > .app-topbar {
+  pointer-events: auto;
+}
+
+.app-topbar {
+  max-width: min(var(--reader-max), calc(100vw - 2 * var(--gutter) - 1rem));
+  margin: 0 auto;
+  height: var(--topbar-pill-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-inline: 0.9rem 1rem;
+  background: color-mix(in srgb, var(--surface) 52%, transparent);
+  backdrop-filter: blur(24px) saturate(1.25);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 38%, transparent);
+  border-radius: 999px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 4px 18px rgba(0, 0, 0, 0.18);
+}
+
+.home-topbar-row {
+  max-width: var(--home-max);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.home-topbar-row .app-topbar {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: var(--topbar-pill-h);
+  max-width: none;
   margin: 0;
-  font-size: 0.82rem;
+  padding-inline: 0.65rem;
+  justify-content: center;
+}
+
+.reader-topbar-shell .app-topbar {
+  max-width: min(var(--reader-max), calc(100vw - 2 * var(--gutter) - 1rem));
+}
+
+.topbar-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.topbar-divider {
+  width: 1px;
+  height: 1.15rem;
+  background: var(--line-strong);
+  flex: 0 0 auto;
+}
+
+.doc-name {
+  font-family: var(--font-ui);
+  color: var(--ink-soft);
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 28rem;
-}
-
-.title-group {
-  flex: 1 1 auto;
   min-width: 0;
 }
 
-.title-row {
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.ghost-button:hover {
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+.ghost-button svg {
+  flex: 0 0 auto;
+}
+
+.home-link {
+  flex: 0 0 auto;
+  margin-inline-start: -0.35rem;
+}
+
+.controls {
+  position: relative;
   display: flex;
-  align-items: baseline;
-  gap: 0.85rem;
-  min-width: 0;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  flex: 0 0 auto;
 }
 
-.reader-body {
+.controls-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+
+.icon-button:hover {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+}
+
+.icon-button.active {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+/* Contents toggle only appears on narrow screens (see media query). */
+.toc-toggle {
+  display: none;
+}
+
+/* ================================================================== *
+ * Reader — the themed document reading section.
+ * ================================================================== */
+.reader-root {
+  position: relative;
+  width: 100%;
+}
+
+.reader-canvas {
+  position: relative;
+  background: var(--bg);
+  color: var(--content-ink-soft);
+  min-height: calc(100vh - var(--topbar-total));
   display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 1.4rem;
-  align-items: start;
+  grid-template-columns: var(--toc-width) minmax(0, 1fr) var(--toc-width);
+  column-gap: clamp(1.25rem, 3vw, 2.75rem);
+  padding: clamp(1.5rem, 3vw, 2.75rem) var(--gutter) 5rem;
 }
 
 .toc-panel {
   position: sticky;
-  top: 4.75rem;
-  padding: 0.75rem 0.7rem;
-  border-left: 1px solid var(--line);
-  max-height: calc(100vh - 5.5rem);
+  top: calc(var(--topbar-total) + clamp(1.25rem, 3vw, 2.75rem));
+  align-self: start;
+  max-height: calc(100vh - var(--topbar-total) - 2rem);
   overflow-y: auto;
+  padding-right: 0.35rem;
+  scrollbar-width: thin;
 }
 
 .toc-panel h2 {
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   color: var(--muted);
-  margin: 0 0 0.65rem;
+  margin: 0 0 0.7rem;
 }
 
 .toc-panel nav {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.15rem;
 }
 
 .toc-link {
@@ -107,10 +230,12 @@
 
 .toc-l2 {
   opacity: 0.74;
+  margin-left: 0.65rem;
 }
 
 .toc-l3 {
   opacity: 0.6;
+  margin-left: 1.25rem;
 }
 
 .toc-link:hover {
@@ -142,176 +267,22 @@
   opacity: 0.82;
 }
 
-.toc-l2 {
-  margin-left: 0.65rem;
-}
-
-.toc-l3 {
-  margin-left: 1.25rem;
-}
-
 .toc-empty {
   font-family: var(--font-ui);
   color: var(--muted);
   font-size: 0.85rem;
 }
 
-.controls {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  flex: 0 0 auto;
-}
-
-.controls-actions {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.library-control {
-  position: relative;
-}
-
-.text-button {
-  font-family: var(--font-ui);
-  border: 1px solid var(--line-strong);
-  background: var(--surface-raised);
-  color: var(--ink);
-  border-radius: 8px;
-  padding: 0.45rem 0.75rem;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 160ms ease;
-}
-
-.text-button:hover,
-.text-button.active {
-  border-color: var(--ink-soft);
-  color: var(--ink);
-}
-
-.library-popover {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  z-index: 40;
-  width: min(18rem, 80vw);
-  max-height: min(24rem, 60vh);
-  overflow: auto;
-  padding: 0.9rem;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
-}
-
-.library-empty {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 0.82rem;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
-.library-empty code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.78em;
-}
-
-.library-list {
+.doc-col {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.45rem;
-}
-
-.library-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.12rem;
-  width: 100%;
-  padding: 0.5rem 0.55rem;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink-soft);
-  font-family: var(--font-ui);
-  font-size: 0.84rem;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-
-.library-item:hover {
-  background: color-mix(in srgb, var(--surface-raised) 80%, transparent);
-  color: var(--ink);
-}
-
-.library-item.active {
-  background: var(--surface-raised);
-  border-color: var(--line-strong);
-  color: var(--ink);
-}
-
-.library-item-title {
-  line-height: 1.3;
-}
-
-.library-item-path {
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-.file-button {
-  font-family: var(--font-ui);
-  border: 1px solid var(--line-strong);
-  background: var(--surface-raised);
-  color: var(--ink);
-  border-radius: 8px;
-  padding: 0.45rem 0.75rem;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 160ms ease;
-}
-
-.file-button:hover {
-  border-color: var(--line-strong);
-  transform: translateY(-1px);
-}
-
-.file-button input {
-  display: none;
-}
-
-.icon-button {
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 2.1rem;
-  height: 2.1rem;
-  border: 1px solid var(--line-strong);
-  background: var(--surface-raised);
-  color: var(--ink);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 160ms ease;
 }
 
-.icon-button:hover {
-  border-color: var(--ink-soft);
-}
-
-.icon-button.active {
-  border-color: var(--ink-soft);
-  color: var(--ink);
-}
-
+/* ================================================================== *
+ * Settings popover (chrome) — used in reader + home.
+ * ================================================================== */
 .settings-popover {
   position: absolute;
   top: calc(100% + 0.5rem);
@@ -320,9 +291,9 @@
   width: 16rem;
   padding: 0.9rem;
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -446,6 +417,286 @@
   background: linear-gradient(135deg, #14111c 50%, #6d4fb0 50%);
 }
 
+/* ================================================================== *
+ * Home hub — fixed modern chrome look (never themed).
+ * ================================================================== */
+.home-shell {
+  width: 100%;
+}
+
+.home-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.home-brand h1 {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.home-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.home-theme {
+  position: relative;
+}
+
+.home-theme-popover {
+  gap: 0;
+}
+
+.home-body {
+  max-width: var(--home-max);
+  margin: 0 auto;
+  padding: clamp(1.75rem, 4vw, 3rem) var(--gutter) 5rem;
+}
+
+.home-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.home-section-head h2 {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.home-count {
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+.doc-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.doc-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.doc-card:focus-visible {
+  outline: 2px solid var(--ink-soft);
+  outline-offset: 2px;
+}
+
+.doc-card-active {
+  border-color: var(--ink-soft);
+}
+
+/* Neutral faux "page" cover — consistent regardless of reading theme. */
+.doc-card-preview {
+  height: 8.5rem;
+  padding: 1.1rem 1.1rem 0;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--surface-raised) 70%, var(--bg)) 0%,
+    var(--bg) 100%
+  );
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: center;
+}
+
+.doc-card-page {
+  width: 100%;
+  max-width: 11rem;
+  background: #f6f7f9;
+  border-radius: 6px 6px 0 0;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  padding: 0.85rem 0.9rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  overflow: hidden;
+}
+
+.doc-card-page-title {
+  font-family: var(--font-display);
+  color: #1f2733;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-card-page-rule {
+  height: 2px;
+  width: 2.2rem;
+  border-radius: 2px;
+  background: #9aa4b2;
+}
+
+.doc-card-page-line {
+  height: 0.34rem;
+  border-radius: 2px;
+  background: #d9dde3;
+}
+
+.doc-card-page-line.short {
+  width: 65%;
+}
+
+.doc-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.95rem 1.05rem 1.1rem;
+}
+
+.doc-card-title {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.doc-card-excerpt {
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.doc-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.doc-card-dot {
+  opacity: 0.6;
+}
+
+.doc-card-folder {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+}
+
+.doc-card-badge {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-raised) 85%, transparent);
+  border: 1px solid var(--line-strong);
+  color: var(--ink-soft);
+  backdrop-filter: blur(4px);
+}
+
+.doc-card-import {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-style: dashed;
+  border-color: var(--line-strong);
+  background: transparent;
+  min-height: 8.5rem;
+  gap: 0.4rem;
+  padding: 1.75rem 1.25rem;
+}
+
+.doc-card-import:hover {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.doc-card-import input {
+  display: none;
+}
+
+.doc-card-import-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.doc-card-import .doc-card-body {
+  align-items: center;
+  padding: 0;
+}
+
+.home-empty {
+  margin: 2rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.home-empty code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  padding: 0.05em 0.3em;
+  border-radius: 5px;
+  background: var(--surface-raised);
+}
+
+/* ================================================================== *
+ * Document paper + content (themed via .reader-canvas[data-theme]).
+ * ================================================================== */
 .paper-scroll,
 .paper-page {
   background: var(--paper);
@@ -457,24 +708,38 @@
 
 .paper-scroll {
   width: min(var(--page-width, 210mm), 100%);
-  margin: 0 auto;
   padding: var(--page-padding, 22mm 18mm);
 }
 
+/* Paged mode: each page renders at its TRUE A-paper size, then is scaled down
+   uniformly (via `zoom`, which reflows) to fit the column width so proportions
+   stay correct. `min-height` lets a page grow for an oversized single block
+   instead of clipping its content. */
 .page-stack {
-  display: grid;
-  gap: 1.2rem;
-  justify-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
 }
 
 .paper-page {
-  width: min(var(--page-width, 210mm), 100%);
-  aspect-ratio: auto;
-  height: auto;
+  width: var(--page-width, 210mm);
   min-height: var(--page-height, 297mm);
   padding: var(--page-padding, 22mm 18mm);
   position: relative;
-  overflow: visible;
+  overflow: hidden;
+  zoom: var(--page-scale, 1);
+}
+
+/* Edge margins are absorbed by the page padding at render time but are excluded
+   from the pagination height budget — reset them so page height stays honest. */
+.page-body > :first-child {
+  margin-top: 0;
+}
+
+.page-body > :last-child {
+  margin-bottom: 0;
 }
 
 .page-running-header {
@@ -514,7 +779,7 @@
   color: var(--content-heading);
   letter-spacing: -0.01em;
   font-family: var(--font-display);
-  scroll-margin-top: 5.5rem;
+  scroll-margin-top: calc(var(--topbar-total) + 0.5rem);
 }
 
 .paper-scroll p,
@@ -729,56 +994,75 @@
   overflow: hidden;
 }
 
+/* The measurement page MUST match the rendered page's box exactly (same width
+   AND same padding) so text wraps identically and block heights are accurate.
+   Otherwise pagination underestimates heights and content is clipped. It is
+   never zoomed — pagination works in true, unscaled pixels. */
 .measure-page {
   width: var(--page-width, 210mm);
+  padding: var(--page-padding, 22mm 18mm);
   min-height: 0;
+  height: auto;
   border: none;
   box-shadow: none;
+  zoom: 1;
 }
 
-@media (max-width: 900px) {
-  .reader-body {
-    grid-template-columns: 1fr;
+/* ================================================================== *
+ * Responsive
+ * ================================================================== */
+
+/* Tablet / small laptop: collapse the side rails into a single centered
+   column and move the TOC into an on-demand dropdown. */
+@media (max-width: 1040px) {
+  .reader-canvas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .toc-toggle {
+    display: inline-flex;
   }
 
   .toc-panel {
-    position: static;
-    border-left: none;
-    border-bottom: 1px solid var(--line);
-    padding: 0 0 0.9rem;
-    margin-bottom: 0.8rem;
+    position: fixed;
+    top: calc(var(--topbar-total) + 0.5rem);
+    right: var(--gutter);
+    left: auto;
+    width: min(20rem, calc(100vw - 2 * var(--gutter)));
+    max-height: min(70vh, 30rem);
+    padding: 0.9rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    z-index: 30;
+    display: none;
   }
 
-  .topbar {
-    flex-direction: column;
-    align-items: flex-start;
-    position: sticky;
-    margin-inline: -1.25rem;
-    padding-inline: 1.25rem;
+  .toc-panel.toc-open {
+    display: block;
+  }
+}
+
+/* Phones */
+@media (max-width: 620px) {
+  .home-link span,
+  .toc-toggle span {
+    display: none;
   }
 
-  .controls {
-    justify-content: flex-start;
-  }
-
-  .title-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.2rem;
-  }
-
-  .subtle {
-    max-width: 100%;
+  .doc-grid {
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
   }
 
   .paper-scroll {
-    width: 100%;
-    padding: 1.4rem;
+    padding: clamp(1.25rem, 6vw, 2rem);
   }
+}
 
-  .paper-page {
-    width: 100%;
-    min-height: auto;
-    padding: 1.5rem;
+/* Very small: single-column card list */
+@media (max-width: 400px) {
+  .doc-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
