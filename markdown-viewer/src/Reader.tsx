@@ -16,6 +16,7 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import { visit } from 'unist-util-visit'
 import { type Theme, THEMES } from './theme'
+import DocAssistant from './DocAssistant'
 
 type ReaderProps = {
   markdown: string
@@ -127,20 +128,7 @@ function computeBlockMeta(sourceBlocks: string[]) {
   })
 }
 
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-}
-
-// Heading ids must be a *pure* function of the heading text so the ids computed
-// for the TOC always match the ids rendered into the DOM.
-function headingId(text: string) {
-  return slugify(text) || 'section'
-}
-
+import { headingId } from './headings'
 type MdastNode = { type: string; value?: string; children?: MdastNode[] }
 
 function mdastText(node: MdastNode): string {
@@ -259,6 +247,7 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
   const [pageSize, setPageSize] = useState<PageSize>('A4')
   const [activeHeadingId, setActiveHeadingId] = useState<string>('')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const [tocOpen, setTocOpen] = useState(false)
   const [pageScale, setPageScale] = useState(1)
   const [pagedContent, setPagedContent] = useState<PageData[]>([
@@ -311,11 +300,30 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     }
   }, [])
 
+  const markdownComponents = useMemo(
+    () => createMarkdownComponents(),
+    [createMarkdownComponents],
+  )
+
+  const renderDocumentMarkdown = useCallback(
+    (content: string) => (
+      <ReactMarkdown
+        components={markdownComponents}
+        rehypePlugins={[rehypeRaw]}
+        remarkPlugins={[remarkGfm]}
+      >
+        {content}
+      </ReactMarkdown>
+    ),
+    [markdownComponents],
+  )
+
   // Reset reading position when the document changes.
   useEffect(() => {
     setActiveHeadingId('')
     setTocOpen(false)
     setSettingsOpen(false)
+    setAssistantOpen(false)
     pendingScrollAnchorRef.current = null
   }, [markdown])
 
@@ -603,9 +611,7 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     activeLink?.scrollIntoView({ block: 'nearest' })
   }, [activeHeadingId])
 
-  const navigateToHeading = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
-    event.preventDefault()
-
+  const navigateToSection = useCallback((id: string) => {
     const target = getHeadingElement(id, docColRef.current)
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -614,7 +620,22 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     window.history.replaceState(null, '', `#${encodeURIComponent(id)}`)
     setActiveHeadingId(id)
     setTocOpen(false)
+  }, [])
+
+  const navigateToHeading = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
+    event.preventDefault()
+    navigateToSection(id)
   }
+
+  const documentSections = useMemo(
+    () =>
+      toc.map((entry) => ({
+        id: entry.id,
+        text: entry.text,
+        level: entry.level,
+      })),
+    [toc],
+  )
 
   const page = PAGE_SIZES[pageSize]
   const canvasStyle = {
@@ -686,13 +707,43 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
             <span>Contents</span>
           </button>
 
+          <button
+            type="button"
+            className="ghost-button assistant-toggle"
+            aria-label="Ask about this document"
+            aria-expanded={assistantOpen}
+            onClick={() => {
+              setAssistantOpen((value) => !value)
+              setSettingsOpen(false)
+              setTocOpen(false)
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+            </svg>
+            <span>Ask</span>
+          </button>
+
           <div className="controls-actions" ref={settingsRef}>
             <button
               type="button"
               className={settingsOpen ? 'icon-button active' : 'icon-button'}
               aria-label="Settings"
               aria-expanded={settingsOpen}
-              onClick={() => setSettingsOpen((value) => !value)}
+              onClick={() => {
+                setSettingsOpen((value) => !value)
+                setAssistantOpen(false)
+              }}
             >
               <SettingsIcon />
             </button>
@@ -758,6 +809,15 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
       </header>
       </div>
 
+      <DocAssistant
+        open={assistantOpen}
+        onClose={() => setAssistantOpen(false)}
+        markdown={markdown}
+        fileName={fileName}
+        sections={documentSections}
+        onNavigateToSection={navigateToSection}
+      />
+
       <div className="reader-canvas" data-theme={theme} style={canvasStyle}>
         <aside
           className={tocOpen ? 'toc-panel toc-open' : 'toc-panel'}
@@ -804,36 +864,26 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
           )}
         </aside>
 
-        <div className="doc-col" ref={docColRef}>
-          {isPaged ? (
-            <section className="page-stack">
-              {pagedContent.map((pageData, index) => (
-                <article className="paper-page" key={`page-${index}`}>
-                  <div className="page-running-header">{pageData.header}</div>
-                  <div className="page-body">
-                    <ReactMarkdown
-                      components={createMarkdownComponents()}
-                      rehypePlugins={[rehypeRaw]}
-                      remarkPlugins={[remarkGfm]}
-                    >
-                      {pageData.content}
-                    </ReactMarkdown>
-                  </div>
-                  <div className="page-number">{index + 1}</div>
-                </article>
-              ))}
-            </section>
-          ) : (
-            <article className="paper-scroll">
-              <ReactMarkdown
-                components={createMarkdownComponents()}
-                rehypePlugins={[rehypeRaw]}
-                remarkPlugins={[remarkGfm]}
-              >
-                {markdown}
-              </ReactMarkdown>
-            </article>
-          )}
+        <div className="doc-stage">
+          <div className="doc-col" ref={docColRef}>
+            {isPaged ? (
+              <section className="page-stack">
+                {pagedContent.map((pageData, index) => (
+                  <article className="paper-page" key={`page-${index}`}>
+                    <div className="page-running-header">{pageData.header}</div>
+                    <div className="page-body">
+                      {renderDocumentMarkdown(pageData.content)}
+                    </div>
+                    <div className="page-number">{index + 1}</div>
+                  </article>
+                ))}
+              </section>
+            ) : (
+              <article className="paper-scroll">
+                {renderDocumentMarkdown(markdown)}
+              </article>
+            )}
+          </div>
         </div>
 
         {isPaged ? (

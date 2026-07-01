@@ -35,6 +35,7 @@
   --radius-sm: 8px;
   --radius: 12px;
   --radius-lg: 18px;
+  --paper-radius: 6px;
   --reader-max: 1180px;
   --home-max: 1080px;
   --toc-width: clamp(190px, 15vw, 236px);
@@ -115,7 +116,7 @@
   --ui-border: #000000;
 
   --content-ink: #000000;
-  --content-ink-soft: #161616;
+  --content-ink-soft: #141414;
   --content-muted: #4a4a4a;
   --content-line: #8a8a8a;
   --content-code-bg: #eeeeee;
@@ -126,9 +127,124 @@
   --content-table-head: #e2e2e2;
   --content-highlight: #efefef;
 
-  /* Stark, technical: monospace headings over a neutral grotesque body. */
-  --font-display: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
-  --font-body: 'Helvetica Neue', Arial, system-ui, 'Segoe UI', sans-serif;
+  /* Screenplay / typewriter — Courier throughout. */
+  --font-display: 'Courier Prime', 'Courier New', Courier, 'Liberation Mono', monospace;
+  --font-body: 'Courier Prime', 'Courier New', Courier, 'Liberation Mono', monospace;
+}
+
+[data-theme='ink-night'] {
+  --bg: #000000;
+  --paper: #141414;
+  --surface: #161616;
+  --surface-raised: #242424;
+  --ink: #fafafa;
+  --ink-soft: #d2d2d2;
+  --muted: #8c8c8c;
+  --line: #2c2c2c;
+  --line-strong: #4a4a4a;
+  --ui-border: #2a2a2a;
+
+  --content-ink: #e8e8e8;
+  --content-ink-soft: #c8c8c8;
+  --content-muted: #8a8a8a;
+  --content-line: #3a3a3a;
+  --content-code-bg: #1e1e1e;
+  --content-accent: #d4d4d4;
+  --content-accent-strong: #f0f0f0;
+  --content-heading: #fafafa;
+  --content-heading-soft: #d8d8d8;
+  --content-table-head: #222222;
+  --content-highlight: #262626;
+
+  --font-display: 'Courier Prime', 'Courier New', Courier, 'Liberation Mono', monospace;
+  --font-body: 'Courier Prime', 'Courier New', Courier, 'Liberation Mono', monospace;
+}
+
+/* Graphite — neutral dark serif, no blue cast */
+[data-theme='graphite'] {
+  --bg: #0a0a0a;
+  --paper: #1a1a1a;
+  --surface: #222222;
+  --surface-raised: #2e2e2e;
+  --ink: #ececec;
+  --ink-soft: #c8c8c8;
+  --muted: #888888;
+  --line: #333333;
+  --line-strong: #484848;
+  --ui-border: #3a3a3a;
+
+  --content-ink: #e6e6e6;
+  --content-ink-soft: #c4c4c4;
+  --content-muted: #909090;
+  --content-line: #363636;
+  --content-code-bg: #242424;
+  --content-accent: #b8b8b8;
+  --content-accent-strong: #d4d4d4;
+  --content-heading: #f2f2f2;
+  --content-heading-soft: #d0d0d0;
+  --content-table-head: #262626;
+  --content-highlight: #2a2a2a;
+
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Times New Roman', serif;
+  --font-body: 'Charter', 'Georgia', 'Times New Roman', serif;
+}
+
+/* Ash — warm neutral dark sans */
+[data-theme='ash'] {
+  --bg: #0f0e0d;
+  --paper: #1b1917;
+  --surface: #242220;
+  --surface-raised: #302e2b;
+  --ink: #ebe8e4;
+  --ink-soft: #c9c4bd;
+  --muted: #8a847c;
+  --line: #35322e;
+  --line-strong: #4a4640;
+  --ui-border: #3d3a36;
+
+  --content-ink: #e8e4de;
+  --content-ink-soft: #c8c2b8;
+  --content-muted: #9a938a;
+  --content-line: #3a3632;
+  --content-code-bg: #252320;
+  --content-accent: #b5aea4;
+  --content-accent-strong: #d0c9bf;
+  --content-heading: #f0ebe4;
+  --content-heading-soft: #ccc5bb;
+  --content-table-head: #282522;
+  --content-highlight: #2c2925;
+
+  --font-display: Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-body: Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Stone — cool neutral dark sans */
+[data-theme='stone'] {
+  --bg: #0c0c0c;
+  --paper: #181818;
+  --surface: #202020;
+  --surface-raised: #2c2c2c;
+  --ink: #eaeaea;
+  --ink-soft: #c6c6c6;
+  --muted: #868686;
+  --line: #323232;
+  --line-strong: #464646;
+  --ui-border: #383838;
+
+  --content-ink: #e4e4e4;
+  --content-ink-soft: #c0c0c0;
+  --content-muted: #949494;
+  --content-line: #343434;
+  --content-code-bg: #222222;
+  --content-accent: #aeaeae;
+  --content-accent-strong: #cccccc;
+  --content-heading: #eeeeee;
+  --content-heading-soft: #cccccc;
+  --content-table-head: #242424;
+  --content-highlight: #282828;
+
+  --font-display: 'Helvetica Neue', 'Segoe UI', Arial, system-ui, sans-serif;
+  --font-body: 'Helvetica Neue', 'Segoe UI', Arial, system-ui, sans-serif;
 }
 
 /* Notion — mirrors the Houdini Solaris / USD Pipeline Guide PDF:

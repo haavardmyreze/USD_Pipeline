@@ -9,7 +9,7 @@ import {
   libraryDocs,
   type LibraryDoc,
 } from './library'
-import { DEFAULT_THEME, isTheme, type Theme } from './theme'
+import { resolveTheme, type Theme } from './theme'
 
 type ViewMode = 'home' | 'reader'
 
@@ -54,10 +54,9 @@ function App() {
   const [activeLibraryId, setActiveLibraryId] = useState(initial.libraryId)
   const [theme, setTheme] = useState<Theme>(() => {
     try {
-      const stored = localStorage.getItem('mdv-theme')
-      return isTheme(stored) ? stored : DEFAULT_THEME
+      return resolveTheme(localStorage.getItem('mdv-theme'))
     } catch {
-      return DEFAULT_THEME
+      return resolveTheme(null)
     }
   })
 
