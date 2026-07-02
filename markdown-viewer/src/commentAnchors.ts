@@ -52,13 +52,58 @@ export function getSelectionContext(scope: HTMLElement, range: Range) {
 
   return {
     quote,
-    prefix: fullText.slice(Math.max(0, startOffset - 48), startOffset),
+    prefix: fullText.slice(Math.max(0, startOffset - 96), startOffset),
     suffix: fullText.slice(
       startOffset + quote.length,
-      startOffset + quote.length + 48,
+      startOffset + quote.length + 96,
     ),
     startOffset,
   }
+}
+
+function getHeadingLevel(heading: HTMLElement) {
+  return Number(heading.tagName.slice(1))
+}
+
+function getSectionTextAfterHeading(scope: HTMLElement, headingId: string) {
+  const heading = scope.querySelector<HTMLElement>(`#${CSS.escape(headingId)}`)
+  if (!heading) {
+    return ''
+  }
+
+  const level = getHeadingLevel(heading)
+  const parts: string[] = []
+
+  let node: ChildNode | null = heading.nextSibling
+  while (node) {
+    if (node instanceof HTMLElement && /^H[1-3]$/i.test(node.tagName)) {
+      if (getHeadingLevel(node) <= level) {
+        break
+      }
+    }
+
+    parts.push(node.textContent ?? '')
+    node = node.nextSibling
+  }
+
+  return parts.join('')
+}
+
+function getOffsetWithinSection(scope: HTMLElement, range: Range, headingId: string) {
+  const heading = scope.querySelector<HTMLElement>(`#${CSS.escape(headingId)}`)
+  if (!heading) {
+    return 0
+  }
+
+  const sectionRange = document.createRange()
+  sectionRange.setStartAfter(heading)
+  sectionRange.setEnd(range.startContainer, range.startOffset)
+
+  if (!scope.contains(sectionRange.commonAncestorContainer)) {
+    return 0
+  }
+
+  return sectionRange.toString().length
 }
 
 function findHeadingLineIndex(markdown: string, entry: TocEntryLike) {
@@ -120,6 +165,73 @@ function quoteToPattern(quote: string) {
   return new RegExp(parts.join('\\s+'), 'g')
 }
 
+function occurrenceIndexAtOffset(fullText: string, quote: string, offset: number) {
+  const trimmed = trimSelectionQuote(quote)
+  if (!trimmed) {
+    return 0
+  }
+
+  let occurrence = 0
+  let searchFrom = 0
+
+  while (searchFrom <= offset) {
+    const found = fullText.indexOf(trimmed, searchFrom)
+    if (found === -1 || found > offset) {
+      return Math.max(0, occurrence - 1)
+    }
+
+    if (offset <= found + trimmed.length) {
+      return occurrence
+    }
+
+    occurrence += 1
+    searchFrom = found + trimmed.length
+  }
+
+  return Math.max(0, occurrence - 1)
+}
+
+type QuoteMatch = {
+  start: number
+  length: number
+}
+
+function findAllQuoteMatches(sectionMarkdown: string, quote: string): QuoteMatch[] {
+  const trimmedQuote = trimSelectionQuote(quote)
+  if (!trimmedQuote) {
+    return []
+  }
+
+  const matches: QuoteMatch[] = []
+
+  let searchFrom = 0
+  while (searchFrom < sectionMarkdown.length) {
+    const found = sectionMarkdown.indexOf(trimmedQuote, searchFrom)
+    if (found === -1) {
+      break
+    }
+    matches.push({ start: found, length: trimmedQuote.length })
+    searchFrom = found + Math.max(1, trimmedQuote.length)
+  }
+
+  const pattern = quoteToPattern(trimmedQuote)
+  if (pattern) {
+    for (const match of sectionMarkdown.matchAll(pattern)) {
+      const start = match.index ?? 0
+      const length = match[0].length
+      const overlaps = matches.some(
+        (existing) =>
+          start < existing.start + existing.length && start + length > existing.start,
+      )
+      if (!overlaps) {
+        matches.push({ start, length })
+      }
+    }
+  }
+
+  return matches.sort((left, right) => left.start - right.start)
+}
+
 function scoreCandidate(
   sectionMarkdown: string,
   candidateStart: number,
@@ -127,25 +239,35 @@ function scoreCandidate(
   prefix: string,
   suffix: string,
 ) {
-  const before = sectionMarkdown.slice(Math.max(0, candidateStart - 64), candidateStart)
-  const after = sectionMarkdown.slice(candidateStart + matchLength, candidateStart + matchLength + 64)
+  const before = sectionMarkdown.slice(Math.max(0, candidateStart - 96), candidateStart)
+  const after = sectionMarkdown.slice(
+    candidateStart + matchLength,
+    candidateStart + matchLength + 96,
+  )
 
   let score = 0
-  const prefixTail = prefix.slice(-24)
-  const suffixHead = suffix.slice(0, 24)
+  const prefixTail = prefix.slice(-48)
+  const suffixHead = suffix.slice(0, 48)
 
   if (prefixTail && before.includes(prefixTail)) {
-    score += 3
+    score += 6
   }
   if (suffixHead && after.includes(suffixHead)) {
-    score += 3
+    score += 6
   }
 
   if (prefixTail && normalizeWhitespace(before).includes(normalizeWhitespace(prefixTail))) {
-    score += 1
+    score += 2
   }
   if (suffixHead && normalizeWhitespace(after).includes(normalizeWhitespace(suffixHead))) {
-    score += 1
+    score += 2
+  }
+
+  if (prefixTail.length >= 8 && before.endsWith(prefixTail.slice(-8))) {
+    score += 3
+  }
+  if (suffixHead.length >= 8 && after.startsWith(suffixHead.slice(0, 8))) {
+    score += 3
   }
 
   return score
@@ -156,44 +278,50 @@ function findQuoteRangeInSection(
   quote: string,
   prefix: string,
   suffix: string,
+  occurrenceIndex: number,
 ) {
   const trimmedQuote = trimSelectionQuote(quote)
   if (!trimmedQuote) {
     return null
   }
 
-  const directIndex = sectionMarkdown.indexOf(trimmedQuote)
-  if (directIndex !== -1) {
-    return { start: directIndex, length: trimmedQuote.length }
-  }
-
-  const pattern = quoteToPattern(trimmedQuote)
-  if (!pattern) {
-    return null
-  }
-
-  const matches = [...sectionMarkdown.matchAll(pattern)]
+  const matches = findAllQuoteMatches(sectionMarkdown, trimmedQuote)
   if (matches.length === 0) {
     return null
   }
 
-  if (matches.length === 1) {
-    const match = matches[0]
-    return { start: match.index ?? 0, length: match[0].length }
+  if (occurrenceIndex >= 0 && occurrenceIndex < matches.length) {
+    const candidate = matches[occurrenceIndex]
+    const candidateScore = scoreCandidate(
+      sectionMarkdown,
+      candidate.start,
+      candidate.length,
+      prefix,
+      suffix,
+    )
+    const bestScore = matches.reduce((max, match) => {
+      return Math.max(
+        max,
+        scoreCandidate(sectionMarkdown, match.start, match.length, prefix, suffix),
+      )
+    }, -1)
+
+    if (candidateScore >= bestScore - 1) {
+      return candidate
+    }
   }
 
   let best = matches[0]
   let bestScore = -1
   for (const match of matches) {
-    const start = match.index ?? 0
-    const score = scoreCandidate(sectionMarkdown, start, match[0].length, prefix, suffix)
+    const score = scoreCandidate(sectionMarkdown, match.start, match.length, prefix, suffix)
     if (score > bestScore) {
       bestScore = score
       best = match
     }
   }
 
-  return { start: best.index ?? 0, length: best[0].length }
+  return best
 }
 
 export function resolveSelectionAnchor(
@@ -235,7 +363,20 @@ export function resolveSelectionAnchor(
     ? getSectionMarkdownRange(markdown, toc, headingId)
     : { start: 0, end: markdown.length }
   const sectionMarkdown = markdown.slice(sectionRange.start, sectionRange.end)
-  const match = findQuoteRangeInSection(sectionMarkdown, trimmedQuote, prefix, suffix)
+  const sectionPlainText = headingId
+    ? getSectionTextAfterHeading(scope, headingId)
+    : paperRoot.textContent ?? ''
+  const offsetInSection = headingId
+    ? getOffsetWithinSection(scope, range, headingId)
+    : getSelectionContext(paperRoot, range).startOffset
+  const occurrenceIndex = occurrenceIndexAtOffset(sectionPlainText, trimmedQuote, offsetInSection)
+  const match = findQuoteRangeInSection(
+    sectionMarkdown,
+    trimmedQuote,
+    prefix,
+    suffix,
+    occurrenceIndex,
+  )
 
   if (!match) {
     return null

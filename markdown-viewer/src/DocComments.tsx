@@ -1,22 +1,17 @@
 import {
-  type CSSProperties,
   type FormEvent,
   type KeyboardEvent,
   type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
 import { resolveSelectionAnchor, type TocEntryLike } from './commentAnchors'
 import {
   buildViewportConnector,
-  measureHighlightAnchor,
-  measureRangeAnchor,
-  stackFixedCardTops,
-  type FixedCardPosition,
-  type ViewportAnchor,
   type ViewportConnector,
 } from './commentLayout'
 import type { CommentAnchor, DocumentComment } from './documentComments'
@@ -24,6 +19,10 @@ import type { CommentAnchor, DocumentComment } from './documentComments'
 type DraftState = {
   anchor: CommentAnchor
 }
+
+type RailItem =
+  | { kind: 'draft'; anchor: CommentAnchor }
+  | { kind: 'comment'; comment: DocumentComment }
 
 type DocCommentsProps = {
   open: boolean
@@ -62,12 +61,26 @@ function DocComments({
   onDeleteComment,
 }: DocCommentsProps) {
   const cardRefs = useRef(new Map<string, HTMLElement>())
+  const railScrollRef = useRef<HTMLDivElement | null>(null)
   const draftRef = useRef<HTMLTextAreaElement | null>(null)
   const [draft, setDraft] = useState<DraftState | null>(null)
   const [draftBody, setDraftBody] = useState('')
   const [editingId, setEditingId] = useState('')
-  const [pinnedLayouts, setPinnedLayouts] = useState<Record<string, FixedCardPosition>>({})
   const [connectors, setConnectors] = useState<ViewportConnector[]>([])
+
+  const railItems = useMemo((): RailItem[] => {
+    const items: RailItem[] = comments.map((comment) => ({ kind: 'comment', comment }))
+    if (draft) {
+      items.push({ kind: 'draft', anchor: draft.anchor })
+      items.sort((left, right) => {
+        const leftStart = left.kind === 'draft' ? left.anchor.start : left.comment.anchor.start
+        const rightStart =
+          right.kind === 'draft' ? right.anchor.start : right.comment.anchor.start
+        return leftStart - rightStart
+      })
+    }
+    return items
+  }, [comments, draft])
 
   const clearDraft = useCallback(() => {
     setDraft(null)
@@ -80,7 +93,6 @@ function DocComments({
       clearDraft()
       setEditingId('')
       setDraftBody('')
-      setPinnedLayouts({})
       setConnectors([])
     }
   }, [clearDraft, open])
@@ -114,83 +126,6 @@ function DocComments({
     },
     [comments, docColRef, setActiveCommentId],
   )
-
-  const measureCardHeights = useCallback(() => {
-    const heights = new Map<string, number>()
-    for (const [id, card] of cardRefs.current.entries()) {
-      heights.set(id, card.offsetHeight)
-    }
-    return heights
-  }, [])
-
-  const collectViewportAnchors = useCallback((): ViewportAnchor[] => {
-    const scope = docColRef.current
-    if (!scope) {
-      return []
-    }
-
-    const anchors: ViewportAnchor[] = []
-
-    if (draft) {
-      const selection = window.getSelection()
-      if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
-        const measured = measureRangeAnchor(selection.getRangeAt(0), draft.anchor.start)
-        if (measured) {
-          anchors.push(measured)
-        } else {
-          anchors.push({
-            id: 'draft',
-            x: 0,
-            y: 0,
-            documentOrder: draft.anchor.start,
-            inViewport: false,
-          })
-        }
-      } else {
-        anchors.push({
-          id: 'draft',
-          x: 0,
-          y: 0,
-          documentOrder: draft.anchor.start,
-          inViewport: false,
-        })
-      }
-    }
-
-    for (const comment of comments) {
-      const highlight = scope.querySelector<HTMLElement>(
-        `mark.comment-highlight[data-comment-id="${CSS.escape(comment.id)}"]`,
-      )
-      if (!highlight) {
-        anchors.push({
-          id: comment.id,
-          x: 0,
-          y: 0,
-          documentOrder: comment.anchor.start,
-          inViewport: false,
-        })
-        continue
-      }
-
-      const measured = measureHighlightAnchor(highlight, comment.anchor.start)
-      if (measured) {
-        anchors.push(measured)
-      }
-    }
-
-    return anchors
-  }, [comments, docColRef, draft])
-
-  const repinCards = useCallback(() => {
-    if (!open) {
-      return
-    }
-
-    const anchors = collectViewportAnchors()
-    const heights = measureCardHeights()
-    const tops = stackFixedCardTops(anchors, heights)
-    setPinnedLayouts(Object.fromEntries(tops.entries()))
-  }, [collectViewportAnchors, measureCardHeights, open])
 
   const updateConnectors = useCallback(() => {
     if (!open) {
@@ -233,14 +168,8 @@ function DocComments({
   }, [activeCommentId, docColRef, draft, open])
 
   useLayoutEffect(() => {
-    repinCards()
-    const frame = window.requestAnimationFrame(repinCards)
-    return () => window.cancelAnimationFrame(frame)
-  }, [repinCards, comments, draft, editingId, draftBody, open])
-
-  useLayoutEffect(() => {
     updateConnectors()
-  }, [updateConnectors, pinnedLayouts, comments, draft, activeCommentId, open])
+  }, [updateConnectors, comments, draft, activeCommentId, open, editingId, draftBody, railItems])
 
   useEffect(() => {
     if (!open) {
@@ -253,19 +182,41 @@ function DocComments({
       })
     }
 
-    const onResize = () => {
-      repinCards()
-      updateConnectors()
-    }
-
     window.addEventListener('scroll', onReflow, { passive: true })
-    window.addEventListener('resize', onResize)
+    window.addEventListener('resize', onReflow, { passive: true })
 
     return () => {
       window.removeEventListener('scroll', onReflow)
-      window.removeEventListener('resize', onResize)
+      window.removeEventListener('resize', onReflow)
     }
-  }, [open, repinCards, updateConnectors])
+  }, [open, updateConnectors])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const rail = railScrollRef.current
+    if (!rail) {
+      return
+    }
+
+    const onRailScroll = () => {
+      window.requestAnimationFrame(updateConnectors)
+    }
+
+    rail.addEventListener('scroll', onRailScroll, { passive: true })
+    return () => rail.removeEventListener('scroll', onRailScroll)
+  }, [open, updateConnectors, railItems.length])
+
+  useEffect(() => {
+    if (!open || !activeCommentId) {
+      return
+    }
+
+    const card = cardRefs.current.get(activeCommentId)
+    card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [activeCommentId, comments.length, draftBody, editingId, open, railItems.length])
 
   useEffect(() => {
     if (!open) {
@@ -443,18 +394,6 @@ function DocComments({
     cardRefs.current.delete(id)
   }
 
-  const getCardStyle = (
-    id: string,
-    isActive: boolean,
-    stackZ: number = pinnedLayouts[id]?.zIndex ?? 1,
-  ): CSSProperties => {
-    const layout = pinnedLayouts[id]
-    return {
-      top: `${layout?.top ?? 96}px`,
-      zIndex: isActive ? 1000 + stackZ : stackZ,
-    }
-  }
-
   if (!open) {
     return null
   }
@@ -468,160 +407,159 @@ function DocComments({
       </svg>
 
       <aside className="comment-rail-fixed" aria-label="Document comments">
-        {comments.length === 0 && !draft ? (
-          <p className="comments-rail-hint">
-            Comment mode is on. Select text in the document to add a comment.
-          </p>
-        ) : null}
+        <div className="comment-rail-panel">
+          <div ref={railScrollRef} className="comment-rail-scroll">
+            {comments.length === 0 && !draft ? (
+              <p className="comments-rail-hint">
+                Comment mode is on. Select text in the document to add a comment.
+              </p>
+            ) : null}
 
-        {draft ? (
-          <article
-            ref={(node) => registerCardRef('draft', node)}
-            className={
-              activeCommentId === 'draft'
-                ? 'comment-rail-card draft active'
-                : 'comment-rail-card draft'
-            }
-            style={getCardStyle(
-              'draft',
-              activeCommentId === 'draft',
-              pinnedLayouts.draft?.zIndex ?? comments.length + 1,
-            )}
-            onClick={() => setActiveCommentId('draft')}
-          >
-            <p className="comment-card-quote">“{draft.anchor.quote}”</p>
-            <form onSubmit={submitDraft}>
-              <textarea
-                ref={draftRef}
-                className="comment-compose-input"
-                rows={3}
-                placeholder="Add a comment…"
-                value={draftBody}
-                onChange={(event) => setDraftBody(event.target.value)}
-                onKeyDown={onDraftKeyDown}
-              />
-              <div className="comment-compose-actions">
-                <button type="button" className="ghost-button" onClick={clearDraft}>
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="comment-primary-button"
-                  disabled={!draftBody.trim()}
+            {railItems.map((item) => {
+              if (item.kind === 'draft') {
+                return (
+                  <article
+                    key="draft"
+                    ref={(node) => registerCardRef('draft', node)}
+                    className={
+                      activeCommentId === 'draft'
+                        ? 'comment-rail-card draft active'
+                        : 'comment-rail-card draft'
+                    }
+                    onClick={() => setActiveCommentId('draft')}
+                  >
+                    <p className="comment-card-quote">“{item.anchor.quote}”</p>
+                    <form onSubmit={submitDraft}>
+                      <textarea
+                        ref={draftRef}
+                        className="comment-compose-input"
+                        rows={3}
+                        placeholder="Add a comment…"
+                        value={draftBody}
+                        onChange={(event) => setDraftBody(event.target.value)}
+                        onKeyDown={onDraftKeyDown}
+                      />
+                      <div className="comment-compose-actions">
+                        <button type="button" className="ghost-button" onClick={clearDraft}>
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="comment-primary-button"
+                          disabled={!draftBody.trim()}
+                        >
+                          Comment
+                        </button>
+                      </div>
+                    </form>
+                  </article>
+                )
+              }
+
+              const comment = item.comment
+              const isActive = comment.id === activeCommentId
+              const isEditing = comment.id === editingId
+
+              return (
+                <article
+                  key={comment.id}
+                  ref={(node) => registerCardRef(comment.id, node)}
+                  data-comment-card={comment.id}
+                  className={isActive ? 'comment-rail-card active' : 'comment-rail-card'}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setActiveCommentId(comment.id)
+                    scrollToComment(comment.id)
+                  }}
                 >
-                  Comment
-                </button>
-              </div>
-            </form>
-          </article>
-        ) : null}
-
-        {comments.map((comment) => {
-          const isActive = comment.id === activeCommentId
-          const isEditing = comment.id === editingId
-          const layout = pinnedLayouts[comment.id]
-          const stackZ =
-            layout?.zIndex ?? comments.findIndex((entry) => entry.id === comment.id) + 1
-
-          return (
-            <article
-              key={comment.id}
-              ref={(node) => registerCardRef(comment.id, node)}
-              data-comment-card={comment.id}
-              className={isActive ? 'comment-rail-card active' : 'comment-rail-card'}
-              style={getCardStyle(comment.id, isActive, stackZ)}
-              onClick={(event) => {
-                event.stopPropagation()
-                setActiveCommentId(comment.id)
-                scrollToComment(comment.id)
-              }}
-            >
-              <button
-                type="button"
-                className="comment-card-quote"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  scrollToComment(comment.id)
-                }}
-              >
-                “{comment.anchor.quote}”
-              </button>
-
-              {isEditing ? (
-                <div className="comment-edit">
-                  <textarea
-                    className="comment-compose-input"
-                    rows={4}
-                    value={draftBody}
-                    onChange={(event) => setDraftBody(event.target.value)}
-                    onKeyDown={(event) => onEditKeyDown(event, comment.id)}
-                  />
-                  <div className="comment-compose-actions">
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => {
-                        setEditingId('')
-                        setDraftBody('')
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="comment-primary-button"
-                      disabled={!draftBody.trim()}
-                      onClick={() => saveEdit(comment.id)}
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p className="comment-card-body">{comment.body}</p>
-              )}
-
-              <div className="comment-card-meta">
-                <time dateTime={new Date(comment.updatedAt).toISOString()}>
-                  {formatCommentTime(comment.updatedAt)}
-                </time>
-                <div className="comment-card-actions">
-                  {!isEditing ? (
-                    <button
-                      type="button"
-                      className="ghost-button comment-action"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        startEditing(comment)
-                      }}
-                    >
-                      Edit
-                    </button>
-                  ) : null}
                   <button
                     type="button"
-                    className="ghost-button comment-action danger"
+                    className="comment-card-quote"
                     onClick={(event) => {
                       event.stopPropagation()
-                      onDeleteComment(comment.id)
+                      scrollToComment(comment.id)
                     }}
                   >
-                    Delete
+                    “{comment.anchor.quote}”
                   </button>
-                </div>
-              </div>
-            </article>
-          )
-        })}
 
-        <button
-          type="button"
-          className="comment-rail-close"
-          aria-label="Exit comment mode"
-          onClick={onClose}
-        >
-          Done
-        </button>
+                  {isEditing ? (
+                    <div className="comment-edit">
+                      <textarea
+                        className="comment-compose-input"
+                        rows={4}
+                        value={draftBody}
+                        onChange={(event) => setDraftBody(event.target.value)}
+                        onKeyDown={(event) => onEditKeyDown(event, comment.id)}
+                      />
+                      <div className="comment-compose-actions">
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => {
+                            setEditingId('')
+                            setDraftBody('')
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="comment-primary-button"
+                          disabled={!draftBody.trim()}
+                          onClick={() => saveEdit(comment.id)}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="comment-card-body">{comment.body}</p>
+                  )}
+
+                  <div className="comment-card-meta">
+                    <time dateTime={new Date(comment.updatedAt).toISOString()}>
+                      {formatCommentTime(comment.updatedAt)}
+                    </time>
+                    <div className="comment-card-actions">
+                      {!isEditing ? (
+                        <button
+                          type="button"
+                          className="ghost-button comment-action"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            startEditing(comment)
+                          }}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="ghost-button comment-action danger"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onDeleteComment(comment.id)
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+
+          <button
+            type="button"
+            className="comment-rail-close"
+            aria-label="Exit comment mode"
+            onClick={onClose}
+          >
+            Done
+          </button>
+        </div>
       </aside>
     </>
   )

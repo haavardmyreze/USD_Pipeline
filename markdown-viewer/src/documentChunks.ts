@@ -432,23 +432,31 @@ export function getDocumentContextInfo(markdown: string): DocumentContextInfo {
   }
 }
 
-export function buildFullDocumentSystemPrompt(fileName: string, markdown: string) {
-  return [
+export function buildFullDocumentSystemPrompt(
+  fileName: string,
+  markdown: string,
+  linkGuide = '',
+) {
+  const lines = [
     `You are a helpful assistant answering questions about the Markdown document "${fileName}".`,
     'The complete document is provided below. Answer from this document only.',
     'If the answer is not in the document, say that clearly and ask a brief clarifying follow-up.',
     'Do not invent or assume rules that are not explicitly documented.',
     'Give practical, clear answers. For overview questions, summarize the document structure and purpose.',
     'Start with a direct answer. Use bullets only when they improve clarity (for steps, options, or comparisons).',
-    'When citing a section, link inline using markdown: [Exact heading](#section-id).',
-    'When relevant, include a section link early in the answer so readers can jump to source context immediately.',
-    'Use section ids exactly as provided in the document context, including numeric prefixes when present.',
+    'Whenever you discuss content from a section, add an inline markdown link: [Exact heading](#section-id).',
+    'Use multiple section links in a single answer when your reply draws from more than one place.',
+    'Put a section link near the first mention of each section you cite — readers should always be able to jump to source context.',
+    'Use section ids exactly as provided in the section index, including numeric prefixes and -2 suffixes for duplicate headings.',
     'For specific technical claims, include a short quote from the document when helpful.',
-    '',
-    '--- FULL DOCUMENT ---',
-    markdown,
-    '--- END DOCUMENT ---',
-  ].join('\n')
+  ]
+
+  if (linkGuide) {
+    lines.push('', '--- SECTION INDEX ---', linkGuide, '--- END SECTION INDEX ---')
+  }
+
+  lines.push('', '--- FULL DOCUMENT ---', markdown, '--- END DOCUMENT ---')
+  return lines.join('\n')
 }
 
 export function buildExcerptSystemPrompt(
@@ -466,14 +474,16 @@ export function buildExcerptSystemPrompt(
       ? 'This is an overview question: synthesize a useful summary from the outline, introduction, and key sections. Describe what the guide covers, who it is for, and the main topics.'
       : 'Answer using the provided material. Combine information across sections when needed.',
     'Start with a direct answer. Use bullets only when they improve clarity (for steps, options, or comparisons).',
-    'Be specific and practical. When you mention a section, link to it inline: [Exact heading](#section-id).',
-    'When relevant, include a section link early in the answer so readers can jump to source context immediately.',
-    'Use the exact heading text and section ids provided in the context/link guide, including numeric prefixes.',
+    'Whenever you discuss content from a section, add an inline markdown link: [Exact heading](#section-id).',
+    'Use multiple section links in a single answer when your reply draws from more than one place.',
+    'Put a section link near the first mention of each section you cite — readers should always be able to jump to source context.',
+    'Use the exact heading text and section ids from the section index, including numeric prefixes and -2 suffixes for duplicate headings.',
+    'You may link to sections that are listed in the index even if their full text is not in the excerpts.',
     'For specific technical claims, include a short quote from the provided material when helpful.',
   ]
 
   if (linkGuide) {
-    lines.push('', linkGuide)
+    lines.push('', '--- SECTION INDEX ---', linkGuide, '--- END SECTION INDEX ---')
   }
 
   lines.push('', contextBlock)

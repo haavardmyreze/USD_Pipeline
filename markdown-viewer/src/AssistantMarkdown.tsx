@@ -92,6 +92,11 @@ export function AssistantMarkdown({
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
+        table: ({ children }) => (
+          <div className="assistant-table-wrap">
+            <table>{children}</table>
+          </div>
+        ),
         a: ({ href, children }) => {
           const sectionId = resolveSectionId(href, sections, getNodeText(children))
           if (sectionId) {

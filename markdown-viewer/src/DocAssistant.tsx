@@ -42,7 +42,11 @@ import {
   warmOllamaModel,
   type OllamaConfig,
 } from './ollama'
-import { formatSectionLinkGuide } from './sectionLinks'
+import {
+  extractReferencedSections,
+  formatSectionLinkGuide,
+  MAX_ASSISTANT_FOOTER_SECTIONS,
+} from './sectionLinks'
 
 type DocAssistantProps = {
   open: boolean
@@ -80,16 +84,6 @@ function mergeSectionRefs(...lists: SectionRef[][]) {
   }
 
   return merged
-}
-
-function findMentionedSections(answer: string, sections: SectionRef[]) {
-  const lower = answer.toLowerCase()
-  return sections
-    .filter((section) => {
-      const heading = section.text.toLowerCase()
-      return heading.length >= 5 && lower.includes(heading)
-    })
-    .sort((left, right) => right.text.length - left.text.length)
 }
 
 function providerErrorMessage(provider: AssistantProvider, error: unknown) {
@@ -353,6 +347,7 @@ function DocAssistant({
   }, [open, testConnection])
 
   const resolveSystemPrompt = (question: string) => {
+    const linkGuide = formatSectionLinkGuide(sections)
     const existing = sessionRef.current
     if (existing && existing.docKey === docKey && existing.mode === 'full') {
       return {
@@ -364,7 +359,7 @@ function DocAssistant({
 
     const forceFullDocument = provider === 'claude'
     if (forceFullDocument || useFullDocument) {
-      const systemPrompt = buildFullDocumentSystemPrompt(fileName, markdown)
+      const systemPrompt = buildFullDocumentSystemPrompt(fileName, markdown, linkGuide)
       sessionRef.current = { docKey, mode: 'full', systemPrompt }
       return {
         systemPrompt,
@@ -374,7 +369,6 @@ function DocAssistant({
     }
 
     const { contextBlock, relatedSections } = buildContextForQuestion(chunks, question)
-    const linkGuide = formatSectionLinkGuide(relatedSections)
     const systemPrompt = buildExcerptSystemPrompt(
       fileName,
       contextBlock,
@@ -393,23 +387,23 @@ function DocAssistant({
 
       const forceFullDocument = provider === 'claude'
       if (forceFullDocument || useFullDocument) {
-        return buildFullDocumentSystemPrompt(fileName, markdown).length
+        return buildFullDocumentSystemPrompt(
+          fileName,
+          markdown,
+          formatSectionLinkGuide(sections),
+        ).length
       }
 
       const sampleQuestion = question.trim() || 'overview'
-      const { contextBlock, relatedSections } = buildContextForQuestion(
-        chunks,
-        sampleQuestion,
-      )
-      const linkGuide = formatSectionLinkGuide(relatedSections)
+      const { contextBlock } = buildContextForQuestion(chunks, sampleQuestion)
       return buildExcerptSystemPrompt(
         fileName,
         contextBlock,
         isOverviewQuestion(sampleQuestion),
-        linkGuide,
+        formatSectionLinkGuide(sections),
       ).length
     },
-    [chunks, docKey, fileName, markdown, provider, useFullDocument],
+    [chunks, docKey, fileName, markdown, provider, sections, useFullDocument],
   )
 
   const contextUsage = useMemo(() => {
@@ -562,9 +556,9 @@ function DocAssistant({
       }
 
       const relatedSections = mergeSectionRefs(
+        extractReferencedSections(assistantText, sections),
         contextSections,
-        findMentionedSections(assistantText, sections),
-      ).slice(0, 5)
+      ).slice(0, MAX_ASSISTANT_FOOTER_SECTIONS)
 
       setMessages((current) => {
         const next = [...current]
@@ -976,7 +970,9 @@ function DocAssistant({
               message.relatedSections.length > 0 &&
               message.content ? (
                 <div className="assistant-section-links">
-                  <span className="assistant-section-links-label">Go to section</span>
+                  <span className="assistant-section-links-label">
+                    {message.relatedSections.length === 1 ? 'Go to section' : 'Go to sections'}
+                  </span>
                   {message.relatedSections.map((section) => (
                     <button
                       key={section.id}
