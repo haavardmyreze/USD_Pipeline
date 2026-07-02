@@ -2,6 +2,7 @@ import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import Home from './Home'
 import Reader from './Reader'
+import { makeDocumentKey } from './documentKey'
 import {
   getDocIdFromUrl,
   getLibraryContent,
@@ -59,6 +60,11 @@ function App() {
       return resolveTheme(null)
     }
   })
+
+  const docKey = useMemo(
+    () => makeDocumentKey(activeLibraryId, fileName, markdown),
+    [activeLibraryId, fileName, markdown],
+  )
 
   useEffect(() => {
     try {
@@ -162,6 +168,7 @@ function App() {
     <Reader
       markdown={markdown}
       fileName={fileName}
+      docKey={docKey}
       theme={theme}
       onSelectTheme={setTheme}
       onHome={goHome}

@@ -194,6 +194,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
 }
 
 .doc-col {
@@ -202,6 +203,10 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
+}
+
+.doc-col.comment-mode {
+  user-select: text;
 }
 .toc-panel {
   position: sticky;
@@ -331,12 +336,69 @@
   margin: 0;
 }
 
+.settings-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.scale-value {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.scale-control {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.scale-step {
+  flex: 0 0 auto;
+  width: 1.85rem;
+  height: 1.85rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.scale-step:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--line-strong) 70%, var(--ink));
+}
+
+.scale-step:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.scale-slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
 .segmented {
   display: flex;
   gap: 0.25rem;
   padding: 0.2rem;
   border-radius: 9px;
   background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.segmented-view .seg {
+  font-size: 0.72rem;
+  padding: 0.38rem 0.3rem;
 }
 
 .seg {
@@ -741,20 +803,41 @@
 }
 
 .paper-scroll {
-  width: min(var(--page-width, 210mm), 100%);
+  width: var(--page-width, 210mm);
   padding: var(--page-padding, 22mm 18mm);
+  zoom: var(--page-scale, 1);
 }
 
-/* Paged mode: each page renders at its TRUE A-paper size, then is scaled down
-   uniformly (via `zoom`, which reflows) to fit the column width so proportions
-   stay correct. `min-height` lets a page grow for an oversized single block
-   instead of clipping its content. */
+/* Paged mode: each page renders at its TRUE A-paper size, then is scaled via
+   `--page-scale` (user zoom). `min-height` lets a page grow for an oversized
+   single block instead of clipping its content. */
 .page-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1.25rem;
   width: 100%;
+}
+
+.card-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.paper-card {
+  min-height: 0;
+  height: auto;
+}
+
+.paper-card > :first-child {
+  margin-top: 0;
+}
+
+.paper-card > :last-child {
+  margin-bottom: 0;
 }
 
 .paper-page {
@@ -1139,7 +1222,8 @@
     grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
   }
 
-  .paper-scroll {
+  .paper-scroll,
+  .paper-card {
     padding: clamp(1.25rem, 6vw, 2rem);
   }
 }
@@ -1788,9 +1872,265 @@
   line-height: 1;
 }
 
+/* ================================================================== *
+ * Document comments
+ * ================================================================== */
+.comment-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ghost-button.active {
+  background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.paper-scroll mark.comment-highlight,
+.paper-page mark.comment-highlight,
+.paper-card mark.comment-highlight {
+  background: color-mix(in srgb, #f5d565 58%, var(--content-highlight));
+  color: inherit;
+  padding: 0.05em 0.15em;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.paper-scroll mark.comment-highlight:hover,
+.paper-page mark.comment-highlight:hover,
+.paper-card mark.comment-highlight:hover,
+.paper-scroll mark.comment-highlight.active,
+.paper-page mark.comment-highlight.active,
+.paper-card mark.comment-highlight.active {
+  background: color-mix(in srgb, #f5d565 82%, var(--content-highlight));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #d9a400 28%, transparent);
+}
+
+.comment-connectors-fixed {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 44;
+  overflow: visible;
+}
+
+.comment-connectors-fixed path {
+  fill: none;
+  stroke: color-mix(in srgb, #d9a400 55%, var(--line-strong));
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.comment-connectors-fixed path.active {
+  stroke: color-mix(in srgb, #d9a400 88%, var(--ink));
+  stroke-width: 2;
+}
+
+.comment-rail-fixed {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 45;
+}
+
+.comments-rail-hint {
+  position: fixed;
+  top: calc(var(--topbar-total) + 0.85rem);
+  right: var(--gutter);
+  width: clamp(16rem, 18vw, 19rem);
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px dashed color-mix(in srgb, var(--line-strong) 80%, transparent);
+  border-radius: 10px;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted);
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.comment-rail-card {
+  position: fixed;
+  right: var(--gutter);
+  width: clamp(16rem, 18vw, 19rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.comment-rail-card.active,
+.comment-rail-card.draft {
+  border-color: color-mix(in srgb, #d9a400 55%, var(--line-strong));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #d9a400 20%, transparent),
+    var(--shadow-card);
+}
+
+.comment-rail-close {
+  position: fixed;
+  right: var(--gutter);
+  bottom: 1rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  padding: 0.42rem 0.9rem;
+  pointer-events: auto;
+}
+
+.comment-rail-close:hover {
+  color: var(--ink);
+}
+
+.comment-compose-quote {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.comment-compose-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 4.5rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.comment-compose-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  outline-offset: 1px;
+}
+
+.comment-compose-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.comment-primary-button {
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.42rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  cursor: pointer;
+}
+
+.comment-primary-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.comment-card-quote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.comment-card-body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+.comment-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.comment-card-meta time {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.comment-card-actions {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.comment-action {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.comment-action.danger {
+  color: #b85c5c;
+}
+
 @media (max-width: 620px) {
   .assistant-toggle span {
     display: none;
+  }
+
+  .comment-connectors-fixed {
+    display: none;
+  }
+
+  .comment-rail-card,
+  .comments-rail-hint {
+    left: var(--gutter);
+    right: var(--gutter);
+    width: auto;
+  }
+
+  .comment-rail-card {
+    top: auto !important;
+    bottom: 4.5rem;
   }
 
   .assistant-panel {

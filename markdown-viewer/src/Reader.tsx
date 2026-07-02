@@ -17,10 +17,24 @@ import remarkParse from 'remark-parse'
 import { visit } from 'unist-util-visit'
 import { type Theme, THEMES } from './theme'
 import DocAssistant from './DocAssistant'
+import DocComments from './DocComments'
+import { injectCommentHighlights } from './commentAnchors'
+import { useDocumentComments } from './documentComments'
+import {
+  clampPageZoom,
+  loadReaderPreferences,
+  PAGE_ZOOM_MAX,
+  PAGE_ZOOM_MIN,
+  PAGE_ZOOM_STEP,
+  saveReaderPreferences,
+  type DocumentViewMode,
+  type PageSize,
+} from './readerConfig'
 
 type ReaderProps = {
   markdown: string
   fileName: string
+  docKey: string
   theme: Theme
   onSelectTheme: (theme: Theme) => void
   onHome: () => void
@@ -33,8 +47,6 @@ type TocEntry = {
   chapterId: string
   sectionId: string
 }
-
-type PageSize = 'A3' | 'A4' | 'A5'
 
 type PageData = {
   content: string
@@ -126,6 +138,34 @@ function computeBlockMeta(sourceBlocks: string[]) {
 
     return { isBreak, isSubHeader, header: h2 || h1 }
   })
+}
+
+function splitMarkdownIntoCards(source: string): PageData[] {
+  const sourceBlocks = splitMarkdownBlocks(source)
+  const meta = computeBlockMeta(sourceBlocks)
+  const cards: PageData[] = []
+  let startIndex = 0
+
+  const pushCard = (endIndex: number) => {
+    const content = sourceBlocks.slice(startIndex, endIndex).join('\n\n').trim()
+    if (content) {
+      cards.push({
+        content,
+        header: meta[startIndex]?.header ?? '',
+      })
+    }
+  }
+
+  for (let index = 0; index < sourceBlocks.length; index += 1) {
+    if (index > startIndex && meta[index]?.isBreak) {
+      pushCard(index)
+      startIndex = index
+    }
+  }
+
+  pushCard(sourceBlocks.length)
+
+  return cards.length > 0 ? cards : [{ content: source, header: '' }]
 }
 
 import { headingId } from './headings'
@@ -246,14 +286,24 @@ const SettingsIcon = () => (
   </svg>
 )
 
-function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProps) {
-  const [isPaged, setIsPaged] = useState(false)
-  const [pageSize, setPageSize] = useState<PageSize>('A4')
+function Reader({
+  markdown,
+  fileName,
+  docKey,
+  theme,
+  onSelectTheme,
+  onHome,
+}: ReaderProps) {
+  const [viewMode, setViewMode] = useState<DocumentViewMode>(
+    () => loadReaderPreferences().viewMode,
+  )
+  const [pageSize, setPageSize] = useState<PageSize>(() => loadReaderPreferences().pageSize)
   const [activeHeadingId, setActiveHeadingId] = useState<string>('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
   const [tocOpen, setTocOpen] = useState(false)
-  const [pageScale, setPageScale] = useState(1)
+  const [pageZoom, setPageZoom] = useState(() => loadReaderPreferences().pageZoom)
   const [pagedContent, setPagedContent] = useState<PageData[]>([
     { content: markdown, header: '' },
   ])
@@ -262,11 +312,42 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
   const tocPanelRef = useRef<HTMLElement | null>(null)
   const settingsRef = useRef<HTMLDivElement | null>(null)
   const docColRef = useRef<HTMLDivElement | null>(null)
+  const docStageRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollAnchorRef = useRef<string | null>(null)
 
-  const blocks = useMemo(() => splitMarkdownBlocks(markdown), [markdown])
+  const {
+    comments,
+    activeCommentId,
+    setActiveCommentId,
+    addComment,
+    updateComment,
+    deleteComment,
+  } = useDocumentComments(docKey, markdown)
+
+  const handleAddComment = useCallback(
+    (anchor: Parameters<typeof addComment>[0], body: string) => {
+      return addComment(anchor, body)
+    },
+    [addComment],
+  )
+
+  const displayMarkdown = useMemo(
+    () => (commentsOpen ? injectCommentHighlights(markdown, comments) : markdown),
+    [comments, commentsOpen, markdown],
+  )
+
+  const blocks = useMemo(() => splitMarkdownBlocks(displayMarkdown), [displayMarkdown])
   const blockMeta = useMemo(() => computeBlockMeta(blocks), [blocks])
+  const cardContent = useMemo(
+    () => splitMarkdownIntoCards(displayMarkdown),
+    [displayMarkdown],
+  )
   const toc = useMemo(() => extractToc(markdown), [markdown])
+  const isPaged = viewMode === 'paged'
+
+  useEffect(() => {
+    saveReaderPreferences({ viewMode, pageSize, pageZoom })
+  }, [viewMode, pageSize, pageZoom])
 
   const activeChapterId = useMemo(() => {
     const activeEntry = toc.find((entry) => entry.id === activeHeadingId)
@@ -341,6 +422,7 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     setTocOpen(false)
     setSettingsOpen(false)
     setAssistantOpen(false)
+    setCommentsOpen(false)
     pendingScrollAnchorRef.current = null
   }, [markdown])
 
@@ -353,12 +435,12 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     }
   }, [toc])
 
-  const changeViewMode = (paged: boolean) => {
-    if (paged === isPaged) {
+  const changeViewMode = (mode: DocumentViewMode) => {
+    if (mode === viewMode) {
       return
     }
     captureScrollAnchor()
-    setIsPaged(paged)
+    setViewMode(mode)
   }
 
   const changePageSize = (size: PageSize) => {
@@ -367,6 +449,15 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     }
     captureScrollAnchor()
     setPageSize(size)
+  }
+
+  const changePageZoom = (zoom: number) => {
+    const clamped = clampPageZoom(zoom)
+    if (clamped === pageZoom) {
+      return
+    }
+    captureScrollAnchor()
+    setPageZoom(clamped)
   }
 
   // After layout reflows from a view-mode or page-size change, restore scroll
@@ -407,13 +498,13 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     return () => {
       cancelled = true
     }
-  }, [isPaged, pageSize, pagedContent, pageScale])
+  }, [viewMode, pageSize, pageZoom, pagedContent, cardContent, comments])
 
   // Layout-aware pagination: measure real element heights off-screen, then pack
   // blocks into pages, forcing a break before every h2.
   useLayoutEffect(() => {
     if (!isPaged) {
-      setPagedContent([{ content: markdown, header: blockMeta[0]?.header ?? '' }])
+      setPagedContent([{ content: displayMarkdown, header: blockMeta[0]?.header ?? '' }])
       return
     }
 
@@ -425,7 +516,7 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
 
     const children = Array.from(pageEl.children) as HTMLElement[]
     if (children.length === 0) {
-      setPagedContent([{ content: markdown, header: blockMeta[0]?.header ?? '' }])
+      setPagedContent([{ content: displayMarkdown, header: blockMeta[0]?.header ?? '' }])
       return
     }
 
@@ -494,35 +585,9 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     setPagedContent(
       nextPages.length > 0
         ? nextPages
-        : [{ content: markdown, header: blockMeta[0]?.header ?? '' }],
+        : [{ content: displayMarkdown, header: blockMeta[0]?.header ?? '' }],
     )
-  }, [blocks, blockMeta, isPaged, markdown, pageSize])
-
-  // Scale true-size pages down to fit the available column width (never up).
-  useLayoutEffect(() => {
-    if (!isPaged) {
-      setPageScale(1)
-      return
-    }
-
-    const el = docColRef.current
-    if (!el) {
-      return
-    }
-
-    const pageWidthPx = PAGE_SIZES[pageSize].widthMm * MM_TO_PX
-    const update = () => {
-      const available = el.clientWidth
-      if (available > 0) {
-        setPageScale(Math.min(1, available / pageWidthPx))
-      }
-    }
-
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [isPaged, pageSize])
+  }, [blocks, blockMeta, displayMarkdown, isPaged, pageSize])
 
   // Scroll-spy: activate the heading occupying the reading zone (~35% down).
   useEffect(() => {
@@ -573,7 +638,7 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
     }
-  }, [toc, isPaged, pagedContent, pageScale])
+  }, [toc, viewMode, pagedContent, cardContent, pageZoom, comments])
 
   useEffect(() => {
     const updateFromHash = () => {
@@ -683,8 +748,10 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     '--page-padding': `${page.paddingTopMm}mm ${page.paddingHorizontalMm}mm`,
     '--page-pad-x': `${page.paddingHorizontalMm}mm`,
     '--page-pad-y': `${page.paddingTopMm}mm`,
-    '--page-scale': pageScale,
+    '--page-scale': pageZoom,
   } as CSSProperties
+
+  const pageZoomPercent = Math.round(pageZoom * 100)
 
   return (
     <div className="reader-root">
@@ -748,6 +815,39 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
 
           <button
             type="button"
+            className={commentsOpen ? 'ghost-button active' : 'ghost-button'}
+            aria-label="Document comments"
+            aria-expanded={commentsOpen}
+            onClick={() => {
+              setCommentsOpen((value) => !value)
+              setAssistantOpen(false)
+              setSettingsOpen(false)
+              setTocOpen(false)
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+              <path d="M8 9h8" />
+              <path d="M8 13h5" />
+            </svg>
+            <span>Comments</span>
+            {comments.length > 0 ? (
+              <span className="comment-count-badge">{comments.length}</span>
+            ) : null}
+          </button>
+
+          <button
+            type="button"
             className="ghost-button assistant-toggle"
             aria-label="Ask about this document"
             aria-expanded={assistantOpen}
@@ -755,6 +855,7 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
               setAssistantOpen((value) => !value)
               setSettingsOpen(false)
               setTocOpen(false)
+              setCommentsOpen(false)
             }}
           >
             <svg
@@ -782,6 +883,7 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
               onClick={() => {
                 setSettingsOpen((value) => !value)
                 setAssistantOpen(false)
+                setCommentsOpen(false)
               }}
             >
               <SettingsIcon />
@@ -791,18 +893,25 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
               <div className="settings-popover" role="dialog" aria-label="Settings">
                 <div className="settings-group">
                   <p className="settings-label">View</p>
-                  <div className="segmented">
+                  <div className="segmented segmented-view">
                     <button
                       type="button"
-                      className={!isPaged ? 'seg active' : 'seg'}
-                      onClick={() => changeViewMode(false)}
+                      className={viewMode === 'continuous' ? 'seg active' : 'seg'}
+                      onClick={() => changeViewMode('continuous')}
                     >
                       Continuous
                     </button>
                     <button
                       type="button"
-                      className={isPaged ? 'seg active' : 'seg'}
-                      onClick={() => changeViewMode(true)}
+                      className={viewMode === 'cards' ? 'seg active' : 'seg'}
+                      onClick={() => changeViewMode('cards')}
+                    >
+                      Cards
+                    </button>
+                    <button
+                      type="button"
+                      className={viewMode === 'paged' ? 'seg active' : 'seg'}
+                      onClick={() => changeViewMode('paged')}
                     >
                       Pages
                     </button>
@@ -822,6 +931,47 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
                         {size}
                       </button>
                     ))}
+                  </div>
+                </div>
+
+                <div className="settings-group">
+                  <div className="settings-label-row">
+                    <p className="settings-label">Scale</p>
+                    <span className="scale-value" aria-live="polite">
+                      {pageZoomPercent}%
+                    </span>
+                  </div>
+                  <div className="scale-control">
+                    <button
+                      type="button"
+                      className="scale-step"
+                      aria-label="Zoom out"
+                      onClick={() => changePageZoom(pageZoom - PAGE_ZOOM_STEP)}
+                      disabled={pageZoom <= PAGE_ZOOM_MIN}
+                    >
+                      −
+                    </button>
+                    <input
+                      type="range"
+                      className="scale-slider"
+                      min={PAGE_ZOOM_MIN * 100}
+                      max={PAGE_ZOOM_MAX * 100}
+                      step={PAGE_ZOOM_STEP * 100}
+                      value={pageZoomPercent}
+                      aria-label="Page scale"
+                      onChange={(event) =>
+                        changePageZoom(Number(event.target.value) / 100)
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="scale-step"
+                      aria-label="Zoom in"
+                      onClick={() => changePageZoom(pageZoom + PAGE_ZOOM_STEP)}
+                      disabled={pageZoom >= PAGE_ZOOM_MAX}
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
 
@@ -857,7 +1007,26 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
         onNavigateToSection={navigateToSection}
       />
 
-      <div className="reader-canvas" data-theme={theme} style={canvasStyle}>
+      <DocComments
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        docColRef={docColRef}
+        markdown={markdown}
+        toc={toc}
+        comments={comments}
+        activeCommentId={activeCommentId}
+        setActiveCommentId={setActiveCommentId}
+        onAddComment={handleAddComment}
+        onUpdateComment={updateComment}
+        onDeleteComment={deleteComment}
+      />
+
+      <div
+        className="reader-canvas"
+        data-theme={theme}
+        data-comment-mode={commentsOpen ? 'true' : undefined}
+        style={canvasStyle}
+      >
         <aside
           className={tocOpen ? 'toc-panel toc-open' : 'toc-panel'}
           aria-label="Table of contents"
@@ -903,9 +1072,12 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
           )}
         </aside>
 
-        <div className="doc-stage">
-          <div className="doc-col" ref={docColRef}>
-            {isPaged ? (
+        <div className="doc-stage" ref={docStageRef}>
+          <div
+            className={commentsOpen ? 'doc-col comment-mode' : 'doc-col'}
+            ref={docColRef}
+          >
+            {viewMode === 'paged' ? (
               <section className="page-stack">
                 {pagedContent.map((pageData, index) => (
                   <article className="paper-page" key={`page-${index}`}>
@@ -917,9 +1089,17 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
                   </article>
                 ))}
               </section>
+            ) : viewMode === 'cards' ? (
+              <section className="card-stack">
+                {cardContent.map((cardData, index) => (
+                  <article className="paper-scroll paper-card" key={`card-${index}`}>
+                    {renderDocumentMarkdown(cardData.content)}
+                  </article>
+                ))}
+              </section>
             ) : (
               <article className="paper-scroll">
-                {renderDocumentMarkdown(markdown)}
+                {renderDocumentMarkdown(displayMarkdown)}
               </article>
             )}
           </div>
@@ -929,7 +1109,7 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
           <div className="measure-host" ref={measureHostRef} aria-hidden="true">
             <div className="paper-page measure-page">
               <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
-                {markdown}
+                {displayMarkdown}
               </ReactMarkdown>
             </div>
           </div>
