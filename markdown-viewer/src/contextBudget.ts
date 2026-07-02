@@ -1,11 +1,16 @@
 /** Aligns with Ollama `num_ctx` ceiling and reserved output tokens. */
 export const MAX_CONTEXT_TOKENS = 16_384
+export const CLAUDE_MAX_CONTEXT_CHARS = 180_000
 export const RESERVED_OUTPUT_TOKENS = 736
 export const CHARS_PER_TOKEN = 3.5
 
 export const MAX_CONTEXT_CHARS = Math.floor(
   (MAX_CONTEXT_TOKENS - RESERVED_OUTPUT_TOKENS) * CHARS_PER_TOKEN,
 )
+
+export function getMaxContextChars(provider: 'ollama' | 'claude' = 'ollama') {
+  return provider === 'claude' ? CLAUDE_MAX_CONTEXT_CHARS : MAX_CONTEXT_CHARS
+}
 
 const MESSAGE_OVERHEAD_CHARS = 24
 
@@ -68,25 +73,28 @@ export function fitChatHistoryToBudget<T extends { content: string }>(
   }
 }
 
-export function computeContextUsage(parts: {
-  systemChars: number
-  history: { content: string }[]
-  draftQuestion: string
-}) {
+export function computeContextUsage(
+  parts: {
+    systemChars: number
+    history: { content: string }[]
+    draftQuestion: string
+  },
+  maxChars: number = MAX_CONTEXT_CHARS,
+) {
   const systemChars = parts.systemChars + MESSAGE_OVERHEAD_CHARS
   const historyChars = totalMessageChars(parts.history)
   const draft = parts.draftQuestion.trim()
   const questionChars = draft ? messageChars(draft) : 0
   const used = systemChars + historyChars + questionChars
-  const percent = Math.min(100, (used / MAX_CONTEXT_CHARS) * 100)
+  const percent = Math.min(100, (used / maxChars) * 100)
 
   return {
     used,
-    max: MAX_CONTEXT_CHARS,
+    max: maxChars,
     percent,
     systemChars,
     historyChars,
     questionChars,
-    isOverBudget: used > MAX_CONTEXT_CHARS,
+    isOverBudget: used > maxChars,
   }
 }

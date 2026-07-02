@@ -145,6 +145,7 @@ function extractToc(markdown: string) {
   const entries: TocEntry[] = []
   let currentChapterId = ''
   let currentSectionId = ''
+  const headingCounts = new Map<string, number>()
   const tree = unified().use(remarkParse).parse(markdown)
 
   visit(tree, 'heading', (node: MdastNode & { depth: number }) => {
@@ -158,7 +159,10 @@ function extractToc(markdown: string) {
       return
     }
 
-    const id = headingId(text)
+    const baseId = headingId(text)
+    const seenCount = headingCounts.get(baseId) ?? 0
+    const id = seenCount === 0 ? baseId : `${baseId}-${seenCount + 1}`
+    headingCounts.set(baseId, seenCount + 1)
     if (node.depth === 1) {
       currentChapterId = id
       currentSectionId = id
@@ -279,11 +283,29 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     return activeEntry.level === 3 ? activeEntry.sectionId : activeEntry.id
   }, [toc, activeHeadingId])
 
-  const createMarkdownComponents = useCallback(() => {
+  const markdownComponents = useMemo(() => {
+    const idsByHeadingText = new Map<string, string[]>()
+    for (const entry of toc) {
+      const key = entry.text.trim().toLowerCase()
+      const list = idsByHeadingText.get(key) ?? []
+      list.push(entry.id)
+      idsByHeadingText.set(key, list)
+    }
+    const usedByHeadingText = new Map<string, number>()
+
+    const resolveRenderedHeadingId = (children?: ReactNode) => {
+      const text = getNodeText(children).trim()
+      const key = text.toLowerCase()
+      const used = usedByHeadingText.get(key) ?? 0
+      usedByHeadingText.set(key, used + 1)
+      const candidate = idsByHeadingText.get(key)?.[used]
+      return candidate ?? headingId(text)
+    }
+
     const makeHeading =
       (tagName: 'h1' | 'h2' | 'h3') =>
       ({ children }: { children?: ReactNode }) => {
-        const id = headingId(getNodeText(children))
+        const id = resolveRenderedHeadingId(children)
         return tagName === 'h1' ? (
           <h1 id={id}>{children}</h1>
         ) : tagName === 'h2' ? (
@@ -298,12 +320,7 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
       h2: makeHeading('h2'),
       h3: makeHeading('h3'),
     }
-  }, [])
-
-  const markdownComponents = useMemo(
-    () => createMarkdownComponents(),
-    [createMarkdownComponents],
-  )
+  }, [toc])
 
   const renderDocumentMarkdown = useCallback(
     (content: string) => (
@@ -611,16 +628,38 @@ function Reader({ markdown, fileName, theme, onSelectTheme, onHome }: ReaderProp
     activeLink?.scrollIntoView({ block: 'nearest' })
   }, [activeHeadingId])
 
-  const navigateToSection = useCallback((id: string) => {
-    const target = getHeadingElement(id, docColRef.current)
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+  const navigateToSection = useCallback(
+    (id: string) => {
+      const scope = docColRef.current
+      let target = getHeadingElement(id, scope)
 
-    window.history.replaceState(null, '', `#${encodeURIComponent(id)}`)
-    setActiveHeadingId(id)
-    setTocOpen(false)
-  }, [])
+      if (!target) {
+        const entry = toc.find((item) => item.id === id)
+        if (entry && scope) {
+          const headings = Array.from(
+            scope.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id]'),
+          )
+          target =
+            headings.find(
+              (heading) => heading.textContent?.trim().toLowerCase() === entry.text.toLowerCase(),
+            ) ?? null
+        }
+      }
+
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        const resolvedId = target.id || id
+        window.history.replaceState(null, '', `#${encodeURIComponent(resolvedId)}`)
+        setActiveHeadingId(resolvedId)
+      } else {
+        window.history.replaceState(null, '', `#${encodeURIComponent(id)}`)
+        setActiveHeadingId(id)
+      }
+
+      setTocOpen(false)
+    },
+    [toc],
+  )
 
   const navigateToHeading = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
     event.preventDefault()

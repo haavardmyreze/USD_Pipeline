@@ -181,7 +181,7 @@
   color: var(--content-ink-soft);
   min-height: calc(100vh - var(--topbar-total));
   display: grid;
-  grid-template-columns: var(--toc-width) minmax(0, 1fr) var(--toc-width);
+  grid-template-columns: var(--toc-width) minmax(0, 1fr);
   column-gap: clamp(1.25rem, 3vw, 2.75rem);
   padding: clamp(1.5rem, 3vw, 2.75rem) var(--gutter) 5rem;
   overflow: clip;
@@ -205,12 +205,18 @@
 }
 .toc-panel {
   position: sticky;
-  top: calc(var(--topbar-total) + clamp(1.25rem, 3vw, 2.75rem));
+  top: var(--topbar-total);
   align-self: start;
   z-index: 4;
-  max-height: calc(100vh - var(--topbar-total) - 2rem);
+  max-height: calc(100vh - var(--topbar-total));
   overflow-y: auto;
-  padding-right: 0.35rem;
+  padding: 0.95rem 0.9rem 1rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 62%, transparent);
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-card);
+  overflow-x: hidden;
+  isolation: isolate;
   scrollbar-width: thin;
 }
 
@@ -1160,9 +1166,9 @@
   flex-direction: column;
   gap: 0.35rem;
   padding-bottom: 0.65rem;
-  background: color-mix(in srgb, var(--surface) 48%, transparent);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
   backdrop-filter: blur(28px) saturate(1.25);
-  border: 1px solid color-mix(in srgb, var(--line-strong) 36%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 56%, transparent);
   border-radius: var(--radius-lg);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.1),
@@ -1281,6 +1287,39 @@
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.assistant-provider-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.2rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg) 24%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 28%, transparent);
+}
+
+.assistant-provider-option {
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+  padding: 0.38rem 0.55rem;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.assistant-provider-option:hover {
+  color: var(--ink-soft);
+}
+
+.assistant-provider-option.active {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-raised) 62%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .assistant-field {

@@ -436,9 +436,14 @@ export function buildFullDocumentSystemPrompt(fileName: string, markdown: string
   return [
     `You are a helpful assistant answering questions about the Markdown document "${fileName}".`,
     'The complete document is provided below. Answer from this document only.',
+    'If the answer is not in the document, say that clearly and ask a brief clarifying follow-up.',
+    'Do not invent or assume rules that are not explicitly documented.',
     'Give practical, clear answers. For overview questions, summarize the document structure and purpose.',
+    'Start with a direct answer. Use bullets only when they improve clarity (for steps, options, or comparisons).',
     'When citing a section, link inline using markdown: [Exact heading](#section-id).',
-    'Section ids are lowercase with punctuation removed and words joined by hyphens.',
+    'When relevant, include a section link early in the answer so readers can jump to source context immediately.',
+    'Use section ids exactly as provided in the document context, including numeric prefixes when present.',
+    'For specific technical claims, include a short quote from the document when helpful.',
     '',
     '--- FULL DOCUMENT ---',
     markdown,
@@ -455,11 +460,16 @@ export function buildExcerptSystemPrompt(
   const lines = [
     `You are a helpful assistant answering questions about the Markdown document "${fileName}".`,
     'You receive a document outline, introduction, and section excerpts — not the full file.',
+    'If the answer is not in the provided material, say that clearly and ask a brief clarifying follow-up.',
+    'Do not invent or assume rules that are not explicitly documented.',
     overview
       ? 'This is an overview question: synthesize a useful summary from the outline, introduction, and key sections. Describe what the guide covers, who it is for, and the main topics.'
       : 'Answer using the provided material. Combine information across sections when needed.',
+    'Start with a direct answer. Use bullets only when they improve clarity (for steps, options, or comparisons).',
     'Be specific and practical. When you mention a section, link to it inline: [Exact heading](#section-id).',
-    'Use the exact heading text from the document outline or excerpts.',
+    'When relevant, include a section link early in the answer so readers can jump to source context immediately.',
+    'Use the exact heading text and section ids provided in the context/link guide, including numeric prefixes.',
+    'For specific technical claims, include a short quote from the provided material when helpful.',
   ]
 
   if (linkGuide) {
