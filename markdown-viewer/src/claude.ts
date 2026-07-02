@@ -5,6 +5,7 @@ const DEFAULT_MAX_TOKENS = 1024
 
 /** Proxied in dev/preview to avoid browser CORS blocks on api.anthropic.com */
 export const CLAUDE_API_BASE = '/api/anthropic'
+const CLAUDE_DIRECT_API_BASE = 'https://api.anthropic.com'
 
 export type ClaudeChatMessage = {
   role: 'user' | 'assistant'
@@ -56,14 +57,21 @@ function logClaudeCacheUsage(usage: ClaudeUsage) {
   })
 }
 
-function messagesUrl(baseUrl: string) {
-  const normalized = baseUrl.replace(/\/+$/, '')
-  return `${normalized}/v1/messages`
-}
+async function fetchClaudeWithFallback(
+  path: '/v1/messages' | '/v1/models',
+  options: RequestInit,
+) {
+  const proxyUrl = `${CLAUDE_API_BASE}${path}`
+  const response = await fetch(proxyUrl, options)
 
-function modelsUrl(baseUrl: string) {
-  const normalized = baseUrl.replace(/\/+$/, '')
-  return `${normalized}/v1/models`
+  // Vercel static deployments can return NOT_FOUND for /api/anthropic.
+  // In that case, retry against Anthropic directly.
+  if (response.status === 404) {
+    const directUrl = `${CLAUDE_DIRECT_API_BASE}${path}`
+    return fetch(directUrl, options)
+  }
+
+  return response
 }
 
 function parseClaudeErrorBody(text: string, status: number) {
@@ -118,7 +126,7 @@ export function claudeErrorMessage(error: unknown) {
 }
 
 export async function listClaudeModels(apiKey: string) {
-  const response = await fetch(modelsUrl(CLAUDE_API_BASE), {
+  const response = await fetchClaudeWithFallback('/v1/models', {
     method: 'GET',
     headers: {
       'x-api-key': apiKey,
@@ -162,7 +170,7 @@ export async function streamClaudeChat(
     throw new Error('Enter your Anthropic API key in connection settings.')
   }
 
-  const response = await fetch(messagesUrl(CLAUDE_API_BASE), {
+  const response = await fetchClaudeWithFallback('/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
