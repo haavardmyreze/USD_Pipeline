@@ -37,6 +37,67 @@ http://localhost:5173/?doc=guides/naming-conventions
 
 The last opened library document is remembered in the browser.
 
+## Firefox extension
+
+The extension is a thin redirect layer: it opens markdown in the hosted viewer at [usd-pipeline-k7aa.vercel.app](https://usd-pipeline-k7aa.vercel.app/). Deploying the web app updates the reader for everyone without reinstalling the add-on.
+
+```bash
+npm run build:firefox-extension
+```
+
+For a one-file install package:
+
+```bash
+npm run package:firefox-extension
+```
+
+This creates:
+
+```
+markdown-viewer/dist-firefox-extension/
+markdown-viewer/release/firefox-extension/quiet-reader-markdown.xpi
+```
+
+Install the `.xpi` in Firefox:
+
+1. Open `about:addons`
+2. Click the gear icon
+3. Choose **Install Add-on From File…**
+4. Select `release/firefox-extension/quiet-reader-markdown.xpi`
+
+For development (reload on every restart), you can still use temporary install:
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on**
+3. Choose `dist-firefox-extension/manifest.json`
+
+### Signed builds (optional, permanent install)
+
+To produce a Mozilla-signed package for unlisted distribution:
+
+1. Create API credentials at [addons.mozilla.org](https://addons.mozilla.org/developers/addon/api/key/)
+2. Set environment variables:
+   - `WEB_EXT_API_KEY`
+   - `WEB_EXT_API_SECRET`
+3. Run:
+
+```bash
+npm run sign:firefox-extension
+```
+
+Signed output is written to `release/firefox-extension-signed/`.
+
+Extension behavior:
+
+- Auto-redirects `.md` / `.markdown` pages to `https://usd-pipeline-k7aa.vercel.app/?src=...`
+- For local `file://` markdown, the extension reads the file and passes the content to the viewer (web pages cannot fetch `file://` URLs directly)
+- Adds right-click actions:
+  - **Open Markdown in Quiet Reader** (for markdown links)
+  - **Open This Page in Quiet Reader** (for markdown pages)
+- Toolbar button opens the hosted viewer home page
+
+Change the viewer URL in `extension/viewer-url.js` if you deploy to a different host.
+
 ## Ask about this document
 
 Open a document and click **Ask** in the reader toolbar to chat about the current file. Choose **Ollama** (local, free) or **Claude** (Anthropic API) in connection settings. The app sends only the most relevant sections (by heading), not the entire document — unless the file is small enough to fit in one request.

@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:firefox-extension": "node ./scripts/build-firefox-extension.mjs",
+    "package:firefox-extension": "npm run build:firefox-extension && node ./scripts/package-firefox-extension.mjs",
+    "sign:firefox-extension": "npm run build:firefox-extension && node ./scripts/sign-firefox-extension.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -26,6 +29,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "oxlint": "^1.69.0",
     "typescript": "~6.0.2",
-    "vite": "^8.1.0"
+    "vite": "^8.1.0",
+    "web-ext": "^8.9.0"
   }
 }

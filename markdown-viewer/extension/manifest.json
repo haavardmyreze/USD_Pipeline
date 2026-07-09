@@ -1,0 +1,36 @@
+{
+  "manifest_version": 2,
+  "name": "Quiet Reader for Markdown",
+  "version": "0.1.0",
+  "description": "Open .md files with the Quiet Reader experience.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "quiet-reader@usd-pipeline.local",
+      "strict_min_version": "109.0"
+    }
+  },
+  "permissions": [
+    "contextMenus",
+    "tabs",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["viewer-url.js", "background.js"],
+    "persistent": false
+  },
+  "browser_action": {
+    "default_title": "Quiet Reader"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*/*.md",
+        "*://*/*.markdown",
+        "file://*/*.md",
+        "file://*/*.markdown"
+      ],
+      "js": ["viewer-url.js", "redirect-md.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
