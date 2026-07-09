@@ -19,6 +19,7 @@ import { type Theme, THEMES } from './theme'
 import DocAssistant from './DocAssistant'
 import DocComments from './DocComments'
 import { injectCommentHighlights } from './commentAnchors'
+import { buildSearchSections, searchSections } from './documentSearch'
 import { useDocumentComments } from './documentComments'
 import {
   clampPageZoom,
@@ -239,6 +240,181 @@ function getNodeText(node: ReactNode): string {
   return ''
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function highlightMatches(text: string, query: string) {
+  const tokens = query
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2)
+
+  if (!text || tokens.length === 0) {
+    return text
+  }
+
+  const pattern = new RegExp(`(${tokens.map(escapeRegExp).join('|')})`, 'gi')
+  const exactPattern = new RegExp(`^(${tokens.map(escapeRegExp).join('|')})$`, 'i')
+  const parts = text.split(pattern)
+
+  return parts.map((part, index) =>
+    exactPattern.test(part) ? <mark key={`${part}-${index}`}>{part}</mark> : part,
+  )
+}
+
+function createSearchRegex(query: string) {
+  const tokens = query
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2)
+
+  if (tokens.length === 0) {
+    return null
+  }
+
+  return new RegExp(`(${tokens.map(escapeRegExp).join('|')})`, 'gi')
+}
+
+function getSectionRange(scope: HTMLElement, sectionId: string) {
+  const heading = scope.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`)
+  if (!heading) {
+    return null
+  }
+
+  const levelMatch = /^H([1-3])$/i.exec(heading.tagName)
+  if (!levelMatch) {
+    return null
+  }
+  const level = Number(levelMatch[1])
+
+  const headings = Array.from(scope.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id]'))
+  const currentIndex = headings.findIndex((item) => item.id === sectionId)
+  if (currentIndex === -1) {
+    return null
+  }
+
+  let endBoundary: HTMLElement | null = null
+  for (let index = currentIndex + 1; index < headings.length; index += 1) {
+    const candidate = headings[index]
+    const candidateLevel = Number(candidate.tagName.slice(1))
+    if (candidateLevel <= level) {
+      endBoundary = candidate
+      break
+    }
+  }
+
+  const range = document.createRange()
+  range.setStartBefore(heading)
+  if (endBoundary) {
+    range.setEndBefore(endBoundary)
+  } else {
+    range.setEnd(scope, scope.childNodes.length)
+  }
+
+  return range
+}
+
+function flashHighlightInDocument(
+  scope: HTMLElement,
+  query: string,
+  sectionId = '',
+  autoScrollToFirstMatch = false,
+) {
+  const pattern = createSearchRegex(query)
+  if (!pattern) {
+    return () => {}
+  }
+
+  const sectionRange = sectionId ? getSectionRange(scope, sectionId) : null
+  const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT)
+  const edited: HTMLElement[] = []
+  let totalMatches = 0
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text
+    const value = node.nodeValue ?? ''
+    if (!value.trim()) {
+      continue
+    }
+
+    const parent = node.parentElement
+    if (!parent) {
+      continue
+    }
+
+    if (sectionRange && !sectionRange.intersectsNode(node)) {
+      continue
+    }
+
+    if (
+      parent.closest(
+        'pre, code, mark, .page-running-header, .page-number, .comment-rail-fixed, .assistant-panel, .search-panel',
+      )
+    ) {
+      continue
+    }
+
+    const matches = [...value.matchAll(pattern)]
+    if (matches.length === 0) {
+      continue
+    }
+
+    const fragment = document.createDocumentFragment()
+    let lastIndex = 0
+
+    for (const match of matches) {
+      const index = match.index ?? 0
+      const found = match[0]
+
+      if (index > lastIndex) {
+        fragment.appendChild(document.createTextNode(value.slice(lastIndex, index)))
+      }
+
+      const marker = document.createElement('mark')
+      marker.className = 'search-flash-highlight'
+      marker.textContent = found
+      fragment.appendChild(marker)
+      edited.push(marker)
+
+      totalMatches += 1
+      lastIndex = index + found.length
+      if (totalMatches >= 180) {
+        break
+      }
+    }
+
+    if (lastIndex < value.length) {
+      fragment.appendChild(document.createTextNode(value.slice(lastIndex)))
+    }
+
+    node.parentNode?.replaceChild(fragment, node)
+
+    if (totalMatches >= 180) {
+      break
+    }
+  }
+
+  if (autoScrollToFirstMatch && edited.length > 0) {
+    const first = edited[0]
+    const rect = first.getBoundingClientRect()
+    if (rect.top < 120 || rect.bottom > window.innerHeight - 120) {
+      first.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+
+  return () => {
+    edited.forEach((marker) => {
+      const parent = marker.parentNode
+      if (!parent) {
+        return
+      }
+      parent.replaceChild(document.createTextNode(marker.textContent ?? ''), marker)
+      parent.normalize()
+    })
+  }
+}
+
 function getHeadingElement(id: string, scope?: ParentNode | null) {
   const escapedId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id
   const root = scope ?? document
@@ -302,8 +478,14 @@ function Reader({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [tocOpen, setTocOpen] = useState(false)
   const [pageZoom, setPageZoom] = useState(() => loadReaderPreferences().pageZoom)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [flashSearchQuery, setFlashSearchQuery] = useState('')
+  const [flashSearchSectionId, setFlashSearchSectionId] = useState('')
+  const [flashAutoScroll, setFlashAutoScroll] = useState(false)
+  const [flashSearchTick, setFlashSearchTick] = useState(0)
   const [pagedContent, setPagedContent] = useState<PageData[]>([
     { content: markdown, header: '' },
   ])
@@ -311,6 +493,7 @@ function Reader({
   const measureHostRef = useRef<HTMLDivElement | null>(null)
   const tocPanelRef = useRef<HTMLElement | null>(null)
   const settingsRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const docColRef = useRef<HTMLDivElement | null>(null)
   const docStageRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollAnchorRef = useRef<string | null>(null)
@@ -343,7 +526,13 @@ function Reader({
     [displayMarkdown],
   )
   const toc = useMemo(() => extractToc(markdown), [markdown])
+  const searchIndex = useMemo(() => buildSearchSections(markdown), [markdown])
+  const searchResults = useMemo(
+    () => searchSections(searchIndex, searchQuery),
+    [searchIndex, searchQuery],
+  )
   const isPaged = viewMode === 'paged'
+  const trimmedSearchQuery = searchQuery.trim()
 
   useEffect(() => {
     saveReaderPreferences({ viewMode, pageSize, pageZoom })
@@ -423,8 +612,81 @@ function Reader({
     setSettingsOpen(false)
     setAssistantOpen(false)
     setCommentsOpen(false)
+    setSearchOpen(false)
+    setSearchQuery('')
+    setFlashSearchQuery('')
+    setFlashSearchSectionId('')
+    setFlashAutoScroll(false)
+    setFlashSearchTick(0)
     pendingScrollAnchorRef.current = null
   }, [markdown])
+
+  useEffect(() => {
+    if (!flashSearchQuery || flashSearchTick === 0) {
+      return
+    }
+
+    const scope = docColRef.current
+    if (!scope) {
+      return
+    }
+
+    let cleanup = () => {}
+    const startDelay = window.setTimeout(() => {
+      cleanup = flashHighlightInDocument(
+        scope,
+        flashSearchQuery,
+        flashSearchSectionId,
+        flashAutoScroll,
+      )
+    }, 260)
+
+    const timer = window.setTimeout(() => {
+      cleanup()
+    }, 3860)
+
+    return () => {
+      window.clearTimeout(startDelay)
+      window.clearTimeout(timer)
+      cleanup()
+    }
+  }, [
+    flashAutoScroll,
+    flashSearchQuery,
+    flashSearchSectionId,
+    flashSearchTick,
+    viewMode,
+    pagedContent,
+    cardContent,
+  ])
+
+  const focusSearchInput = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    })
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName ?? ''
+      const isEditable =
+        target?.isContentEditable ||
+        tagName === 'INPUT' ||
+        tagName === 'TEXTAREA' ||
+        tagName === 'SELECT'
+
+      if (!isEditable && event.key === '/') {
+        event.preventDefault()
+        setSearchOpen(true)
+        focusSearchInput()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [focusSearchInput])
 
   const captureScrollAnchor = useCallback(() => {
     const scope = docColRef.current
@@ -731,6 +993,20 @@ function Reader({
     navigateToSection(id)
   }
 
+  const toggleSearch = () => {
+    if (searchOpen) {
+      setSearchOpen(false)
+      return
+    }
+
+    setSearchOpen(true)
+    setAssistantOpen(false)
+    setCommentsOpen(false)
+    setSettingsOpen(false)
+    setTocOpen(false)
+    focusSearchInput()
+  }
+
   const documentSections = useMemo(
     () =>
       toc.map((entry) => ({
@@ -815,12 +1091,37 @@ function Reader({
 
           <button
             type="button"
+            className={trimmedSearchQuery ? 'ghost-button active' : 'ghost-button'}
+            aria-label="Search document"
+            aria-expanded={searchOpen}
+            onClick={toggleSearch}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <span>Search</span>
+          </button>
+
+          <button
+            type="button"
             className={commentsOpen ? 'ghost-button active' : 'ghost-button'}
             aria-label="Document comments"
             aria-expanded={commentsOpen}
             onClick={() => {
               setCommentsOpen((value) => !value)
               setAssistantOpen(false)
+              setSearchOpen(false)
               setSettingsOpen(false)
               setTocOpen(false)
             }}
@@ -855,6 +1156,7 @@ function Reader({
               setAssistantOpen((value) => !value)
               setSettingsOpen(false)
               setTocOpen(false)
+              setSearchOpen(false)
               setCommentsOpen(false)
             }}
           >
@@ -884,6 +1186,7 @@ function Reader({
                 setSettingsOpen((value) => !value)
                 setAssistantOpen(false)
                 setCommentsOpen(false)
+                setSearchOpen(false)
               }}
             >
               <SettingsIcon />
@@ -1020,6 +1323,104 @@ function Reader({
         onUpdateComment={updateComment}
         onDeleteComment={deleteComment}
       />
+
+      {searchOpen ? (
+        <aside className="search-panel" aria-label="Document search">
+          <div className="search-panel-header">
+            <h2>Search</h2>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Close search"
+              onClick={() => setSearchOpen(false)}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="search-panel-body">
+            <div className="search-panel-input-row">
+              <input
+                ref={searchInputRef}
+                type="search"
+                className="search-panel-input"
+                value={searchQuery}
+                placeholder="Search headings and sections"
+                aria-label="Search this document"
+                spellCheck={false}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+              {trimmedSearchQuery ? (
+                <button
+                  type="button"
+                  className="search-panel-clear"
+                  onClick={() => {
+                    setSearchQuery('')
+                    focusSearchInput()
+                  }}
+                  aria-label="Clear search"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+
+            {trimmedSearchQuery ? (
+              <p className="search-panel-hint">
+                {searchResults.length === 0
+                  ? 'No matching sections.'
+                  : `${searchResults.length} matching section${searchResults.length === 1 ? '' : 's'}.`}
+              </p>
+            ) : (
+              <p className="search-panel-hint">Tip: press / to focus search.</p>
+            )}
+
+            <div className="search-results" role="list" aria-label="Search results">
+              {trimmedSearchQuery
+                ? searchResults.map((result) => (
+                    <button
+                      key={result.id}
+                      type="button"
+                      className={`search-result search-l${result.level}`}
+                      onClick={() => {
+                        navigateToSection(result.id)
+                        if (trimmedSearchQuery) {
+                          setFlashSearchQuery(trimmedSearchQuery)
+                          setFlashSearchSectionId(result.id)
+                          setFlashAutoScroll(result.reason !== 'Strong heading match' && result.reason !== 'Exact heading match')
+                          setFlashSearchTick(Date.now())
+                        }
+                      }}
+                    >
+                      <span className="search-result-title">
+                        {highlightMatches(result.text, trimmedSearchQuery)}
+                      </span>
+                      <span className="search-result-reason">{result.reason}</span>
+                      {result.snippet ? (
+                        <span className="search-result-snippet">
+                          {highlightMatches(result.snippet, trimmedSearchQuery)}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))
+                : null}
+            </div>
+          </div>
+        </aside>
+      ) : null}
 
       <div
         className="reader-canvas"
