@@ -660,14 +660,6 @@
   background: linear-gradient(135deg, #2e3440 50%, #5e81ac 50%);
 }
 
-.theme-swatch[data-theme='forest'] {
-  background: linear-gradient(135deg, #0f1410 50%, #2f6b3e 50%);
-}
-
-.theme-swatch[data-theme='dusk'] {
-  background: linear-gradient(135deg, #14111c 50%, #6d4fb0 50%);
-}
-
 .theme-swatch[data-theme='ink-night'] {
   background: linear-gradient(135deg, #000000 50%, #141414 50%);
 }
@@ -945,6 +937,47 @@
   padding: 0;
 }
 
+.doc-card-import:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.doc-card-paste {
+  cursor: text;
+}
+
+.doc-card-paste-input {
+  width: 100%;
+  margin-top: 0.45rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  resize: none;
+}
+
+.doc-card-paste-input::placeholder {
+  color: var(--muted);
+}
+
+.doc-card-paste-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 1px;
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line-strong));
+}
+
+.doc-card-error {
+  margin-top: 0.35rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #b42318;
+}
+
 .home-empty {
   margin: 2rem 0 0;
   font-family: var(--font-ui);
@@ -1198,6 +1231,22 @@
 [data-theme='notion'] .paper-scroll h3,
 [data-theme='notion'] .paper-page h3 {
   color: var(--content-heading);
+}
+
+/* Graphite / Stone — neutral prose + headings; color reserved for notation. */
+.reader-canvas[data-theme='graphite'] .paper-scroll h3,
+.reader-canvas[data-theme='graphite'] .paper-page h3,
+.reader-canvas[data-theme='stone'] .paper-scroll h3,
+.reader-canvas[data-theme='stone'] .paper-page h3 {
+  color: var(--content-heading-soft);
+}
+
+.reader-canvas[data-theme='graphite'] .paper-scroll mark,
+.reader-canvas[data-theme='graphite'] .paper-page mark,
+.reader-canvas[data-theme='stone'] .paper-scroll mark,
+.reader-canvas[data-theme='stone'] .paper-page mark {
+  color: var(--content-accent-strong);
+  background: color-mix(in srgb, var(--content-accent) 24%, var(--paper));
 }
 
 .paper-scroll del,

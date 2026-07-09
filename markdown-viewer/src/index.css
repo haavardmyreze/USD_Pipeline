@@ -160,7 +160,7 @@
   --font-body: 'Courier Prime', 'Courier New', Courier, 'Liberation Mono', monospace;
 }
 
-/* Graphite — neutral dark serif, no blue cast */
+/* Graphite — neutral dark serif; accent color on markdown notation only */
 [data-theme='graphite'] {
   --bg: #0a0a0a;
   --paper: #1a1a1a;
@@ -178,12 +178,12 @@
   --content-muted: #909090;
   --content-line: #363636;
   --content-code-bg: #242424;
-  --content-accent: #b8b8b8;
-  --content-accent-strong: #d4d4d4;
+  --content-accent: #c4a060;
+  --content-accent-strong: #dbb872;
   --content-heading: #f2f2f2;
   --content-heading-soft: #d0d0d0;
   --content-table-head: #262626;
-  --content-highlight: #2a2a2a;
+  --content-highlight: #3d3426;
 
   --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Times New Roman', serif;
   --font-body: 'Charter', 'Georgia', 'Times New Roman', serif;
@@ -218,7 +218,7 @@
   --font-body: Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* Stone — cool neutral dark sans */
+/* Stone — cool neutral dark sans; accent color on markdown notation only */
 [data-theme='stone'] {
   --bg: #0c0c0c;
   --paper: #181818;
@@ -236,12 +236,12 @@
   --content-muted: #949494;
   --content-line: #343434;
   --content-code-bg: #222222;
-  --content-accent: #aeaeae;
-  --content-accent-strong: #cccccc;
+  --content-accent: #6d8fad;
+  --content-accent-strong: #8eb0d4;
   --content-heading: #eeeeee;
   --content-heading-soft: #cccccc;
   --content-table-head: #242424;
-  --content-highlight: #282828;
+  --content-highlight: #263038;
 
   --font-display: 'Helvetica Neue', 'Segoe UI', Arial, system-ui, sans-serif;
   --font-body: 'Helvetica Neue', 'Segoe UI', Arial, system-ui, sans-serif;
@@ -305,66 +305,6 @@
   /* Clean humanist sans — crisp and technical, like the palette. */
   --font-display: 'Avenir Next', 'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
   --font-body: 'Avenir Next', 'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
-}
-
-/* Forest — botanical greens on warm paper */
-[data-theme='forest'] {
-  --bg: #0f1410;
-  --paper: #f4f6ef;
-  --surface: #1a221b;
-  --surface-raised: #262f27;
-  --ink: #e7ece6;
-  --ink-soft: #c5cdc3;
-  --muted: #828c7d;
-  --line: #2b342c;
-  --line-strong: #3f4a3f;
-  --ui-border: #cdd6c8;
-
-  --content-ink: #1c241c;
-  --content-ink-soft: #2f3a2f;
-  --content-muted: #6a7563;
-  --content-line: #d3dccd;
-  --content-code-bg: #e9efe3;
-  --content-accent: #46784f;
-  --content-accent-strong: #2f6b3e;
-  --content-heading: #1f4d2c;
-  --content-heading-soft: #356b41;
-  --content-table-head: #e6efe0;
-  --content-highlight: #eef3e4;
-
-  /* Warm old-style serif — bookish and organic. */
-  --font-display: 'Hoefler Text', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  --font-body: 'Hoefler Text', 'Palatino Linotype', Palatino, Georgia, serif;
-}
-
-/* Dusk — violet twilight */
-[data-theme='dusk'] {
-  --bg: #14111c;
-  --paper: #f6f3fb;
-  --surface: #221d2e;
-  --surface-raised: #2f2840;
-  --ink: #ebe6f2;
-  --ink-soft: #cbc2da;
-  --muted: #877e98;
-  --line: #2f2940;
-  --line-strong: #463c59;
-  --ui-border: #d6cee6;
-
-  --content-ink: #241d33;
-  --content-ink-soft: #392f4d;
-  --content-muted: #786a8c;
-  --content-line: #ddd3ec;
-  --content-code-bg: #efe9f7;
-  --content-accent: #6d4fb0;
-  --content-accent-strong: #5a3ba0;
-  --content-heading: #3d2a66;
-  --content-heading-soft: #533c80;
-  --content-table-head: #ece4f6;
-  --content-highlight: #f0e9f9;
-
-  /* Elegant transitional serif — refined, slightly editorial. */
-  --font-display: 'Baskerville', 'Hoefler Text', 'Big Caslon', Georgia, serif;
-  --font-body: 'Baskerville', 'Hoefler Text', Georgia, serif;
 }
 
 *,

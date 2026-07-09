@@ -188,6 +188,13 @@ function extractToc(markdown: string) {
   let currentSectionId = ''
   const headingCounts = new Map<string, number>()
   const tree = unified().use(remarkParse).parse(markdown)
+  let hasH1 = false
+
+  visit(tree, 'heading', (node: MdastNode & { depth: number }) => {
+    if (node.depth === 1) {
+      hasH1 = true
+    }
+  })
 
   visit(tree, 'heading', (node: MdastNode & { depth: number }) => {
     if (node.depth < 1 || node.depth > 3) {
@@ -208,6 +215,9 @@ function extractToc(markdown: string) {
       currentChapterId = id
       currentSectionId = id
     } else if (node.depth === 2) {
+      if (!hasH1) {
+        currentChapterId = id
+      }
       currentSectionId = id
     }
 
@@ -221,6 +231,29 @@ function extractToc(markdown: string) {
   })
 
   return entries
+}
+
+function shouldShowTocEntry(
+  entry: TocEntry,
+  activeChapterId: string,
+  activeSectionId: string,
+  hasTopLevelChapters: boolean,
+) {
+  if (entry.level === 1) {
+    return true
+  }
+
+  if (entry.level === 2) {
+    return hasTopLevelChapters ? entry.chapterId === activeChapterId : true
+  }
+
+  if (entry.level === 3) {
+    return hasTopLevelChapters
+      ? entry.chapterId === activeChapterId && entry.sectionId === activeSectionId
+      : entry.sectionId === activeSectionId
+  }
+
+  return false
 }
 
 function getNodeText(node: ReactNode): string {
@@ -526,6 +559,10 @@ function Reader({
     [displayMarkdown],
   )
   const toc = useMemo(() => extractToc(markdown), [markdown])
+  const hasTopLevelChapters = useMemo(
+    () => toc.some((entry) => entry.level === 1),
+    [toc],
+  )
   const searchIndex = useMemo(() => buildSearchSections(markdown), [markdown])
   const searchResults = useMemo(
     () => searchSections(searchIndex, searchQuery),
@@ -541,10 +578,19 @@ function Reader({
   const activeChapterId = useMemo(() => {
     const activeEntry = toc.find((entry) => entry.id === activeHeadingId)
     if (!activeEntry) {
-      return toc.find((entry) => entry.level === 1)?.id ?? ''
+      if (hasTopLevelChapters) {
+        return toc.find((entry) => entry.level === 1)?.id ?? ''
+      }
+      return toc.find((entry) => entry.level === 2)?.id ?? ''
     }
-    return activeEntry.level === 1 ? activeEntry.id : activeEntry.chapterId
-  }, [toc, activeHeadingId])
+    if (activeEntry.level === 1) {
+      return activeEntry.id
+    }
+    if (!hasTopLevelChapters && activeEntry.level === 3) {
+      return activeEntry.sectionId
+    }
+    return activeEntry.chapterId
+  }, [toc, activeHeadingId, hasTopLevelChapters])
   const activeSectionId = useMemo(() => {
     const activeEntry = toc.find((entry) => entry.id === activeHeadingId)
     if (!activeEntry) {
@@ -1439,11 +1485,12 @@ function Reader({
           ) : (
             <nav>
               {toc.map((entry) =>
-                entry.level === 1 ||
-                (entry.level === 2 && entry.chapterId === activeChapterId) ||
-                (entry.level === 3 &&
-                  entry.chapterId === activeChapterId &&
-                  entry.sectionId === activeSectionId) ? (
+                shouldShowTocEntry(
+                  entry,
+                  activeChapterId,
+                  activeSectionId,
+                  hasTopLevelChapters,
+                ) ? (
                   <a
                     key={entry.id}
                     href={`#${entry.id}`}
@@ -1452,7 +1499,10 @@ function Reader({
                       'toc-link',
                       `toc-l${entry.level}`,
                       activeHeadingId === entry.id ? 'active' : '',
-                      entry.level === 1 && entry.id === activeChapterId
+                      (entry.level === 1 && entry.id === activeChapterId) ||
+                      (!hasTopLevelChapters &&
+                        entry.level === 2 &&
+                        entry.id === activeChapterId)
                         ? 'active-chapter'
                         : '',
                       entry.level === 2 && entry.id === activeSectionId

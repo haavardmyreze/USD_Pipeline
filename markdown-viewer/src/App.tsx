@@ -214,15 +214,9 @@ function App() {
     window.history.pushState(null, '', url)
   }
 
-  const onFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) {
-      return
-    }
-
-    const content = await file.text()
+  const openImportedContent = (content: string, importedFileName: string) => {
     setMarkdown(content)
-    setFileName(file.name)
+    setFileName(importedFileName)
     setActiveLibraryId('')
     setExternalSrc('')
     setView('reader')
@@ -233,8 +227,25 @@ function App() {
     url.searchParams.delete('src')
     url.hash = ''
     window.history.pushState(null, '', url)
+  }
 
+  const onFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    const content = await file.text()
+    openImportedContent(content, file.name)
     event.target.value = ''
+  }
+
+  const onImportFromClipboard = (content: string) => {
+    if (!content.trim()) {
+      throw new Error('Clipboard is empty.')
+    }
+
+    openImportedContent(content, 'clipboard.md')
   }
 
   if (view === 'home') {
@@ -246,6 +257,7 @@ function App() {
         onSelectTheme={setTheme}
         onOpen={openDoc}
         onImport={onFileUpload}
+        onImportFromClipboard={onImportFromClipboard}
       />
     )
   }

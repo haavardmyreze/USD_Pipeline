@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, type ClipboardEvent, useEffect, useRef, useState } from 'react'
 import { type LibraryDoc } from './library'
 import { type Theme, THEMES } from './theme'
 
@@ -9,6 +9,7 @@ type HomeProps = {
   onSelectTheme: (theme: Theme) => void
   onOpen: (doc: LibraryDoc) => void
   onImport: (event: ChangeEvent<HTMLInputElement>) => void
+  onImportFromClipboard: (content: string) => void
 }
 
 function PagePreview({ doc }: { doc: LibraryDoc }) {
@@ -108,7 +109,41 @@ function ThemeMenu({
   )
 }
 
-function Home({ docs, activeDocId, theme, onSelectTheme, onOpen, onImport }: HomeProps) {
+function Home({
+  docs,
+  activeDocId,
+  theme,
+  onSelectTheme,
+  onOpen,
+  onImport,
+  onImportFromClipboard,
+}: HomeProps) {
+  const pasteInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const [clipboardError, setClipboardError] = useState<string | null>(null)
+
+  const handleClipboardPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    event.preventDefault()
+    setClipboardError(null)
+
+    const content = event.clipboardData.getData('text/plain')
+    if (!content.trim()) {
+      setClipboardError('Clipboard is empty.')
+      return
+    }
+
+    try {
+      onImportFromClipboard(content)
+    } catch (error) {
+      setClipboardError(
+        error instanceof Error ? error.message : 'Could not open pasted content.',
+      )
+    } finally {
+      if (pasteInputRef.current) {
+        pasteInputRef.current.value = ''
+      }
+    }
+  }
+
   return (
     <main className="home-shell">
       <div className="topbar-shell home-topbar-shell">
@@ -199,12 +234,51 @@ function Home({ docs, activeDocId, theme, onSelectTheme, onOpen, onImport }: Hom
               onChange={onImport}
             />
           </label>
+
+          <label
+            className="doc-card doc-card-import doc-card-paste"
+            onClick={() => pasteInputRef.current?.focus()}
+          >
+            <div className="doc-card-import-icon" aria-hidden="true">
+              <svg
+                width="26"
+                height="26"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="8" y="2" width="8" height="4" rx="1" />
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              </svg>
+            </div>
+            <div className="doc-card-body">
+              <span className="doc-card-title">Paste from clipboard</span>
+              <textarea
+                ref={pasteInputRef}
+                className="doc-card-paste-input"
+                rows={2}
+                placeholder="Click here, then press Ctrl+V (or ⌘V)"
+                aria-label="Paste markdown from clipboard"
+                onPaste={handleClipboardPaste}
+                onChange={() => setClipboardError(null)}
+              />
+              {clipboardError ? (
+                <span className="doc-card-error" role="alert">
+                  {clipboardError}
+                </span>
+              ) : null}
+            </div>
+          </label>
         </div>
 
         {docs.length === 0 ? (
           <p className="home-empty">
             No library documents yet. Add <code>.md</code> files to{' '}
-            <code>markdown-viewer/library/</code> or import one from disk.
+            <code>markdown-viewer/library/</code>, import one from disk, or paste
+            from clipboard.
           </p>
         ) : null}
       </section>

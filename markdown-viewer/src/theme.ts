@@ -5,8 +5,6 @@ export type Theme =
   | 'crimson'
   | 'notion'
   | 'nord'
-  | 'forest'
-  | 'dusk'
   | 'ink-night'
   | 'graphite'
   | 'ash'
@@ -16,24 +14,25 @@ export const THEMES: { id: Theme; label: string }[] = [
   { id: 'slate', label: 'Slate' },
   { id: 'notion', label: 'Notion' },
   { id: 'nord', label: 'Nord' },
-  { id: 'forest', label: 'Forest' },
-  { id: 'dusk', label: 'Dusk' },
   { id: 'crimson', label: 'Crimson' },
   { id: 'sepia', label: 'Sepia' },
   { id: 'ink', label: 'Ink' },
-  { id: 'ink-night', label: 'Ink Night' },
   { id: 'graphite', label: 'Graphite' },
-  { id: 'ash', label: 'Ash' },
   { id: 'stone', label: 'Stone' },
+  { id: 'ash', label: 'Ash' },
+  { id: 'ink-night', label: 'Ink Night' },
 ]
 
 export const DEFAULT_THEME: Theme = 'slate'
 
 const LEGACY_THEME_MAP: Record<string, Theme> = {
   'slate-night': 'graphite',
+  'notion-night': 'stone',
   'nord-night': 'ash',
   'forest-night': 'stone',
   'dusk-night': 'stone',
+  forest: 'slate',
+  dusk: 'stone',
 }
 
 export function isTheme(value: string | null): value is Theme {
