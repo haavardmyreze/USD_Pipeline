@@ -44,19 +44,16 @@ function normalizeRow(row: string[], colCount: number) {
   return normalized.slice(0, colCount)
 }
 
-function buildHeaders(headerRow: string[], colCount: number) {
-  return normalizeRow(headerRow, colCount).map((value, index) => {
-    const trimmed = value.trim()
-    return trimmed || csvColumnLabel(index)
-  })
+function buildColumnHeaders(colCount: number) {
+  return Array.from({ length: colCount }, (_, index) => csvColumnLabel(index))
 }
 
-function buildSectionsAndFullText(headers: string[], rows: string[][]) {
+function buildSectionsAndFullText(columnHeaders: string[], rows: string[][]) {
   const sections: CsvRowSection[] = []
   const parts: string[] = []
 
   if (rows.length === 0) {
-    if (headers.length > 0) {
+    if (columnHeaders.length > 0) {
       sections.push({
         id: 'csv-header',
         text: 'Header',
@@ -64,13 +61,13 @@ function buildSectionsAndFullText(headers: string[], rows: string[][]) {
         startRow: 0,
         endRow: 0,
       })
-      parts.push(`### Header\n${headers.join('\t')}`)
+      parts.push(`### Header\n${columnHeaders.join('\t')}`)
     }
 
     return { sections, fullText: parts.join('\n\n') }
   }
 
-  const headerLine = headers.join('\t')
+  const headerLine = columnHeaders.join('\t')
 
   for (let start = 0; start < rows.length; start += ROWS_PER_SECTION) {
     const end = Math.min(start + ROWS_PER_SECTION, rows.length)
@@ -139,13 +136,10 @@ export function buildCsvDocumentIndex(raw: string): CsvDocumentIndex {
   }
 
   const colCount = Math.max(...nonEmptyRows.map((row) => row.length), 0)
-  const headers = buildHeaders(nonEmptyRows[0], colCount)
-  const rows =
-    nonEmptyRows.length > 1
-      ? nonEmptyRows.slice(1).map((row) => normalizeRow(row, colCount))
-      : []
+  const headers = buildColumnHeaders(colCount)
+  const rows = nonEmptyRows.map((row) => normalizeRow(row, colCount))
 
-  const plainText = [headers.join('\t'), ...rows.map((row) => row.join('\t'))].join('\n')
+  const plainText = rows.map((row) => row.join('\t')).join('\n')
   const { sections, fullText } = buildSectionsAndFullText(headers, rows)
 
   return {
