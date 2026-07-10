@@ -1,4 +1,5 @@
 import type { CsvDocumentIndex } from './csvDocument'
+import { csvColumnLabel } from './csvDocument'
 
 export type CsvSearchResult = {
   id: string
@@ -87,7 +88,7 @@ export function searchCsv(index: CsvDocumentIndex, query: string): CsvSearchResu
         id: `csv-cell-${row}-${col}`,
         row,
         col,
-        columnName: index.headers[col] ?? `Column ${col + 1}`,
+        columnName: index.headers[col] ?? csvColumnLabel(col),
         value,
         snippet: buildSnippet(value, trimmed),
         score,

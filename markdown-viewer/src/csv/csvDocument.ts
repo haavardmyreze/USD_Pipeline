@@ -24,6 +24,18 @@ export type CsvDocumentIndex = {
 
 const ROWS_PER_SECTION = 50
 
+/** Excel-style column letter(s) for a 0-based index: 0 → A, 25 → Z, 26 → AA. */
+export function csvColumnLabel(colIndex: number): string {
+  let n = colIndex + 1
+  let label = ''
+  while (n > 0) {
+    n -= 1
+    label = String.fromCharCode(65 + (n % 26)) + label
+    n = Math.floor(n / 26)
+  }
+  return label
+}
+
 function normalizeRow(row: string[], colCount: number) {
   const normalized = [...row]
   while (normalized.length < colCount) {
@@ -35,7 +47,7 @@ function normalizeRow(row: string[], colCount: number) {
 function buildHeaders(headerRow: string[], colCount: number) {
   return normalizeRow(headerRow, colCount).map((value, index) => {
     const trimmed = value.trim()
-    return trimmed || `Column ${index + 1}`
+    return trimmed || csvColumnLabel(index)
   })
 }
 
