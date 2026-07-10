@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { getCommentAnchorSortKey } from './documents/commentAnchorUtils'
 import { resolveSelectionAnchor, type TocEntryLike } from './commentAnchors'
 import {
   buildViewportConnector,
@@ -36,6 +37,17 @@ type DocCommentsProps = {
   onAddComment: (anchor: CommentAnchor, body: string) => DocumentComment | null
   onUpdateComment: (id: string, body: string) => void
   onDeleteComment: (id: string) => void
+  resolveSelectionAnchor?: (
+    selection: Selection,
+    scope: HTMLElement,
+  ) => CommentAnchor | null
+  scrollToAnchor?: (commentId: string, anchor: CommentAnchor) => void
+}
+
+function getCommentHighlightElement(scope: HTMLElement, commentId: string) {
+  return scope.querySelector<HTMLElement>(
+    `mark.comment-highlight[data-comment-id="${CSS.escape(commentId)}"], [data-comment-id="${CSS.escape(commentId)}"].csv-comment-hit`,
+  )
 }
 
 function formatCommentTime(timestamp: number) {
@@ -59,6 +71,8 @@ function DocComments({
   onAddComment,
   onUpdateComment,
   onDeleteComment,
+  resolveSelectionAnchor: resolveSelectionAnchorOverride,
+  scrollToAnchor,
 }: DocCommentsProps) {
   const cardRefs = useRef(new Map<string, HTMLElement>())
   const railScrollRef = useRef<HTMLDivElement | null>(null)
@@ -73,9 +87,14 @@ function DocComments({
     if (draft) {
       items.push({ kind: 'draft', anchor: draft.anchor })
       items.sort((left, right) => {
-        const leftStart = left.kind === 'draft' ? left.anchor.start : left.comment.anchor.start
+        const leftStart =
+          left.kind === 'draft'
+            ? getCommentAnchorSortKey(left.anchor)
+            : getCommentAnchorSortKey(left.comment.anchor)
         const rightStart =
-          right.kind === 'draft' ? right.anchor.start : right.comment.anchor.start
+          right.kind === 'draft'
+            ? getCommentAnchorSortKey(right.anchor)
+            : getCommentAnchorSortKey(right.comment.anchor)
         return leftStart - rightStart
       })
     }
@@ -99,14 +118,18 @@ function DocComments({
 
   const scrollToComment = useCallback(
     (commentId: string) => {
+      const comment = comments.find((entry) => entry.id === commentId)
+      if (comment && scrollToAnchor) {
+        scrollToAnchor(commentId, comment.anchor)
+        return
+      }
+
       const scope = docColRef.current
       if (!scope) {
         return
       }
 
-      const highlight = scope.querySelector<HTMLElement>(
-        `mark.comment-highlight[data-comment-id="${CSS.escape(commentId)}"]`,
-      )
+      const highlight = getCommentHighlightElement(scope, commentId)
 
       if (highlight) {
         highlight.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -114,8 +137,7 @@ function DocComments({
         return
       }
 
-      const comment = comments.find((entry) => entry.id === commentId)
-      if (comment?.anchor.headingId) {
+      if (comment?.anchor.kind !== 'pdf' && comment?.anchor.kind !== 'csv' && comment?.anchor.headingId) {
         const heading = scope.querySelector<HTMLElement>(
           `#${CSS.escape(comment.anchor.headingId)}`,
         )
@@ -124,7 +146,7 @@ function DocComments({
 
       setActiveCommentId(commentId)
     },
-    [comments, docColRef, setActiveCommentId],
+    [comments, docColRef, scrollToAnchor, setActiveCommentId],
   )
 
   const updateConnectors = useCallback(() => {
@@ -154,9 +176,7 @@ function DocComments({
       }
     } else {
       const card = cardRefs.current.get(activeCommentId)
-      const highlight = scope.querySelector<HTMLElement>(
-        `mark.comment-highlight[data-comment-id="${CSS.escape(activeCommentId)}"]`,
-      )
+      const highlight = getCommentHighlightElement(scope, activeCommentId)
       if (card && highlight) {
         lines.push(
           buildViewportConnector(activeCommentId, highlight.getBoundingClientRect(), card),
@@ -283,7 +303,9 @@ function DocComments({
         return
       }
 
-      const anchor = resolveSelectionAnchor(markdown, selection, scope, toc)
+      const anchor = resolveSelectionAnchorOverride
+        ? resolveSelectionAnchorOverride(selection, scope)
+        : resolveSelectionAnchor(markdown, selection, scope, toc)
       if (!anchor) {
         return
       }
@@ -299,7 +321,7 @@ function DocComments({
     return () => {
       scope.removeEventListener('mouseup', onMouseUp)
     }
-  }, [docColRef, editingId, markdown, open, setActiveCommentId, toc])
+  }, [docColRef, editingId, markdown, open, resolveSelectionAnchorOverride, setActiveCommentId, toc])
 
   useEffect(() => {
     if (!open) {
@@ -313,7 +335,7 @@ function DocComments({
 
     const onClick = (event: MouseEvent) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>(
-        'mark.comment-highlight[data-comment-id]',
+        'mark.comment-highlight[data-comment-id], [data-comment-id].csv-comment-hit',
       )
       if (!target || !scope.contains(target)) {
         return

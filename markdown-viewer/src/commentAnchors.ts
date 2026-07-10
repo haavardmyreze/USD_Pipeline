@@ -1,4 +1,5 @@
 import type { CommentAnchor, DocumentComment } from './documentComments'
+import { isCsvCommentAnchor, isPdfCommentAnchor } from './documents/commentAnchorUtils'
 
 export type TocEntryLike = {
   id: string
@@ -400,13 +401,32 @@ export function injectCommentHighlights(
 
   const validComments = comments
     .filter((comment) => {
+      if (isPdfCommentAnchor(comment.anchor) || isCsvCommentAnchor(comment.anchor)) {
+        return false
+      }
+
       const { start, end } = comment.anchor
       return start >= 0 && end > start && end <= markdown.length
     })
-    .sort((left, right) => right.anchor.start - left.anchor.start)
+    .sort((left, right) => {
+      if (
+        isPdfCommentAnchor(left.anchor) ||
+        isPdfCommentAnchor(right.anchor) ||
+        isCsvCommentAnchor(left.anchor) ||
+        isCsvCommentAnchor(right.anchor)
+      ) {
+        return 0
+      }
+
+      return right.anchor.start - left.anchor.start
+    })
 
   let result = markdown
   for (const comment of validComments) {
+    if (isPdfCommentAnchor(comment.anchor) || isCsvCommentAnchor(comment.anchor)) {
+      continue
+    }
+
     const { start, end } = comment.anchor
     const slice = result.slice(start, end)
     if (!slice) {

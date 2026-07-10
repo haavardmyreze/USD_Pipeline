@@ -1,8 +1,12 @@
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { detectFormatFromFileName, detectFormatFromSrc } from './documents/detectFormat'
+import type { DocumentFormat } from './documents/types'
 import Home from './Home'
+import PdfReader from './pdf/PdfReader'
+import CsvReader from './csv/CsvReader'
 import Reader from './Reader'
-import { makeDocumentKey } from './documentKey'
+import { hashArrayBuffer, makeDocumentKey } from './documentKey'
 import {
   getDocIdFromUrl,
   getLibraryContent,
@@ -36,17 +40,19 @@ function parseFileNameFromSrc(src: string) {
   }
 }
 
-// The home hub is the default surface. A valid `?doc=` deep link opens the
-// reader directly so shared/bookmarked links land on the document.
 function resolveInitialState() {
   const src = getSrcFromUrl()
   if (src) {
     return {
       view: 'reader' as ViewMode,
+      format: detectFormatFromSrc(src),
       content: '',
       fileName: parseFileNameFromSrc(src),
       libraryId: '',
       externalSrc: src,
+      pdfSource: null as ArrayBuffer | string | null,
+      csvContent: '',
+      fingerprint: '',
     }
   }
 
@@ -57,30 +63,42 @@ function resolveInitialState() {
     if (doc && content) {
       return {
         view: 'reader' as ViewMode,
+        format: 'markdown' as DocumentFormat,
         content,
         fileName: doc.fileName,
         libraryId: doc.id,
         externalSrc: '',
+        pdfSource: null as ArrayBuffer | string | null,
+        csvContent: '',
+        fingerprint: content,
       }
     }
   }
 
   return {
     view: 'home' as ViewMode,
+    format: 'markdown' as DocumentFormat,
     content: '',
     fileName: '',
     libraryId: lastOpenedId(),
     externalSrc: '',
+    pdfSource: null as ArrayBuffer | string | null,
+    csvContent: '',
+    fingerprint: '',
   }
 }
 
 function App() {
   const initial = useMemo(() => resolveInitialState(), [])
   const [view, setView] = useState<ViewMode>(initial.view)
+  const [documentFormat, setDocumentFormat] = useState<DocumentFormat>(initial.format)
   const [markdown, setMarkdown] = useState(initial.content)
   const [fileName, setFileName] = useState(initial.fileName)
   const [activeLibraryId, setActiveLibraryId] = useState(initial.libraryId)
   const [externalSrc, setExternalSrc] = useState(initial.externalSrc)
+  const [pdfSource, setPdfSource] = useState<ArrayBuffer | string | null>(initial.pdfSource)
+  const [csvContent, setCsvContent] = useState(initial.csvContent ?? '')
+  const [contentFingerprint, setContentFingerprint] = useState(initial.fingerprint)
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       return resolveTheme(localStorage.getItem('mdv-theme'))
@@ -90,8 +108,8 @@ function App() {
   })
 
   const docKey = useMemo(
-    () => makeDocumentKey(activeLibraryId, fileName, markdown),
-    [activeLibraryId, fileName, markdown],
+    () => makeDocumentKey(activeLibraryId, fileName, contentFingerprint),
+    [activeLibraryId, fileName, contentFingerprint],
   )
 
   useEffect(() => {
@@ -101,34 +119,72 @@ function App() {
 
     const controller = new AbortController()
     let cancelled = false
+    const format = detectFormatFromSrc(externalSrc)
+    setDocumentFormat(format)
     setMarkdown('')
+    setPdfSource(null)
+    setCsvContent('')
+    setContentFingerprint('')
     setView('reader')
     setActiveLibraryId('')
 
-    const loadExternalMarkdown = async () => {
+    const loadExternalDocument = async () => {
       try {
+        if (format === 'pdf') {
+          const response = await fetch(externalSrc, {
+            signal: controller.signal,
+          })
+          if (!response.ok) {
+            throw new Error(`Could not load PDF (${response.status})`)
+          }
+
+          const data = await response.arrayBuffer()
+          if (!cancelled) {
+            setPdfSource(data)
+            setContentFingerprint(hashArrayBuffer(data))
+          }
+          return
+        }
+
         const response = await fetch(externalSrc, {
           signal: controller.signal,
           headers: {
-            Accept: 'text/markdown,text/plain;q=0.9,*/*;q=0.8',
+            Accept: 'text/csv,text/plain,text/markdown;q=0.9,*/*;q=0.8',
           },
         })
         if (!response.ok) {
-          throw new Error(`Could not load markdown (${response.status})`)
+          throw new Error(`Could not load document (${response.status})`)
         }
         const content = await response.text()
         if (!cancelled) {
-          setMarkdown(content)
+          if (format === 'csv') {
+            setCsvContent(content)
+          } else {
+            setMarkdown(content)
+          }
+          setContentFingerprint(content)
         }
       } catch (error) {
         if (cancelled || (error instanceof DOMException && error.name === 'AbortError')) {
           return
         }
-        setMarkdown(`# Unable to load document\n\nSource: \`${externalSrc}\`\n\n${error instanceof Error ? error.message : 'Unknown error.'}`)
+
+        if (format === 'pdf') {
+          setPdfSource(null)
+          setContentFingerprint('')
+        } else if (format === 'csv') {
+          setCsvContent('')
+          setContentFingerprint('')
+        } else {
+          setMarkdown(
+            `# Unable to load document\n\nSource: \`${externalSrc}\`\n\n${error instanceof Error ? error.message : 'Unknown error.'}`,
+          )
+          setContentFingerprint(externalSrc)
+        }
       }
     }
 
-    void loadExternalMarkdown()
+    void loadExternalDocument()
     return () => {
       cancelled = true
       controller.abort()
@@ -143,7 +199,6 @@ function App() {
     }
   }, [theme])
 
-  // Keep the view in sync with browser back/forward navigation.
   useEffect(() => {
     const onPopState = () => {
       const src = getSrcFromUrl()
@@ -151,6 +206,11 @@ function App() {
         setExternalSrc(src)
         setFileName(parseFileNameFromSrc(src))
         setActiveLibraryId('')
+        setDocumentFormat(detectFormatFromSrc(src))
+        setPdfSource(null)
+        setMarkdown('')
+        setCsvContent('')
+        setContentFingerprint('')
         setView('reader')
         return
       }
@@ -164,11 +224,20 @@ function App() {
           setFileName(doc.fileName)
           setActiveLibraryId(doc.id)
           setExternalSrc('')
+          setDocumentFormat('markdown')
+          setPdfSource(null)
+          setCsvContent('')
+          setContentFingerprint(content)
           setView('reader')
           return
         }
       }
+
       setExternalSrc('')
+      setDocumentFormat('markdown')
+      setPdfSource(null)
+      setCsvContent('')
+      setContentFingerprint('')
       setView('home')
     }
 
@@ -186,6 +255,10 @@ function App() {
     setFileName(doc.fileName)
     setActiveLibraryId(doc.id)
     setExternalSrc('')
+    setDocumentFormat('markdown')
+    setPdfSource(null)
+    setCsvContent('')
+    setContentFingerprint(content)
     setView('reader')
     window.scrollTo({ top: 0, behavior: 'auto' })
 
@@ -205,6 +278,10 @@ function App() {
   const goHome = () => {
     setView('home')
     setExternalSrc('')
+    setDocumentFormat('markdown')
+    setPdfSource(null)
+    setCsvContent('')
+    setContentFingerprint('')
     window.scrollTo({ top: 0, behavior: 'auto' })
 
     const url = new URL(window.location.href)
@@ -214,11 +291,15 @@ function App() {
     window.history.pushState(null, '', url)
   }
 
-  const openImportedContent = (content: string, importedFileName: string) => {
+  const openImportedMarkdown = (content: string, importedFileName: string) => {
     setMarkdown(content)
     setFileName(importedFileName)
     setActiveLibraryId('')
     setExternalSrc('')
+    setDocumentFormat('markdown')
+    setPdfSource(null)
+    setCsvContent('')
+    setContentFingerprint(content)
     setView('reader')
     window.scrollTo({ top: 0, behavior: 'auto' })
 
@@ -229,14 +310,66 @@ function App() {
     window.history.pushState(null, '', url)
   }
 
+  const openImportedPdf = (data: ArrayBuffer, importedFileName: string) => {
+    setMarkdown('')
+    setCsvContent('')
+    setFileName(importedFileName)
+    setActiveLibraryId('')
+    setExternalSrc('')
+    setDocumentFormat('pdf')
+    setPdfSource(data)
+    setContentFingerprint(hashArrayBuffer(data))
+    setView('reader')
+    window.scrollTo({ top: 0, behavior: 'auto' })
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('doc')
+    url.searchParams.delete('src')
+    url.hash = ''
+    window.history.pushState(null, '', url)
+  }
+
+  const openImportedCsv = (content: string, importedFileName: string) => {
+    setMarkdown('')
+    setFileName(importedFileName)
+    setActiveLibraryId('')
+    setExternalSrc('')
+    setDocumentFormat('csv')
+    setPdfSource(null)
+    setCsvContent(content)
+    setContentFingerprint(content)
+    setView('reader')
+    window.scrollTo({ top: 0, behavior: 'auto' })
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('doc')
+    url.searchParams.delete('src')
+    url.hash = ''
+    window.history.pushState(null, '', url)
+  }
+
+  const onImportFile = async (file: File) => {
+    const format = detectFormatFromFileName(file.name)
+    if (format === 'pdf') {
+      openImportedPdf(await file.arrayBuffer(), file.name)
+      return
+    }
+
+    if (format === 'csv') {
+      openImportedCsv(await file.text(), file.name)
+      return
+    }
+
+    openImportedMarkdown(await file.text(), file.name)
+  }
+
   const onFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) {
       return
     }
 
-    const content = await file.text()
-    openImportedContent(content, file.name)
+    await onImportFile(file)
     event.target.value = ''
   }
 
@@ -245,7 +378,7 @@ function App() {
       throw new Error('Clipboard is empty.')
     }
 
-    openImportedContent(content, 'clipboard.md')
+    openImportedMarkdown(content, 'clipboard.md')
   }
 
   if (view === 'home') {
@@ -257,7 +390,34 @@ function App() {
         onSelectTheme={setTheme}
         onOpen={openDoc}
         onImport={onFileUpload}
+        onImportFile={onImportFile}
         onImportFromClipboard={onImportFromClipboard}
+      />
+    )
+  }
+
+  if (documentFormat === 'pdf' && pdfSource) {
+    return (
+      <PdfReader
+        fileName={fileName}
+        docKey={docKey}
+        pdfSource={pdfSource}
+        theme={theme}
+        onSelectTheme={setTheme}
+        onHome={goHome}
+      />
+    )
+  }
+
+  if (documentFormat === 'csv' && csvContent) {
+    return (
+      <CsvReader
+        fileName={fileName}
+        docKey={docKey}
+        csvContent={csvContent}
+        theme={theme}
+        onSelectTheme={setTheme}
+        onHome={goHome}
       />
     )
   }

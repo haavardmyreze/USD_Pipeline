@@ -8,9 +8,114 @@ export type ReaderPreferences = {
   pageZoom: number
 }
 
-export const PAGE_ZOOM_MIN = 0.5
-export const PAGE_ZOOM_MAX = 2
-export const PAGE_ZOOM_STEP = 0.05
+// Google Docs toolbar zoom presets: 50–90% below 100%, then +25% above 100%.
+export const PAGE_ZOOM_LEVELS = [0.5, 0.75, 0.9, 1, 1.25, 1.5, 1.75, 2] as const
+
+export const PAGE_ZOOM_MIN = PAGE_ZOOM_LEVELS[0]
+export const PAGE_ZOOM_MAX = 3
+const ZOOM_MATCH_TOLERANCE = 0.005
+
+export function isEditableKeyboardTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  const tagName = target.tagName
+  return (
+    target.isContentEditable ||
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT'
+  )
+}
+
+export function getPageZoomLevels(max = PAGE_ZOOM_MAX): number[] {
+  const levels: number[] = [...PAGE_ZOOM_LEVELS]
+
+  for (let zoom = 2.25; zoom <= max + 0.001; zoom += 0.25) {
+    levels.push(Math.round(zoom * 100) / 100)
+  }
+
+  return levels
+}
+
+export function stepPageZoom(current: number, direction: 'in' | 'out', max = PAGE_ZOOM_MAX) {
+  const levels = getPageZoomLevels(max)
+
+  if (direction === 'in') {
+    for (const level of levels) {
+      if (level > current + ZOOM_MATCH_TOLERANCE) {
+        return level
+      }
+    }
+
+    return levels[levels.length - 1]
+  }
+
+  for (let index = levels.length - 1; index >= 0; index -= 1) {
+    const level = levels[index]
+    if (level < current - ZOOM_MATCH_TOLERANCE) {
+      return level
+    }
+  }
+
+  return levels[0]
+}
+
+export function zoomDirectionFromWheel(deltaY: number) {
+  return deltaY > 0 ? 'out' : 'in'
+}
+
+export function isZoomWheelEvent(event: { ctrlKey: boolean; metaKey: boolean }) {
+  return event.ctrlKey || event.metaKey
+}
+
+export function attachDocumentZoomWheel(
+  root: HTMLElement,
+  onZoom: (direction: 'in' | 'out', event: WheelEvent) => void,
+) {
+  const onWheel = (event: WheelEvent) => {
+    if (!isZoomWheelEvent(event) || isEditableKeyboardTarget(event.target)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    onZoom(zoomDirectionFromWheel(event.deltaY), event)
+  }
+
+  root.addEventListener('wheel', onWheel, { passive: false, capture: true })
+  return () => root.removeEventListener('wheel', onWheel, { capture: true })
+}
+
+export function applyZoomKeyboardShortcut(
+  event: KeyboardEvent,
+  onStepZoom: (direction: 'in' | 'out') => void,
+) {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || isEditableKeyboardTarget(event.target)) {
+    return false
+  }
+
+  const zoomIn =
+    event.key === '+' ||
+    event.key === '=' ||
+    event.code === 'NumpadAdd'
+  const zoomOut = event.key === '-' || event.key === '_' || event.code === 'NumpadSubtract'
+
+  if (zoomIn) {
+    event.preventDefault()
+    onStepZoom('in')
+    return true
+  }
+
+  if (zoomOut) {
+    event.preventDefault()
+    onStepZoom('out')
+    return true
+  }
+
+  return false
+}
 
 const DEFAULT_PREFERENCES: ReaderPreferences = {
   viewMode: 'continuous',

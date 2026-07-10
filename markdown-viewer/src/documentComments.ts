@@ -1,11 +1,32 @@
 import { useCallback, useEffect, useState } from 'react'
+import { getCommentAnchorSortKey, isCsvCommentAnchor, normalizeCommentAnchor } from './documents/commentAnchorUtils'
 
-export type CommentAnchor = {
+export type MarkdownCommentAnchor = {
+  kind?: 'markdown'
   start: number
   end: number
   quote: string
   headingId: string
 }
+
+export type PdfCommentAnchor = {
+  kind: 'pdf'
+  page: number
+  quote: string
+  charOffset: number
+  charEnd: number
+  globalOffset: number
+}
+
+export type CsvCommentAnchor = {
+  kind: 'csv'
+  row: number
+  col: number
+  quote: string
+  globalOffset: number
+}
+
+export type CommentAnchor = MarkdownCommentAnchor | PdfCommentAnchor | CsvCommentAnchor
 
 export type DocumentComment = {
   id: string
@@ -14,6 +35,11 @@ export type DocumentComment = {
   createdAt: number
   updatedAt: number
 }
+
+export type CommentPruneSource =
+  | { format: 'markdown'; markdown: string }
+  | { format: 'pdf'; pageTexts: string[] }
+  | { format: 'csv'; rows: string[][] }
 
 const STORAGE_PREFIX = 'mdv-comments:'
 
@@ -27,6 +53,13 @@ function createCommentId() {
   }
 
   return `comment-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function normalizeStoredComment(comment: DocumentComment): DocumentComment {
+  return {
+    ...comment,
+    anchor: normalizeCommentAnchor(comment.anchor),
+  }
 }
 
 export function loadDocumentComments(docKey: string): DocumentComment[] {
@@ -52,11 +85,13 @@ export function loadDocumentComments(docKey: string): DocumentComment[] {
           typeof comment.id === 'string' &&
           typeof comment.body === 'string' &&
           comment.anchor &&
-          typeof comment.anchor.start === 'number' &&
-          typeof comment.anchor.end === 'number' &&
           typeof comment.anchor.quote === 'string',
       )
-      .sort((left, right) => left.anchor.start - right.anchor.start)
+      .map(normalizeStoredComment)
+      .sort(
+        (left, right) =>
+          getCommentAnchorSortKey(left.anchor) - getCommentAnchorSortKey(right.anchor),
+      )
   } catch {
     return []
   }
@@ -75,16 +110,49 @@ export function saveDocumentComments(docKey: string, comments: DocumentComment[]
 }
 
 export function pruneDocumentComments(
-  markdown: string,
+  source: CommentPruneSource,
   comments: DocumentComment[],
 ): DocumentComment[] {
   return comments.filter((comment) => {
-    const { start, end, quote } = comment.anchor
-    if (start < 0 || end <= start || end > markdown.length) {
+    const anchor = normalizeCommentAnchor(comment.anchor)
+
+    if (anchor.kind === 'pdf') {
+      if (source.format !== 'pdf') {
+        return false
+      }
+
+      const pageText = source.pageTexts[anchor.page - 1] ?? ''
+      if (!pageText) {
+        return false
+      }
+
+      return pageText.includes(anchor.quote.trim())
+    }
+
+    if (isCsvCommentAnchor(anchor)) {
+      if (source.format !== 'csv') {
+        return false
+      }
+
+      const cellValue = source.rows[anchor.row]?.[anchor.col] ?? ''
+      if (!cellValue) {
+        return false
+      }
+
+      const quote = anchor.quote.trim()
+      return cellValue === quote || cellValue.includes(quote) || quote.includes(cellValue.trim())
+    }
+
+    if (source.format !== 'markdown') {
       return false
     }
 
-    const anchoredText = markdown.slice(start, end)
+    const { start, end, quote } = anchor
+    if (start < 0 || end <= start || end > source.markdown.length) {
+      return false
+    }
+
+    const anchoredText = source.markdown.slice(start, end)
     if (!anchoredText) {
       return false
     }
@@ -97,16 +165,16 @@ export function pruneDocumentComments(
   })
 }
 
-export function useDocumentComments(docKey: string, markdown: string) {
+export function useDocumentComments(docKey: string, source: CommentPruneSource) {
   const [comments, setComments] = useState<DocumentComment[]>(() =>
-    pruneDocumentComments(markdown, loadDocumentComments(docKey)),
+    pruneDocumentComments(source, loadDocumentComments(docKey)),
   )
   const [activeCommentId, setActiveCommentId] = useState('')
 
   useEffect(() => {
-    setComments(pruneDocumentComments(markdown, loadDocumentComments(docKey)))
+    setComments(pruneDocumentComments(source, loadDocumentComments(docKey)))
     setActiveCommentId('')
-  }, [docKey, markdown])
+  }, [docKey, source])
 
   useEffect(() => {
     saveDocumentComments(docKey, comments)
@@ -121,14 +189,17 @@ export function useDocumentComments(docKey: string, markdown: string) {
     const now = Date.now()
     const comment: DocumentComment = {
       id: createCommentId(),
-      anchor,
+      anchor: normalizeCommentAnchor(anchor),
       body: trimmedBody,
       createdAt: now,
       updatedAt: now,
     }
 
     setComments((current) =>
-      [...current, comment].sort((left, right) => left.anchor.start - right.anchor.start),
+      [...current, comment].sort(
+        (left, right) =>
+          getCommentAnchorSortKey(left.anchor) - getCommentAnchorSortKey(right.anchor),
+      ),
     )
     setActiveCommentId(comment.id)
     return comment

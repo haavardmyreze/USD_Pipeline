@@ -23,10 +23,12 @@ import { buildSearchSections, searchSections } from './documentSearch'
 import { useDocumentComments } from './documentComments'
 import {
   clampPageZoom,
+  applyZoomKeyboardShortcut,
+  attachDocumentZoomWheel,
   loadReaderPreferences,
   PAGE_ZOOM_MAX,
   PAGE_ZOOM_MIN,
-  PAGE_ZOOM_STEP,
+  stepPageZoom,
   saveReaderPreferences,
   type DocumentViewMode,
   type PageSize,
@@ -528,9 +530,14 @@ function Reader({
   const settingsRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const docColRef = useRef<HTMLDivElement | null>(null)
+  const readerRootRef = useRef<HTMLDivElement | null>(null)
   const docStageRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollAnchorRef = useRef<string | null>(null)
 
+  const commentSource = useMemo(
+    () => ({ format: 'markdown' as const, markdown }),
+    [markdown],
+  )
   const {
     comments,
     activeCommentId,
@@ -538,7 +545,7 @@ function Reader({
     addComment,
     updateComment,
     deleteComment,
-  } = useDocumentComments(docKey, markdown)
+  } = useDocumentComments(docKey, commentSource)
 
   const handleAddComment = useCallback(
     (anchor: Parameters<typeof addComment>[0], body: string) => {
@@ -713,27 +720,6 @@ function Reader({
     })
   }, [])
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      const tagName = target?.tagName ?? ''
-      const isEditable =
-        target?.isContentEditable ||
-        tagName === 'INPUT' ||
-        tagName === 'TEXTAREA' ||
-        tagName === 'SELECT'
-
-      if (!isEditable && event.key === '/') {
-        event.preventDefault()
-        setSearchOpen(true)
-        focusSearchInput()
-      }
-    }
-
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [focusSearchInput])
-
   const captureScrollAnchor = useCallback(() => {
     const scope = docColRef.current
     const headingIds = toc.map((item) => item.id)
@@ -767,6 +753,58 @@ function Reader({
     captureScrollAnchor()
     setPageZoom(clamped)
   }
+
+  const stepZoomFromWheel = useCallback(
+    (direction: 'in' | 'out') => {
+      setPageZoom((current) => {
+        const next = stepPageZoom(current, direction)
+        if (next === current) {
+          return current
+        }
+        captureScrollAnchor()
+        return next
+      })
+    },
+    [captureScrollAnchor],
+  )
+
+  useEffect(() => {
+    const root = readerRootRef.current
+    if (!root) {
+      return
+    }
+
+    return attachDocumentZoomWheel(root, (direction) => {
+      stepZoomFromWheel(direction)
+    })
+  }, [stepZoomFromWheel])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (applyZoomKeyboardShortcut(event, (direction) => {
+        changePageZoom(stepPageZoom(pageZoom, direction))
+      })) {
+        return
+      }
+
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName ?? ''
+      const isEditable =
+        target?.isContentEditable ||
+        tagName === 'INPUT' ||
+        tagName === 'TEXTAREA' ||
+        tagName === 'SELECT'
+
+      if (!isEditable && event.key === '/') {
+        event.preventDefault()
+        setSearchOpen(true)
+        focusSearchInput()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [changePageZoom, focusSearchInput, pageZoom])
 
   // After layout reflows from a view-mode or page-size change, restore scroll
   // position by anchoring to the same heading — not a raw scroll offset.
@@ -1076,7 +1114,7 @@ function Reader({
   const pageZoomPercent = Math.round(pageZoom * 100)
 
   return (
-    <div className="reader-root">
+    <div className="reader-root" ref={readerRootRef}>
       <div className="topbar-shell reader-topbar-shell">
         <header className="app-topbar topbar-pill reader-topbar">
         <div className="topbar-lead">
@@ -1295,7 +1333,7 @@ function Reader({
                       type="button"
                       className="scale-step"
                       aria-label="Zoom out"
-                      onClick={() => changePageZoom(pageZoom - PAGE_ZOOM_STEP)}
+                      onClick={() => changePageZoom(stepPageZoom(pageZoom, 'out'))}
                       disabled={pageZoom <= PAGE_ZOOM_MIN}
                     >
                       −
@@ -1305,7 +1343,7 @@ function Reader({
                       className="scale-slider"
                       min={PAGE_ZOOM_MIN * 100}
                       max={PAGE_ZOOM_MAX * 100}
-                      step={PAGE_ZOOM_STEP * 100}
+                      step={1}
                       value={pageZoomPercent}
                       aria-label="Page scale"
                       onChange={(event) =>
@@ -1316,7 +1354,7 @@ function Reader({
                       type="button"
                       className="scale-step"
                       aria-label="Zoom in"
-                      onClick={() => changePageZoom(pageZoom + PAGE_ZOOM_STEP)}
+                      onClick={() => changePageZoom(stepPageZoom(pageZoom, 'in'))}
                       disabled={pageZoom >= PAGE_ZOOM_MAX}
                     >
                       +

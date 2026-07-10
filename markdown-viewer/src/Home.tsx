@@ -9,6 +9,7 @@ type HomeProps = {
   onSelectTheme: (theme: Theme) => void
   onOpen: (doc: LibraryDoc) => void
   onImport: (event: ChangeEvent<HTMLInputElement>) => void
+  onImportFile: (file: File) => void | Promise<void>
   onImportFromClipboard: (content: string) => void
 }
 
@@ -116,10 +117,12 @@ function Home({
   onSelectTheme,
   onOpen,
   onImport,
+  onImportFile,
   onImportFromClipboard,
 }: HomeProps) {
   const pasteInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [clipboardError, setClipboardError] = useState<string | null>(null)
+  const [importDragOver, setImportDragOver] = useState(false)
 
   const handleClipboardPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     event.preventDefault()
@@ -206,7 +209,36 @@ function Home({
             </button>
           ))}
 
-          <label className="doc-card doc-card-import">
+          <label
+            className={
+              importDragOver
+                ? 'doc-card doc-card-import doc-card-import-drag'
+                : 'doc-card doc-card-import'
+            }
+            onDragEnter={(event) => {
+              event.preventDefault()
+              setImportDragOver(true)
+            }}
+            onDragOver={(event) => {
+              event.preventDefault()
+              event.dataTransfer.dropEffect = 'copy'
+              setImportDragOver(true)
+            }}
+            onDragLeave={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node)) {
+                return
+              }
+              setImportDragOver(false)
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              setImportDragOver(false)
+              const file = event.dataTransfer.files?.[0]
+              if (file) {
+                void onImportFile(file)
+              }
+            }}
+          >
             <div className="doc-card-import-icon" aria-hidden="true">
               <svg
                 width="26"
@@ -225,12 +257,14 @@ function Home({
             <div className="doc-card-body">
               <span className="doc-card-title">Import from disk</span>
               <span className="doc-card-excerpt">
-                Open a Markdown file from your computer.
+                {importDragOver
+                  ? 'Drop your file here'
+                  : 'Open a Markdown, PDF, or CSV file, or drag one here.'}
               </span>
             </div>
             <input
               type="file"
-              accept=".md,.markdown,text/markdown,text/plain"
+              accept=".md,.markdown,.pdf,.csv,text/markdown,text/plain,text/csv,application/pdf"
               onChange={onImport}
             />
           </label>
