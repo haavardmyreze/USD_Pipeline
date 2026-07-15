@@ -9,17 +9,17 @@ import { clampPageZoom } from '../readerConfig'
 import {
   nextCanvasWheelZoom,
 } from '../canvas/canvasZoom'
-import { DrawIcon } from './icons'
+import { DrawIcon, LaserIcon } from './icons'
 import type { TopbarAction } from './ReaderTopbar'
 import {
   csvInkLayerKey,
   markdownInkLayerKey,
   panZoomInkContentOffset,
   pdfInkLayerKey,
-  scrollInkViewport,
+  scrollDocumentInkViewport,
   type InkViewport,
 } from './inkAnchors'
-import { useDrawMode } from './useDrawMode'
+import { usePresentationMode } from './usePresentationMode'
 
 export type InkViewportNavigation = {
   panBy: (deltaX: number, deltaY: number) => void
@@ -111,32 +111,63 @@ export function usePanZoomInkNavigation(
 }
 
 export function useReaderDrawMode(onActivate?: () => void) {
-  const { drawMode, toggleDrawMode, exitDrawMode, setDrawMode } = useDrawMode(onActivate)
+  const {
+    drawMode,
+    laserMode,
+    toggleDrawMode,
+    toggleLaserMode,
+    exitPresentationMode,
+    setDrawMode,
+  } = usePresentationMode(onActivate)
   const drawModeRef = useRef(drawMode)
+  const laserModeRef = useRef(laserMode)
 
   useEffect(() => {
     drawModeRef.current = drawMode
   }, [drawMode])
 
-  return { drawMode, toggleDrawMode, exitDrawMode, setDrawMode, drawModeRef }
+  useEffect(() => {
+    laserModeRef.current = laserMode
+  }, [laserMode])
+
+  return {
+    drawMode,
+    laserMode,
+    toggleDrawMode,
+    toggleLaserMode,
+    exitDrawMode: exitPresentationMode,
+    exitPresentationMode,
+    setDrawMode,
+    drawModeRef,
+    laserModeRef,
+  }
 }
 
-export function useScrollInkBinding(
+export function useScrollDocumentInkBinding(
+  docColRef: RefObject<HTMLElement | null>,
   getLayerKey: () => string,
   contentZoom: number,
 ): InkBinding {
-  const getInkViewport = useCallback((): InkViewport => scrollInkViewport(), [])
+  const getInkViewport = useCallback(
+    (): InkViewport => scrollDocumentInkViewport(docColRef),
+    [docColRef],
+  )
 
   return {
     getLayerKey,
     getInkViewport,
     contentZoom,
+    useSheetCoordinates: true,
+    viewportVersion: window.scrollY + contentZoom,
   }
 }
 
-export function useMarkdownInkBinding(contentZoom: number): InkBinding {
+export function useMarkdownInkBinding(
+  docColRef: RefObject<HTMLElement | null>,
+  contentZoom: number,
+): InkBinding {
   const getLayerKey = useCallback(() => markdownInkLayerKey(), [])
-  return useScrollInkBinding(getLayerKey, contentZoom)
+  return useScrollDocumentInkBinding(docColRef, getLayerKey, contentZoom)
 }
 
 export function usePdfInkBinding(
@@ -144,7 +175,7 @@ export function usePdfInkBinding(
   contentZoom: number,
 ): InkBinding {
   const getLayerKey = useCallback(() => pdfInkLayerKey(docColRef), [docColRef])
-  return useScrollInkBinding(getLayerKey, contentZoom)
+  return useScrollDocumentInkBinding(docColRef, getLayerKey, contentZoom)
 }
 
 export function useCsvInkBinding(
@@ -159,7 +190,7 @@ export function useCsvInkBinding(
   panRef.current = { panX, panY }
 
   const getInkViewport = useCallback((): InkViewport => {
-    const offset = panZoomInkContentOffset(viewportRef.current)
+    const offset = panZoomInkContentOffset(viewportRef.current, 0)
     return {
       anchorX: panRef.current.panX,
       anchorY: panRef.current.panY,
@@ -196,11 +227,33 @@ export function createDrawTopbarAction(
   }
 }
 
+export function createLaserTopbarAction(
+  laserMode: boolean,
+  toggleLaserMode: () => void,
+): TopbarAction {
+  return {
+    id: 'laser',
+    label: 'Laser',
+    icon: createElement(LaserIcon),
+    active: laserMode,
+    onToggle: toggleLaserMode,
+  }
+}
+
 export function createDrawPaletteAction(toggleDrawMode: () => void) {
   return {
     id: 'draw',
     title: 'Toggle draw mode (D)',
     keywords: 'annotate ink pen marker presentation draw d',
     action: toggleDrawMode,
+  }
+}
+
+export function createLaserPaletteAction(toggleLaserMode: () => void) {
+  return {
+    id: 'laser',
+    title: 'Toggle laser pointer (L)',
+    keywords: 'present pointer highlight laser l',
+    action: toggleLaserMode,
   }
 }

@@ -3597,6 +3597,40 @@ body.canvas-zoom-scrub-dragging .reader-root .ink-overlay-canvas {
   pointer-events: auto;
 }
 
+.reader-root[data-laser-mode='true'] .topbar-shell,
+.reader-root[data-laser-mode='true'] .topbar-shell *,
+.reader-root[data-laser-mode='true'] .laser-toolbar-shell,
+.reader-root[data-laser-mode='true'] .laser-toolbar-shell * {
+  pointer-events: auto;
+}
+
+body.laser-pointer-active,
+body.laser-pointer-active * {
+  cursor: none !important;
+}
+
+.laser-overlay-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  width: 100%;
+  height: 100vh;
+  pointer-events: none;
+}
+
+.laser-toolbar-label {
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  padding-inline: 0.15rem 0.25rem;
+  white-space: nowrap;
+}
+
+.laser-toolbar {
+  gap: 0.55rem;
+}
+
 /* ================================================================== *
  * Draw toolbar — secondary pill below the main topbar
  * ================================================================== */

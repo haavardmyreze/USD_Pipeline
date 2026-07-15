@@ -92,6 +92,16 @@ export const DrawIcon = (props: IconProps = {}) => (
   </svg>
 )
 
+export const LaserIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <circle cx="12" cy="11" r="2.5" fill="currentColor" stroke="none" />
+    <path d="M12 13.5V20" />
+    <path d="M9.5 18h5" opacity="0.65" />
+    <path d="M6 8l2 1.5" opacity="0.45" />
+    <path d="M18 8l-2 1.5" opacity="0.45" />
+  </svg>
+)
+
 export const PenIcon = DrawIcon
 
 export const MarkerIcon = (props: IconProps = {}) => (

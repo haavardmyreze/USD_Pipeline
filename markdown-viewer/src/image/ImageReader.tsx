@@ -29,9 +29,12 @@ import { ReaderTopbar, type TopbarAction } from '../ui/ReaderTopbar'
 import { ThemePicker } from '../ui/ThemePicker'
 import { CommandPalette } from '../ui/CommandPalette'
 import { InkAnnotation } from '../ui/InkAnnotation'
+import { LaserPointer } from '../ui/LaserPointer'
 import {
   createDrawPaletteAction,
   createDrawTopbarAction,
+  createLaserPaletteAction,
+  createLaserTopbarAction,
   useCsvInkBinding,
   usePanZoomInkNavigation,
   useReaderDrawMode,
@@ -99,7 +102,8 @@ export default function ImageReader({
   const strokeUnitScale = imageStrokeUnitScale(sheetLayout)
 
   useReaderPageTheme(theme)
-  const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode()
+  const { drawMode, laserMode, toggleDrawMode, toggleLaserMode, drawModeRef } =
+    useReaderDrawMode()
 
   const isHdr = decoded?.kind === 'exr' || decoded?.kind === 'hdr'
 
@@ -372,7 +376,10 @@ export default function ImageReader({
     .filter(Boolean)
     .join(' ')
 
-  const topbarActions: TopbarAction[] = [createDrawTopbarAction(drawMode, toggleDrawMode)]
+  const topbarActions: TopbarAction[] = [
+    createDrawTopbarAction(drawMode, toggleDrawMode),
+    createLaserTopbarAction(laserMode, toggleLaserMode),
+  ]
 
   const settingsContent = (
     <>
@@ -446,6 +453,7 @@ export default function ImageReader({
   const paletteGroups = [
     actionsPaletteGroup([
       createDrawPaletteAction(toggleDrawMode),
+      createLaserPaletteAction(toggleLaserMode),
       {
         id: 'fit',
         title: 'Zoom: Fit image',
@@ -475,9 +483,11 @@ export default function ImageReader({
       ref={readerRootRef}
       data-theme={theme}
       data-draw-mode={drawMode ? 'true' : undefined}
+      data-laser-mode={laserMode ? 'true' : undefined}
     >
       <CommandPalette groups={paletteGroups} />
       <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
+      <LaserPointer active={laserMode} />
 
       <div className="reader-canvas reader-canvas-image" data-theme={theme}>
         <div className="doc-stage csv-stage">

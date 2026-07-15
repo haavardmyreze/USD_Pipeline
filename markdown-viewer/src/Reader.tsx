@@ -61,12 +61,15 @@ import { ThemePicker } from './ui/ThemePicker'
 import { usePanels } from './ui/usePanels'
 import { CommandPalette } from './ui/CommandPalette'
 import { InkAnnotation } from './ui/InkAnnotation'
+import { LaserPointer } from './ui/LaserPointer'
 import { SelectionMenu } from './ui/SelectionMenu'
 import { TocRail } from './ui/TocRail'
 import { Lightbox } from './ui/Lightbox'
 import {
   createDrawPaletteAction,
   createDrawTopbarAction,
+  createLaserPaletteAction,
+  createLaserTopbarAction,
   useMarkdownInkBinding,
   useReaderDrawMode,
 } from './ui/useReaderInk'
@@ -297,13 +300,14 @@ function Reader({
   const searchOpen = panels.isOpen('search')
   const commentsOpen = panels.isOpen('comments')
   const assistantOpen = panels.isOpen('assistant')
-  const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode(closeAllPanels)
-  const inkBinding = useMarkdownInkBinding(pageZoom)
+  const { drawMode, laserMode, toggleDrawMode, toggleLaserMode, drawModeRef } =
+    useReaderDrawMode(closeAllPanels)
 
   const measureHostRef = useRef<HTMLDivElement | null>(null)
   const tocPanelRef = useRef<HTMLElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const docColRef = useRef<HTMLDivElement | null>(null)
+  const inkBinding = useMarkdownInkBinding(docColRef, pageZoom)
   const readerRootRef = useRef<HTMLDivElement | null>(null)
   const docStageRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollAnchorRef = useRef<string | null>(null)
@@ -972,6 +976,7 @@ function Reader({
       onToggle: () => panels.toggle('assistant'),
     },
     createDrawTopbarAction(drawMode, toggleDrawMode),
+    createLaserTopbarAction(laserMode, toggleLaserMode),
   ]
 
   const settingsContent = (
@@ -1148,6 +1153,7 @@ function Reader({
         action: () => panels.toggle('assistant'),
       },
       createDrawPaletteAction(toggleDrawMode),
+      createLaserPaletteAction(toggleLaserMode),
       {
         id: 'view-continuous',
         title: 'View: Continuous',
@@ -1178,9 +1184,15 @@ function Reader({
   ]
 
   return (
-    <div className="reader-root" ref={readerRootRef} data-draw-mode={drawMode ? 'true' : undefined}>
+    <div
+      className="reader-root"
+      ref={readerRootRef}
+      data-draw-mode={drawMode ? 'true' : undefined}
+      data-laser-mode={laserMode ? 'true' : undefined}
+    >
       <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
       <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
+      <LaserPointer active={laserMode} />
       <SelectionMenu
         scopeRef={docColRef}
         disabled={commentsOpen || drawMode}

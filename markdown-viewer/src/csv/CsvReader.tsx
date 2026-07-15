@@ -28,9 +28,12 @@ import { usePanels } from '../ui/usePanels'
 import { useReaderPageTheme } from '../ui/useReaderPageTheme'
 import { CommandPalette } from '../ui/CommandPalette'
 import { InkAnnotation } from '../ui/InkAnnotation'
+import { LaserPointer } from '../ui/LaserPointer'
 import {
   createDrawPaletteAction,
   createDrawTopbarAction,
+  createLaserPaletteAction,
+  createLaserTopbarAction,
   useCsvInkBinding,
   usePanZoomInkNavigation,
   useReaderDrawMode,
@@ -111,7 +114,8 @@ export default function CsvReader({
   const searchOpen = panels.isOpen('search')
   const commentsOpen = panels.isOpen('comments')
   const assistantOpen = panels.isOpen('assistant')
-  const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode(closeAllPanels)
+  const { drawMode, laserMode, toggleDrawMode, toggleLaserMode, drawModeRef } =
+    useReaderDrawMode(closeAllPanels)
 
   useReaderPageTheme(theme)
 
@@ -466,6 +470,7 @@ export default function CsvReader({
       onToggle: () => panels.toggle('assistant'),
     },
     createDrawTopbarAction(drawMode, toggleDrawMode),
+    createLaserTopbarAction(laserMode, toggleLaserMode),
   ]
 
   const settingsContent = (
@@ -552,6 +557,7 @@ export default function CsvReader({
         action: () => panels.toggle('assistant'),
       },
       createDrawPaletteAction(toggleDrawMode),
+      createLaserPaletteAction(toggleLaserMode),
       {
         id: 'fit',
         title: 'Zoom: Fit sheet',
@@ -581,9 +587,11 @@ export default function CsvReader({
       ref={readerRootRef}
       data-theme={theme}
       data-draw-mode={drawMode ? 'true' : undefined}
+      data-laser-mode={laserMode ? 'true' : undefined}
     >
       <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
       <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
+      <LaserPointer active={laserMode} />
 
       <DocAssistant
         open={assistantOpen}

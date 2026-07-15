@@ -25,11 +25,14 @@ import { ThemePicker } from '../ui/ThemePicker'
 import { usePanels } from '../ui/usePanels'
 import { CommandPalette } from '../ui/CommandPalette'
 import { InkAnnotation } from '../ui/InkAnnotation'
+import { LaserPointer } from '../ui/LaserPointer'
 import { SelectionMenu } from '../ui/SelectionMenu'
 import { TocRail } from '../ui/TocRail'
 import {
   createDrawPaletteAction,
   createDrawTopbarAction,
+  createLaserPaletteAction,
+  createLaserTopbarAction,
   usePdfInkBinding,
   useReaderDrawMode,
 } from '../ui/useReaderInk'
@@ -104,7 +107,8 @@ export default function PdfReader({
   const searchOpen = panels.isOpen('search')
   const commentsOpen = panels.isOpen('comments')
   const assistantOpen = panels.isOpen('assistant')
-  const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode(closeAllPanels)
+  const { drawMode, laserMode, toggleDrawMode, toggleLaserMode, drawModeRef } =
+    useReaderDrawMode(closeAllPanels)
   const inkBinding = usePdfInkBinding(docColRef, pageZoom)
 
   const commentSource = useMemo(
@@ -446,6 +450,7 @@ export default function PdfReader({
       onToggle: () => panels.toggle('assistant'),
     },
     createDrawTopbarAction(drawMode, toggleDrawMode),
+    createLaserTopbarAction(laserMode, toggleLaserMode),
   ]
 
   const settingsContent = (
@@ -502,6 +507,7 @@ export default function PdfReader({
         action: () => panels.toggle('assistant'),
       },
       createDrawPaletteAction(toggleDrawMode),
+      createLaserPaletteAction(toggleLaserMode),
       {
         id: 'fit-width',
         title: 'Zoom: Fit width',
@@ -526,9 +532,15 @@ export default function PdfReader({
   ]
 
   return (
-    <div className="reader-root" ref={readerRootRef} data-draw-mode={drawMode ? 'true' : undefined}>
+    <div
+      className="reader-root"
+      ref={readerRootRef}
+      data-draw-mode={drawMode ? 'true' : undefined}
+      data-laser-mode={laserMode ? 'true' : undefined}
+    >
       <CommandPalette groups={paletteGroups} />
       <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
+      <LaserPointer active={laserMode} />
       <SelectionMenu
         scopeRef={docColRef}
         disabled={commentsOpen || drawMode}

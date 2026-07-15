@@ -23,10 +23,10 @@ function inkOverlayTop() {
 }
 
 /** Map a pan/zoom content viewport to ink-overlay coordinates. */
-export function panZoomInkContentOffset(viewportElement: HTMLElement | null): Pick<
-  InkViewport,
-  'contentOffsetX' | 'contentOffsetY'
-> {
+export function panZoomInkContentOffset(
+  viewportElement: HTMLElement | null,
+  inkOverlayOriginY = inkOverlayTop(),
+): Pick<InkViewport, 'contentOffsetX' | 'contentOffsetY'> {
   if (!viewportElement) {
     return { contentOffsetX: 0, contentOffsetY: 0 }
   }
@@ -34,13 +34,30 @@ export function panZoomInkContentOffset(viewportElement: HTMLElement | null): Pi
   const rect = viewportElement.getBoundingClientRect()
   return {
     contentOffsetX: rect.left,
-    contentOffsetY: rect.top - inkOverlayTop(),
+    contentOffsetY: rect.top - inkOverlayOriginY,
   }
 }
 
 /** Document scroll position for markdown and PDF readers. */
 export function scrollInkViewport(): InkViewport {
   return { anchorX: 0, anchorY: window.scrollY }
+}
+
+/** Scroll readers: store ink in unscaled document space so page zoom does not drift. */
+export function scrollDocumentInkViewport(
+  docColRef: RefObject<HTMLElement | null>,
+  inkOverlayOriginY = inkOverlayTop(),
+): InkViewport {
+  const column = docColRef.current
+  const rect = column?.getBoundingClientRect()
+  const columnTop = rect?.top ?? inkOverlayOriginY
+
+  return {
+    anchorX: 0,
+    anchorY: -window.scrollY,
+    contentOffsetX: rect?.left ?? 0,
+    contentOffsetY: columnTop - inkOverlayOriginY,
+  }
 }
 
 /** One layer per viewport-height scroll segment in markdown. */
