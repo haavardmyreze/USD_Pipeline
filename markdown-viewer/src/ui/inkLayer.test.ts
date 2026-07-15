@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { scrollDocumentInkViewportFromRect, type InkViewport } from './inkAnchors'
 import type { InkLayer } from './inkLayer'
 import { storageToViewportPoint, viewportToStoragePoint } from './inkLayer'
-import type { InkViewport } from './inkAnchors'
 
 function sheetLayer(): InkLayer {
   return {
@@ -13,6 +13,36 @@ function sheetLayer(): InkLayer {
     backingCanvas: {} as HTMLCanvasElement,
   }
 }
+
+describe('scroll document ink coordinates', () => {
+  it('tracks the same client point when page zoom changes', () => {
+    const layer = sheetLayer()
+    const inkTop = 72
+    const clientPoint = { x: 280, y: 420 }
+    const drawZoom = 1.1
+    const nextZoom = 1.6
+    const drawRect = { left: 120, top: 180 }
+    const unscaledX = (clientPoint.x - drawRect.left) / drawZoom
+    const unscaledY = (clientPoint.y - drawRect.top) / drawZoom
+    const nextRect = {
+      left: clientPoint.x - unscaledX * nextZoom,
+      top: clientPoint.y - unscaledY * nextZoom,
+    }
+
+    const viewportAtDraw = scrollDocumentInkViewportFromRect(drawRect, inkTop)
+    const canvasPoint = {
+      x: clientPoint.x,
+      y: clientPoint.y - inkTop,
+    }
+
+    const stored = viewportToStoragePoint(canvasPoint, layer, viewportAtDraw, drawZoom)
+    const viewportAfterZoom = scrollDocumentInkViewportFromRect(nextRect, inkTop)
+    const restored = storageToViewportPoint(stored, viewportAfterZoom, nextZoom, 'sheet')
+
+    expect(restored.x).toBeCloseTo(clientPoint.x, 5)
+    expect(restored.y).toBeCloseTo(clientPoint.y - inkTop, 5)
+  })
+})
 
 describe('sheet ink coordinates', () => {
   it('round-trips pan/zoom viewport points at the same zoom', () => {

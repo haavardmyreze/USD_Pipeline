@@ -22,6 +22,36 @@ function inkOverlayTop() {
   return Number.isFinite(topbar) ? topbar : 72
 }
 
+/** Zoomed document root inside `.doc-col` (paper stack, not the column wrapper). */
+export function scrollInkContentRoot(docColRef: RefObject<HTMLElement | null>): HTMLElement | null {
+  const column = docColRef.current
+  if (!column) {
+    return null
+  }
+
+  return (
+    column.querySelector<HTMLElement>(':scope > .page-stack') ??
+    column.querySelector<HTMLElement>(':scope > .card-stack') ??
+    column.querySelector<HTMLElement>(':scope > .paper-scroll') ??
+    column.querySelector<HTMLElement>(':scope > .pdf-page-stack') ??
+    column
+  )
+}
+
+export function scrollDocumentInkViewportFromRect(
+  rect: Pick<DOMRect, 'left' | 'top'> | null | undefined,
+  inkOverlayOriginY = inkOverlayTop(),
+): InkViewport {
+  const contentTop = rect?.top ?? inkOverlayOriginY
+
+  return {
+    anchorX: 0,
+    anchorY: 0,
+    contentOffsetX: rect?.left ?? 0,
+    contentOffsetY: contentTop - inkOverlayOriginY,
+  }
+}
+
 /** Map a pan/zoom content viewport to ink-overlay coordinates. */
 export function panZoomInkContentOffset(
   viewportElement: HTMLElement | null,
@@ -48,16 +78,8 @@ export function scrollDocumentInkViewport(
   docColRef: RefObject<HTMLElement | null>,
   inkOverlayOriginY = inkOverlayTop(),
 ): InkViewport {
-  const column = docColRef.current
-  const rect = column?.getBoundingClientRect()
-  const columnTop = rect?.top ?? inkOverlayOriginY
-
-  return {
-    anchorX: 0,
-    anchorY: -window.scrollY,
-    contentOffsetX: rect?.left ?? 0,
-    contentOffsetY: columnTop - inkOverlayOriginY,
-  }
+  const contentRoot = scrollInkContentRoot(docColRef)
+  return scrollDocumentInkViewportFromRect(contentRoot?.getBoundingClientRect(), inkOverlayOriginY)
 }
 
 /** One layer per viewport-height scroll segment in markdown. */
