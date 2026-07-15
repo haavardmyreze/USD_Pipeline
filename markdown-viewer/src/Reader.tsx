@@ -60,9 +60,16 @@ import { SearchPanel } from './ui/SearchPanel'
 import { ThemePicker } from './ui/ThemePicker'
 import { usePanels } from './ui/usePanels'
 import { CommandPalette } from './ui/CommandPalette'
+import { InkAnnotation } from './ui/InkAnnotation'
 import { SelectionMenu } from './ui/SelectionMenu'
 import { TocRail } from './ui/TocRail'
 import { Lightbox } from './ui/Lightbox'
+import {
+  createDrawPaletteAction,
+  createDrawTopbarAction,
+  useMarkdownInkBinding,
+  useReaderDrawMode,
+} from './ui/useReaderInk'
 import { markdownCodeComponents } from './markdown/CodeBlocks'
 import { applyFindHighlights, type FindHighlights } from './markdown/findHighlights'
 import { LinkPreview } from './ui/LinkPreview'
@@ -290,6 +297,8 @@ function Reader({
   const searchOpen = panels.isOpen('search')
   const commentsOpen = panels.isOpen('comments')
   const assistantOpen = panels.isOpen('assistant')
+  const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode(closeAllPanels)
+  const inkBinding = useMarkdownInkBinding(pageZoom)
 
   const measureHostRef = useRef<HTMLDivElement | null>(null)
   const tocPanelRef = useRef<HTMLElement | null>(null)
@@ -615,13 +624,16 @@ function Reader({
     }
 
     return attachDocumentZoomWheel(root, (direction) => {
+      if (drawModeRef.current) {
+        return
+      }
       stepZoom(direction)
     })
   }, [stepZoom])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (applyZoomKeyboardShortcut(event, stepZoom)) {
+      if (!drawModeRef.current && applyZoomKeyboardShortcut(event, stepZoom)) {
         return
       }
 
@@ -749,6 +761,10 @@ function Reader({
     const headingIds = toc.map((item) => item.id)
 
     const onScroll = () => {
+      if (drawModeRef.current) {
+        return
+      }
+
       const activationLine = Math.max(160, window.innerHeight * 0.35)
       let activeId = ''
 
@@ -955,6 +971,7 @@ function Reader({
       active: assistantOpen,
       onToggle: () => panels.toggle('assistant'),
     },
+    createDrawTopbarAction(drawMode, toggleDrawMode),
   ]
 
   const settingsContent = (
@@ -1130,6 +1147,7 @@ function Reader({
         keywords: 'ai assistant chat',
         action: () => panels.toggle('assistant'),
       },
+      createDrawPaletteAction(toggleDrawMode),
       {
         id: 'view-continuous',
         title: 'View: Continuous',
@@ -1160,11 +1178,12 @@ function Reader({
   ]
 
   return (
-    <div className="reader-root" ref={readerRootRef}>
+    <div className="reader-root" ref={readerRootRef} data-draw-mode={drawMode ? 'true' : undefined}>
       <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
+      <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
       <SelectionMenu
         scopeRef={docColRef}
-        disabled={commentsOpen}
+        disabled={commentsOpen || drawMode}
         actions={[
           { id: 'comment', label: 'Comment', onRun: () => commentOnSelection() },
           { id: 'ask', label: 'Ask', onRun: askAboutSelection },
@@ -1180,7 +1199,7 @@ function Reader({
       <TocRail
         sections={tocRailSections}
         activeId={activeSectionId || activeChapterId}
-        hidden={tocOpen || commentsOpen}
+        hidden={tocOpen || commentsOpen || drawMode}
         onNavigate={navigateToSection}
       />
       <Lightbox scopeRef={docColRef} />
@@ -1340,7 +1359,7 @@ function Reader({
           </div>
         </div>
 
-        <LinkPreview scopeRef={docColRef} />
+        {drawMode ? null : <LinkPreview scopeRef={docColRef} />}
 
         {isPaged ? (
           <div className="measure-host" ref={measureHostRef} aria-hidden="true">

@@ -26,6 +26,13 @@ import { SearchPanel } from '../ui/SearchPanel'
 import { ThemePicker } from '../ui/ThemePicker'
 import { usePanels } from '../ui/usePanels'
 import { CommandPalette } from '../ui/CommandPalette'
+import { InkAnnotation } from '../ui/InkAnnotation'
+import {
+  createDrawPaletteAction,
+  createDrawTopbarAction,
+  useCsvInkBinding,
+  useReaderDrawMode,
+} from '../ui/useReaderInk'
 import {
   actionsPaletteGroup,
   libraryPaletteGroup,
@@ -102,6 +109,8 @@ export default function CsvReader({
   const searchOpen = panels.isOpen('search')
   const commentsOpen = panels.isOpen('comments')
   const assistantOpen = panels.isOpen('assistant')
+  const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode(closeAllPanels)
+  const inkBinding = useCsvInkBinding(viewport.panX, viewport.panY, viewport.zoom)
 
   const index = useMemo(() => buildCsvDocumentIndex(csvContent), [csvContent])
 
@@ -282,6 +291,10 @@ export default function CsvReader({
     }
 
     return attachDocumentZoomWheel(root, (_direction, event) => {
+      if (drawModeRef.current) {
+        return
+      }
+
       const viewportElement = viewportRef.current
       if (!viewportElement) {
         return
@@ -315,7 +328,7 @@ export default function CsvReader({
 
   const handleViewportPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!canStartPan(event)) {
+      if (drawModeRef.current || !canStartPan(event)) {
         return
       }
 
@@ -389,7 +402,7 @@ export default function CsvReader({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (applyZoomKeyboardShortcut(event, stepZoom)) {
+      if (!drawModeRef.current && applyZoomKeyboardShortcut(event, stepZoom)) {
         return
       }
 
@@ -440,6 +453,7 @@ export default function CsvReader({
       active: assistantOpen,
       onToggle: () => panels.toggle('assistant'),
     },
+    createDrawTopbarAction(drawMode, toggleDrawMode),
   ]
 
   const settingsContent = (
@@ -525,6 +539,7 @@ export default function CsvReader({
         keywords: 'ai assistant chat',
         action: () => panels.toggle('assistant'),
       },
+      createDrawPaletteAction(toggleDrawMode),
       {
         id: 'fit',
         title: 'Zoom: Fit sheet',
@@ -549,8 +564,9 @@ export default function CsvReader({
   ]
 
   return (
-    <div className="reader-root" ref={readerRootRef}>
+    <div className="reader-root" ref={readerRootRef} data-draw-mode={drawMode ? 'true' : undefined}>
       <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
+      <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
       <ReaderTopbar
         fileName={fileName}
         onHome={onHome}
@@ -609,11 +625,15 @@ export default function CsvReader({
       <div
         className="reader-canvas reader-canvas-csv"
         data-theme={theme}
-        data-comment-mode={commentsOpen ? 'true' : undefined}
+        data-comment-mode={commentsOpen && !drawMode ? 'true' : undefined}
       >
         <div className="doc-stage csv-stage">
           <div
-            className={commentsOpen ? 'doc-col comment-mode csv-doc-col' : 'doc-col csv-doc-col'}
+            className={
+              commentsOpen && !drawMode
+                ? 'doc-col comment-mode csv-doc-col'
+                : 'doc-col csv-doc-col'
+            }
             ref={docColRef}
           >
             <div

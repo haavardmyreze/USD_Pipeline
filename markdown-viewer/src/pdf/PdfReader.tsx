@@ -24,8 +24,15 @@ import { SearchPanel } from '../ui/SearchPanel'
 import { ThemePicker } from '../ui/ThemePicker'
 import { usePanels } from '../ui/usePanels'
 import { CommandPalette } from '../ui/CommandPalette'
+import { InkAnnotation } from '../ui/InkAnnotation'
 import { SelectionMenu } from '../ui/SelectionMenu'
 import { TocRail } from '../ui/TocRail'
+import {
+  createDrawPaletteAction,
+  createDrawTopbarAction,
+  usePdfInkBinding,
+  useReaderDrawMode,
+} from '../ui/useReaderInk'
 import {
   actionsPaletteGroup,
   libraryPaletteGroup,
@@ -97,6 +104,8 @@ export default function PdfReader({
   const searchOpen = panels.isOpen('search')
   const commentsOpen = panels.isOpen('comments')
   const assistantOpen = panels.isOpen('assistant')
+  const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode(closeAllPanels)
+  const inkBinding = usePdfInkBinding(docColRef, pageZoom)
 
   const commentSource = useMemo(
     () => ({
@@ -159,6 +168,9 @@ export default function PdfReader({
     }
 
     return attachDocumentZoomWheel(root, (direction) => {
+      if (drawModeRef.current) {
+        return
+      }
       stepZoom(direction)
     })
   }, [index, stepZoom])
@@ -242,7 +254,7 @@ export default function PdfReader({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (applyZoomKeyboardShortcut(event, stepZoom)) {
+      if (!drawModeRef.current && applyZoomKeyboardShortcut(event, stepZoom)) {
         return
       }
 
@@ -270,6 +282,10 @@ export default function PdfReader({
 
     const observer = new IntersectionObserver(
       (entries) => {
+        if (drawModeRef.current) {
+          return
+        }
+
         const visible = entries
           .filter((entry) => entry.isIntersecting)
           .sort((left, right) => right.intersectionRatio - left.intersectionRatio)
@@ -429,6 +445,7 @@ export default function PdfReader({
       active: assistantOpen,
       onToggle: () => panels.toggle('assistant'),
     },
+    createDrawTopbarAction(drawMode, toggleDrawMode),
   ]
 
   const settingsContent = (
@@ -484,6 +501,7 @@ export default function PdfReader({
         keywords: 'ai assistant chat',
         action: () => panels.toggle('assistant'),
       },
+      createDrawPaletteAction(toggleDrawMode),
       {
         id: 'fit-width',
         title: 'Zoom: Fit width',
@@ -508,11 +526,12 @@ export default function PdfReader({
   ]
 
   return (
-    <div className="reader-root" ref={readerRootRef}>
+    <div className="reader-root" ref={readerRootRef} data-draw-mode={drawMode ? 'true' : undefined}>
       <CommandPalette groups={paletteGroups} />
+      <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
       <SelectionMenu
         scopeRef={docColRef}
-        disabled={commentsOpen}
+        disabled={commentsOpen || drawMode}
         actions={[
           { id: 'comment', label: 'Comment', onRun: () => commentOnSelection() },
           { id: 'ask', label: 'Ask', onRun: askAboutSelection },
@@ -528,7 +547,7 @@ export default function PdfReader({
       <TocRail
         sections={index.sections}
         activeId={activeSectionId}
-        hidden={tocOpen || commentsOpen}
+        hidden={tocOpen || commentsOpen || drawMode}
         onNavigate={navigateToSection}
       />
       <ReaderTopbar

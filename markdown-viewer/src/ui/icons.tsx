@@ -84,3 +84,27 @@ export const ClipboardIcon = (props: IconProps = {}) => (
     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
   </svg>
 )
+
+export const DrawIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+)
+
+export const PenIcon = DrawIcon
+
+export const MarkerIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <path d="M4 20h16" />
+    <path d="m7 17 8.5-8.5a2.12 2.12 0 0 1 3 3L10 20H7z" />
+    <path d="m14 6 4 4" />
+  </svg>
+)
+
+export const EraserIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <path d="M7 21h13" />
+    <path d="m19 12-6.5 6.5a2.12 2.12 0 0 1-3 0L5 13.5a2.12 2.12 0 0 1 0-3L11.5 4a2.12 2.12 0 0 1 3 0L19 8.5" />
+  </svg>
+)
