@@ -199,8 +199,8 @@ export function createDrawTopbarAction(
 export function createDrawPaletteAction(toggleDrawMode: () => void) {
   return {
     id: 'draw',
-    title: 'Toggle draw mode',
-    keywords: 'annotate ink pen marker presentation',
+    title: 'Toggle draw mode (D)',
+    keywords: 'annotate ink pen marker presentation draw d',
     action: toggleDrawMode,
   }
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { isEditableKeyboardTarget } from '../readerConfig'
 
 /**
- * Solo draw mode: toggled from the topbar, exits on Escape.
+ * Solo draw mode: toggled from the topbar or D, exits on Escape.
  * Calls `onActivate` when entering so panels can close first.
  */
 export function useDrawMode(onActivate?: () => void) {
@@ -19,6 +20,26 @@ export function useDrawMode(onActivate?: () => void) {
   const exitDrawMode = useCallback(() => {
     setDrawMode(false)
   }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key.toLowerCase() !== 'd' ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        isEditableKeyboardTarget(event.target)
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      toggleDrawMode()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [toggleDrawMode])
 
   useEffect(() => {
     if (!drawMode) {

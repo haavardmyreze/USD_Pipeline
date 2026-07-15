@@ -321,6 +321,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html[data-theme],
+html[data-theme] body {
+  background: var(--bg);
+}
+
 #root {
   min-height: 100vh;
 }

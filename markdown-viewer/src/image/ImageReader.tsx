@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -43,6 +44,7 @@ import {
 import type { LibraryDoc } from '../library'
 import type { ToneMappingType } from 'hdrify'
 import { decodeImageBuffer, type DecodedImage } from './decodeImage'
+import { useReaderPageTheme } from '../ui/useReaderPageTheme'
 import { imageMetaTextScale, imageSheetLayout, imageStrokeUnitScale } from './imageSheetLayout'
 
 type ImageReaderProps = {
@@ -81,16 +83,23 @@ export default function ImageReader({
   const [isPanning, setIsPanning] = useState(false)
   const [exposure, setExposure] = useState(0)
   const [toneMapping, setToneMapping] = useState<ToneMappingType>('aces')
-  const [sheetLayout, setSheetLayout] = useState(() => imageSheetLayout(1, 1))
   const [viewport, setViewport] = useState<CsvViewportState>({
     panX: 0,
     panY: 0,
     zoom: 1,
   })
 
+  const sheetLayout = useMemo(
+    () =>
+      decoded
+        ? imageSheetLayout(decoded.width, decoded.height)
+        : imageSheetLayout(1, 1),
+    [decoded],
+  )
   const strokeUnitScale = imageStrokeUnitScale(sheetLayout)
-  const metaTextScale = imageMetaTextScale(sheetLayout.sheetWidth, sheetLayout.sheetHeight)
+  const metaTextScale = imageMetaTextScale(sheetLayout)
 
+  useReaderPageTheme(theme)
   const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode()
 
   const isHdr = decoded?.kind === 'exr' || decoded?.kind === 'hdr'
@@ -143,6 +152,8 @@ export default function ImageReader({
         sheet.offsetHeight,
         viewportElement.clientWidth,
         viewportElement.clientHeight,
+        40,
+        1,
       ),
     )
   }, [])
@@ -217,9 +228,7 @@ export default function ImageReader({
       return
     }
 
-    const layout = imageSheetLayout(decoded.width, decoded.height)
-    setSheetLayout(layout)
-
+    const layout = sheetLayout
     canvas.width = decoded.width
     canvas.height = decoded.height
     canvas.style.width = `${layout.sheetWidth}px`
@@ -232,7 +241,7 @@ export default function ImageReader({
     })
 
     return () => window.cancelAnimationFrame(frame)
-  }, [decoded, fitImage])
+  }, [decoded, fitImage, sheetLayout])
 
   useEffect(() => {
     const root = readerRootRef.current
@@ -462,7 +471,12 @@ export default function ImageReader({
   ]
 
   return (
-    <div className="reader-root" ref={readerRootRef} data-draw-mode={drawMode ? 'true' : undefined}>
+    <div
+      className="reader-root reader-root-pan"
+      ref={readerRootRef}
+      data-theme={theme}
+      data-draw-mode={drawMode ? 'true' : undefined}
+    >
       <CommandPalette groups={paletteGroups} />
       <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
       <ReaderTopbar

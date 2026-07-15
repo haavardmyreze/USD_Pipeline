@@ -25,6 +25,7 @@ import { ReaderTopbar, type TopbarAction } from '../ui/ReaderTopbar'
 import { SearchPanel } from '../ui/SearchPanel'
 import { ThemePicker } from '../ui/ThemePicker'
 import { usePanels } from '../ui/usePanels'
+import { useReaderPageTheme } from '../ui/useReaderPageTheme'
 import { CommandPalette } from '../ui/CommandPalette'
 import { InkAnnotation } from '../ui/InkAnnotation'
 import {
@@ -111,6 +112,8 @@ export default function CsvReader({
   const commentsOpen = panels.isOpen('comments')
   const assistantOpen = panels.isOpen('assistant')
   const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode(closeAllPanels)
+
+  useReaderPageTheme(theme)
 
   const index = useMemo(() => buildCsvDocumentIndex(csvContent), [csvContent])
 
@@ -573,7 +576,12 @@ export default function CsvReader({
   ]
 
   return (
-    <div className="reader-root" ref={readerRootRef} data-draw-mode={drawMode ? 'true' : undefined}>
+    <div
+      className="reader-root reader-root-pan"
+      ref={readerRootRef}
+      data-theme={theme}
+      data-draw-mode={drawMode ? 'true' : undefined}
+    >
       <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
       <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
       <ReaderTopbar
