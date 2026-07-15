@@ -14,34 +14,59 @@ $ErrorActionPreference = 'Stop'
 $launcherBat = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'Open-InViewer.bat'))
 $launcherCommand = "`"$launcherBat`" `"%1`""
 $progId = 'QuietReader.Document'
+$appName = 'Open-InViewer.bat'
 
 function Register-Extension {
   param([string]$Extension)
 
   $extensionKey = "HKCU:\Software\Classes\$Extension"
   $openCommandKey = "HKCU:\Software\Classes\$progId\shell\open\command"
-
-  New-Item -Path $extensionKey -Force | Out-Null
-  Set-ItemProperty -Path $extensionKey -Name '(default)' -Value $progId
-
-  New-Item -Path "HKCU:\Software\Classes\$progId" -Force | Out-Null
-  Set-ItemProperty -Path "HKCU:\Software\Classes\$progId" -Name '(default)' -Value $Script:AssociationLabel
+  $openWithListKey = "HKCU:\Software\Classes\$Extension\OpenWithList"
+  $openWithProgidsKey = "HKCU:\Software\Classes\$Extension\OpenWithProgids"
 
   New-Item -Path $openCommandKey -Force | Out-Null
   Set-ItemProperty -Path $openCommandKey -Name '(default)' -Value $launcherCommand
 
-  $openWithKey = "HKCU:\Software\Classes\$Extension\OpenWithProgids"
-  New-Item -Path $openWithKey -Force | Out-Null
-  New-ItemProperty -Path $openWithKey -Name $progId -PropertyType String -Force | Out-Null
+  New-Item -Path "HKCU:\Software\Classes\$progId" -Force | Out-Null
+  Set-ItemProperty -Path "HKCU:\Software\Classes\$progId" -Name '(default)' -Value $Script:AssociationLabel
+
+  New-Item -Path $openWithListKey -Force | Out-Null
+  New-ItemProperty -Path $openWithListKey -Name $appName -PropertyType String -Force | Out-Null
+
+  New-Item -Path $openWithProgidsKey -Force | Out-Null
+  New-ItemProperty -Path $openWithProgidsKey -Name $progId -PropertyType String -Force | Out-Null
+
+  # Do not overwrite the user's current default ProgId here. Windows 10/11 stores
+  # defaults in UserChoice with a hash, so only OpenWith registration is reliable.
+  if (Test-Path $extensionKey) {
+    Remove-ItemProperty -Path $extensionKey -Name '(default)' -ErrorAction SilentlyContinue
+  }
+}
+
+function Register-Application {
+  $appKey = "HKCU:\Software\Classes\Applications\$appName"
+  $commandKey = "$appKey\shell\open\command"
+
+  New-Item -Path $appKey -Force | Out-Null
+  Set-ItemProperty -Path $appKey -Name 'FriendlyAppName' -Value $Script:AssociationLabel
+  Set-ItemProperty -Path $appKey -Name 'DefaultIcon' -Value "$launcherBat,0"
+
+  New-Item -Path $commandKey -Force | Out-Null
+  Set-ItemProperty -Path $commandKey -Name '(default)' -Value $launcherCommand
 }
 
 function Unregister-Extension {
   param([string]$Extension)
 
-  $extensionKey = "HKCU:\Software\Classes\$Extension"
-  if (Test-Path $extensionKey) {
-    Remove-ItemProperty -Path $extensionKey -Name '(default)' -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "$extensionKey\OpenWithProgids" -Name $progId -ErrorAction SilentlyContinue
+  $openWithListKey = "HKCU:\Software\Classes\$Extension\OpenWithList"
+  $openWithProgidsKey = "HKCU:\Software\Classes\$Extension\OpenWithProgids"
+
+  if (Test-Path $openWithListKey) {
+    Remove-ItemProperty -Path $openWithListKey -Name $appName -ErrorAction SilentlyContinue
+  }
+
+  if (Test-Path $openWithProgidsKey) {
+    Remove-ItemProperty -Path $openWithProgidsKey -Name $progId -ErrorAction SilentlyContinue
   }
 }
 
@@ -58,9 +83,15 @@ if ($Unregister) {
     Remove-Item -Path "HKCU:\Software\Classes\$progId" -Recurse -Force
   }
 
+  if (Test-Path "HKCU:\Software\Classes\Applications\$appName") {
+    Remove-Item -Path "HKCU:\Software\Classes\Applications\$appName" -Recurse -Force
+  }
+
   Write-Host 'Quiet Reader file associations removed from HKCU.'
   exit 0
 }
+
+Register-Application
 
 foreach ($extension in $Script:SupportedExtensions) {
   Register-Extension -Extension $extension
@@ -72,4 +103,11 @@ Write-Host ''
 Write-Host 'Next steps:'
 Write-Host '  1. Right-click a supported file in Explorer'
 Write-Host '  2. Choose Open with -> Quiet Reader'
-Write-Host '  3. Optional: Choose "Always" to make it the default'
+Write-Host '  3. Click "Always" if you want it as the default app'
+Write-Host ''
+Write-Host 'If Quiet Reader is missing from the list, choose "Choose another app"'
+Write-Host 'and browse to:'
+Write-Host "  $launcherBat"
+Write-Host ''
+Write-Host 'To verify manually:'
+Write-Host "  powershell -ExecutionPolicy Bypass -File `"$PSScriptRoot\Test-Launcher.ps1`""

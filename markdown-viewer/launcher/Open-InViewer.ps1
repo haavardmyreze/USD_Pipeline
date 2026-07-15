@@ -8,10 +8,20 @@ $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot\config.ps1"
 
+$Script:LogPath = Join-Path $env:TEMP 'quiet-reader-launcher.log'
+
+function Write-LauncherLog {
+  param([string]$Message)
+  $line = '{0} {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
+  Add-Content -Path $Script:LogPath -Value $line -Encoding UTF8
+}
+
 function Write-LauncherError {
   param([string]$Message)
+  Write-LauncherLog "ERROR: $Message"
   Write-Error $Message
   if ([Environment]::UserInteractive) {
+    Add-Type -AssemblyName System.Windows.Forms
     [void][System.Windows.Forms.MessageBox]::Show(
       $Message,
       'Quiet Reader',
@@ -86,14 +96,11 @@ function New-ViewerUrl {
 function Open-ViewerUrl {
   param(
     [string]$ViewerUrl,
-    [int]$FileSize
+    [string]$FileName
   )
 
-  if ($FileSize -le $Script:MaxDirectLaunchBytes) {
-    Start-Process $ViewerUrl
-    return
-  }
-
+  # Always route through a local redirect page. This avoids Windows command-line
+  # length limits and makes Start-Process behavior consistent across browsers.
   $redirectPath = [IO.Path]::Combine(
     [IO.Path]::GetTempPath(),
     ('quiet-reader-open-{0}.html' -f [guid]::NewGuid().ToString('N'))
@@ -102,7 +109,7 @@ function Open-ViewerUrl {
   $html = @"
 <!doctype html>
 <meta charset="utf-8">
-<title>Opening in Quiet Reader…</title>
+<title>Opening $(($FileName -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'))…</title>
 <p style="font: 14px/1.5 Segoe UI, sans-serif; color: #444; padding: 24px;">
   Opening in Quiet Reader…
 </p>
@@ -112,11 +119,15 @@ location.replace($(ConvertTo-JavaScriptString $ViewerUrl));
 "@
 
   [IO.File]::WriteAllText($redirectPath, $html, [Text.UTF8Encoding]::new($false))
-  Start-Process $redirectPath
+  Write-LauncherLog "Opening redirect: $redirectPath"
+  Write-LauncherLog "Target URL length: $($ViewerUrl.Length)"
+  Start-Process -FilePath $redirectPath
 }
 
 function Open-DocumentInViewer {
   param([string]$Path)
+
+  Write-LauncherLog "Open request: $Path"
 
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
     Write-LauncherError "File not found: $Path"
@@ -141,19 +152,24 @@ function Open-DocumentInViewer {
   $mimeType = Get-LauncherMimeType $resolved
   $dataUrl = New-DataUrl -Path $resolved -MimeType $mimeType
   $viewerUrl = New-ViewerUrl -DataUrl $dataUrl -FileName $fileInfo.Name
-  Open-ViewerUrl -ViewerUrl $viewerUrl -FileSize $fileInfo.Length
+  Open-ViewerUrl -ViewerUrl $viewerUrl -FileName $fileInfo.Name
+  Write-LauncherLog "Launch complete for $($fileInfo.Name)"
 }
 
-Add-Type -AssemblyName System.Windows.Forms
-
-if (-not $FilePaths -or $FilePaths.Count -eq 0) {
-  Start-Process $Script:ViewerOrigin
-  exit 0
-}
-
-foreach ($path in $FilePaths) {
-  if ([string]::IsNullOrWhiteSpace($path)) {
-    continue
+try {
+  if (-not $FilePaths -or $FilePaths.Count -eq 0) {
+    Write-LauncherLog 'No file path provided; opening viewer home page.'
+    Start-Process $Script:ViewerOrigin
+    exit 0
   }
-  Open-DocumentInViewer -Path $path.Trim('"')
+
+  foreach ($path in $FilePaths) {
+    if ([string]::IsNullOrWhiteSpace($path)) {
+      continue
+    }
+    Open-DocumentInViewer -Path $path.Trim('"')
+  }
+} catch {
+  Write-LauncherError $_.Exception.Message
+  exit 1
 }

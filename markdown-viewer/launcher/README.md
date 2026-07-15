@@ -19,10 +19,21 @@ Supported extensions: `.md`, `.markdown`, `.pdf`, `.csv`, `.png`, `.jpg`, `.jpeg
 ## Manual test
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\Open-InViewer.ps1 "C:\path\to\note.md"
+powershell -ExecutionPolicy Bypass -File .\Test-Launcher.ps1
 ```
 
-Or double-click `Open-InViewer.bat` after passing a file path.
+This opens `library/welcome.md` and prints diagnostics. If something fails, check:
+
+```
+%TEMP%\quiet-reader-launcher.log
+```
+
+## Troubleshooting
+
+- **Quiet Reader is not in the Open with list:** run `Register-ViewerAssociations.ps1` again, then use **Open with → Choose another app → Browse** and select `Open-InViewer.bat`.
+- **A blank tab flashes and nothing opens:** open the log file above and re-run `Test-Launcher.ps1`.
+- **The browser opens but the document is empty:** wait for Vercel to finish deploying the latest `main` branch, then try again.
+- **Very large files:** drag the file into an already-open Quiet Reader tab instead.
 
 ## How it works
 
@@ -30,9 +41,7 @@ Browsers cannot read `C:\...` paths from a remote Vercel app. The launcher:
 
 1. Reads the local file
 2. Encodes it as a `data:` URL
-3. Opens `https://usd-pipeline-k7aa.vercel.app/?src=...&name=...` in your default browser
-
-Large files use a temporary local HTML redirect page to avoid Windows command-line length limits.
+3. Opens a temporary local HTML page that redirects to `https://usd-pipeline-k7aa.vercel.app/?src=...&name=...`
 
 Very large files (> 24 MB) are rejected with a message to drag the file into an already-open viewer tab instead.
 
