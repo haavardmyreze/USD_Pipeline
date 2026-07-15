@@ -31,6 +31,7 @@ import {
   createDrawPaletteAction,
   createDrawTopbarAction,
   useCsvInkBinding,
+  usePanZoomInkNavigation,
   useReaderDrawMode,
 } from '../ui/useReaderInk'
 import {
@@ -110,7 +111,6 @@ export default function CsvReader({
   const commentsOpen = panels.isOpen('comments')
   const assistantOpen = panels.isOpen('assistant')
   const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode(closeAllPanels)
-  const inkBinding = useCsvInkBinding(viewport.panX, viewport.panY, viewport.zoom)
 
   const index = useMemo(() => buildCsvDocumentIndex(csvContent), [csvContent])
 
@@ -213,6 +213,15 @@ export default function CsvReader({
     }
   }, [])
 
+  const inkNavigation = usePanZoomInkNavigation(viewportRef, setViewport, clampViewportPan)
+  const inkBinding = useCsvInkBinding(
+    viewportRef,
+    viewport.panX,
+    viewport.panY,
+    viewport.zoom,
+    inkNavigation,
+  )
+
   const focusElementInViewport = useCallback((element: HTMLElement | null) => {
     const sheet = sheetRef.current
     const viewportElement = viewportRef.current
@@ -290,30 +299,30 @@ export default function CsvReader({
       return
     }
 
-    return attachDocumentZoomWheel(root, (_direction, event) => {
-      if (drawModeRef.current) {
-        return
-      }
+    return attachDocumentZoomWheel(
+      root,
+      (_direction, event) => {
+        const viewportElement = viewportRef.current
+        if (!viewportElement) {
+          return
+        }
 
-      const viewportElement = viewportRef.current
-      if (!viewportElement) {
-        return
-      }
-
-      const delta = wheelZoomDelta(event.deltaY)
-      setViewport((current) => {
-        const nextZoom = clampPageZoom(current.zoom + delta)
-        return zoomAtPoint(
-          current.panX,
-          current.panY,
-          current.zoom,
-          nextZoom,
-          event.clientX,
-          event.clientY,
-          viewportElement.getBoundingClientRect(),
-        )
-      })
-    })
+        const delta = wheelZoomDelta(event.deltaY)
+        setViewport((current) => {
+          const nextZoom = clampPageZoom(current.zoom + delta)
+          return zoomAtPoint(
+            current.panX,
+            current.panY,
+            current.zoom,
+            nextZoom,
+            event.clientX,
+            event.clientY,
+            viewportElement.getBoundingClientRect(),
+          )
+        })
+      },
+      { shouldHandle: () => !drawModeRef.current },
+    )
   }, [])
 
   useEffect(() => {
@@ -402,7 +411,7 @@ export default function CsvReader({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!drawModeRef.current && applyZoomKeyboardShortcut(event, stepZoom)) {
+      if (applyZoomKeyboardShortcut(event, stepZoom)) {
         return
       }
 

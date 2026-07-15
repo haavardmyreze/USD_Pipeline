@@ -10,11 +10,13 @@ export type StoredStroke = {
   simulatePressure: boolean
 }
 
+export type InkCoordinateSpace = 'viewport' | 'sheet'
+
 export type InkLayer = {
   key: string
   anchorX: number
   anchorY: number
-  zoomKey: number
+  coordinateSpace: InkCoordinateSpace
   strokes: StoredStroke[]
   backingCanvas: HTMLCanvasElement
 }
@@ -50,14 +52,14 @@ export function createInkLayer(
   key: string,
   anchorX: number,
   anchorY: number,
-  zoomKey: number,
+  coordinateSpace: InkCoordinateSpace,
   size: ViewportCanvasSize,
 ): InkLayer {
   const layer: InkLayer = {
     key,
     anchorX,
     anchorY,
-    zoomKey,
+    coordinateSpace,
     strokes: [],
     backingCanvas: document.createElement('canvas'),
   }
@@ -89,6 +91,10 @@ export function resizeInkLayer(layer: InkLayer, size: ViewportCanvasSize) {
 }
 
 export function redrawInkLayer(layer: InkLayer, size: ViewportCanvasSize) {
+  if (layer.coordinateSpace === 'sheet') {
+    return
+  }
+
   const context = layerContext(layer, size)
   if (!context) {
     return
@@ -110,12 +116,94 @@ export function redrawInkLayer(layer: InkLayer, size: ViewportCanvasSize) {
   }
 }
 
+export function viewportToStoragePoint(
+  viewportPoint: InkPoint,
+  layer: InkLayer,
+  viewport: InkViewport,
+  contentZoom: number,
+): InkPoint {
+  if (layer.coordinateSpace === 'sheet') {
+    const offsetX = viewport.contentOffsetX ?? 0
+    const offsetY = viewport.contentOffsetY ?? 0
+    const contentX = viewportPoint.x - offsetX
+    const contentY = viewportPoint.y - offsetY
+    return {
+      x: (contentX - viewport.anchorX) / contentZoom,
+      y: (contentY - viewport.anchorY) / contentZoom,
+      pressure: viewportPoint.pressure,
+    }
+  }
+
+  return {
+    x: viewportPoint.x - (layer.anchorX - viewport.anchorX),
+    y: viewportPoint.y - (layer.anchorY - viewport.anchorY),
+    pressure: viewportPoint.pressure,
+  }
+}
+
+export function storageToViewportPoint(
+  storagePoint: InkPoint,
+  viewport: InkViewport,
+  contentZoom: number,
+  coordinateSpace: InkCoordinateSpace,
+): InkPoint {
+  if (coordinateSpace === 'sheet') {
+    const offsetX = viewport.contentOffsetX ?? 0
+    const offsetY = viewport.contentOffsetY ?? 0
+    return {
+      x: storagePoint.x * contentZoom + viewport.anchorX + offsetX,
+      y: storagePoint.y * contentZoom + viewport.anchorY + offsetY,
+      pressure: storagePoint.pressure,
+    }
+  }
+
+  return storagePoint
+}
+
+function strokeIntersectsViewport(
+  stroke: StoredStroke,
+  viewport: InkViewport,
+  contentZoom: number,
+  coordinateSpace: InkCoordinateSpace,
+  viewportWidth: number,
+  viewportHeight: number,
+) {
+  const margin = 48
+  for (const point of stroke.points) {
+    const viewportPoint = storageToViewportPoint(point, viewport, contentZoom, coordinateSpace)
+    if (
+      viewportPoint.x >= -margin &&
+      viewportPoint.x <= viewportWidth + margin &&
+      viewportPoint.y >= -margin &&
+      viewportPoint.y <= viewportHeight + margin
+    ) {
+      return true
+    }
+  }
+
+  return false
+}
+
 export function layerIsVisible(
   layer: InkLayer,
   viewport: InkViewport,
   viewportWidth: number,
   viewportHeight: number,
+  contentZoom = 1,
 ) {
+  if (layer.coordinateSpace === 'sheet') {
+    return layer.strokes.some((stroke) =>
+      strokeIntersectsViewport(
+        stroke,
+        viewport,
+        contentZoom,
+        layer.coordinateSpace,
+        viewportWidth,
+        viewportHeight,
+      ),
+    )
+  }
+
   const offsetX = layer.anchorX - viewport.anchorX
   const offsetY = layer.anchorY - viewport.anchorY
   return (
@@ -137,13 +225,37 @@ export function compositeInkLayers(
   currentColor: string,
   currentBrush: InkBrushKind,
   simulatePressure: boolean,
+  contentZoom: number,
+  strokeUnitScale = 1,
 ) {
   displayContext.setTransform(1, 0, 0, 1, 0, 0)
   displayContext.clearRect(0, 0, displayCanvas.width, displayCanvas.height)
   displayContext.setTransform(size.devicePixelRatio, 0, 0, size.devicePixelRatio, 0, 0)
 
+  const strokeSizeScale = contentZoom * strokeUnitScale
+
   for (const layer of layers) {
-    if (!layerIsVisible(layer, viewport, size.cssWidth, size.cssHeight)) {
+    if (
+      !layerIsVisible(layer, viewport, size.cssWidth, size.cssHeight, contentZoom)
+    ) {
+      continue
+    }
+
+    if (layer.coordinateSpace === 'sheet') {
+      for (const stroke of layer.strokes) {
+        const viewportPoints = stroke.points.map((point) =>
+          storageToViewportPoint(point, viewport, contentZoom, layer.coordinateSpace),
+        )
+        drawInkStroke(
+          displayContext,
+          viewportPoints,
+          stroke.color,
+          stroke.brush ?? 'pen',
+          true,
+          stroke.simulatePressure,
+          strokeSizeScale,
+        )
+      }
       continue
     }
 
@@ -162,17 +274,39 @@ export function compositeInkLayers(
     )
   }
 
-  if (
-    activeLayer &&
-    currentStroke.length > 0 &&
-    layerIsVisible(activeLayer, viewport, size.cssWidth, size.cssHeight)
-  ) {
-    const offsetX = activeLayer.anchorX - viewport.anchorX
-    const offsetY = activeLayer.anchorY - viewport.anchorY
-    displayContext.save()
-    displayContext.translate(offsetX, offsetY)
-    drawInkStroke(displayContext, currentStroke, currentColor, currentBrush, false, simulatePressure)
-    displayContext.restore()
+  if (activeLayer && currentStroke.length > 0) {
+    const drawActiveStroke =
+      activeLayer.coordinateSpace === 'sheet' ||
+      layerIsVisible(activeLayer, viewport, size.cssWidth, size.cssHeight, contentZoom)
+
+    if (!drawActiveStroke) {
+      return
+    }
+    const viewportStroke =
+      activeLayer.coordinateSpace === 'sheet'
+        ? currentStroke.map((point) =>
+            storageToViewportPoint(point, viewport, contentZoom, activeLayer.coordinateSpace),
+          )
+        : currentStroke
+
+    if (activeLayer.coordinateSpace === 'sheet') {
+      drawInkStroke(
+        displayContext,
+        viewportStroke,
+        currentColor,
+        currentBrush,
+        false,
+        simulatePressure,
+        strokeSizeScale,
+      )
+    } else {
+      const offsetX = activeLayer.anchorX - viewport.anchorX
+      const offsetY = activeLayer.anchorY - viewport.anchorY
+      displayContext.save()
+      displayContext.translate(offsetX, offsetY)
+      drawInkStroke(displayContext, viewportStroke, currentColor, currentBrush, false, simulatePressure)
+      displayContext.restore()
+    }
   }
 }
 

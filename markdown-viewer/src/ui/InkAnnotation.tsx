@@ -15,6 +15,7 @@ import {
   layerIsVisible,
   redrawInkLayer,
   resizeInkLayer,
+  viewportToStoragePoint,
   type InkLayer,
   type StoredStroke,
   viewportCanvasSize,
@@ -44,11 +45,9 @@ function toLayerPoint(
   viewportPoint: InkPoint,
   layer: InkLayer,
   viewport: InkViewport,
+  contentZoom: number,
 ): InkPoint {
-  return {
-    x: viewportPoint.x - (layer.anchorX - viewport.anchorX),
-    y: viewportPoint.y - (layer.anchorY - viewport.anchorY),
-  }
+  return viewportToStoragePoint(viewportPoint, layer, viewport, contentZoom)
 }
 
 function toolToBrush(tool: DrawTool): InkBrushKind {
@@ -58,7 +57,10 @@ function toolToBrush(tool: DrawTool): InkBrushKind {
 export function InkAnnotation({
   docKey,
   drawMode,
-  zoomKey,
+  contentZoom,
+  useSheetCoordinates = false,
+  strokeUnitScale = 1,
+  navigation,
   getLayerKey,
   getInkViewport,
   viewportVersion,
@@ -75,11 +77,15 @@ export function InkAnnotation({
   const isDrawingRef = useRef(false)
   const isErasingRef = useRef(false)
   const temporaryEraserRef = useRef(false)
+  const panSessionRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
   const getLayerKeyRef = useRef(getLayerKey)
   const getInkViewportRef = useRef(getInkViewport)
   const repaintFrameRef = useRef<number | null>(null)
   const docKeyRef = useRef(docKey)
-  const zoomKeyRef = useRef(zoomKey)
+  const contentZoomRef = useRef(contentZoom)
+  const strokeUnitScaleRef = useRef(strokeUnitScale)
+  const useSheetCoordinatesRef = useRef(useSheetCoordinates)
+  const navigationRef = useRef(navigation)
   const drawModeRef = useRef(drawMode)
   const toolRef = useRef<DrawTool>('pen')
   const brushRef = useRef<InkBrushKind>('pen')
@@ -91,13 +97,16 @@ export function InkAnnotation({
   getLayerKeyRef.current = getLayerKey
   getInkViewportRef.current = getInkViewport
   docKeyRef.current = docKey
-  zoomKeyRef.current = zoomKey
+  contentZoomRef.current = contentZoom
+  strokeUnitScaleRef.current = strokeUnitScale
+  useSheetCoordinatesRef.current = useSheetCoordinates
+  navigationRef.current = navigation
   drawModeRef.current = drawMode
   toolRef.current = tool
   brushRef.current = toolToBrush(tool)
   colorRef.current = color
 
-  const documentState = () => getInkDocumentState(docKeyRef.current, zoomKeyRef.current)
+  const documentState = () => getInkDocumentState(docKeyRef.current)
 
   const syncCanvasCursor = useCallback(() => {
     const canvas = canvasRef.current
@@ -131,6 +140,8 @@ export function InkAnnotation({
       colorRef.current,
       brushRef.current,
       simulatePressureRef.current,
+      contentZoomRef.current,
+      strokeUnitScaleRef.current,
     )
 
     if (isErasingRef.current && eraserPathRef.current.length >= 2) {
@@ -187,10 +198,34 @@ export function InkAnnotation({
     const key = getLayerKeyRef.current()
     const viewport = getInkViewportRef.current()
     const size = viewportCanvasSize()
+    const zoom = contentZoomRef.current
+    const useSheet = useSheetCoordinatesRef.current
+
+    if (useSheet) {
+      const sheetAnchorX = viewport.anchorX / zoom
+      const sheetAnchorY = viewport.anchorY / zoom
+      const threshold = 48 / zoom
+      const existing = layers.find(
+        (layer) =>
+          layer.key === key &&
+          layer.coordinateSpace === 'sheet' &&
+          Math.abs(layer.anchorX - sheetAnchorX) < threshold &&
+          Math.abs(layer.anchorY - sheetAnchorY) < threshold,
+      )
+
+      if (existing) {
+        return existing
+      }
+
+      const layer = createInkLayer(key, sheetAnchorX, sheetAnchorY, 'sheet', size)
+      layers.push(layer)
+      return layer
+    }
+
     const existing = layers.find(
       (layer) =>
         layer.key === key &&
-        layer.zoomKey === zoomKeyRef.current &&
+        layer.coordinateSpace === 'viewport' &&
         Math.abs(layer.anchorX - viewport.anchorX) < 48 &&
         Math.abs(layer.anchorY - viewport.anchorY) < 48,
     )
@@ -203,7 +238,7 @@ export function InkAnnotation({
       key,
       viewport.anchorX,
       viewport.anchorY,
-      zoomKeyRef.current,
+      'viewport',
       size,
     )
     layers.push(layer)
@@ -231,11 +266,11 @@ export function InkAnnotation({
 
     for (let layerIndex = layers.length - 1; layerIndex >= 0; layerIndex -= 1) {
       const layer = layers[layerIndex]
-      if (!layerIsVisible(layer, viewport, size.cssWidth, size.cssHeight)) {
+      if (!layerIsVisible(layer, viewport, size.cssWidth, size.cssHeight, contentZoomRef.current)) {
         continue
       }
 
-      const layerPoint = toLayerPoint(viewportPoint, layer, viewport)
+      const layerPoint = toLayerPoint(viewportPoint, layer, viewport, contentZoomRef.current)
 
       for (let strokeIndex = layer.strokes.length - 1; strokeIndex >= 0; strokeIndex -= 1) {
         const stroke = layer.strokes[strokeIndex]
@@ -243,7 +278,9 @@ export function InkAnnotation({
           continue
         }
 
-        if (!hitTestStrokePoints(stroke.points, layerPoint.x, layerPoint.y, stroke.brush ?? 'pen')) {
+        if (!hitTestStrokePoints(stroke.points, layerPoint.x, layerPoint.y, stroke.brush ?? 'pen', {
+          radiusScale: strokeUnitScaleRef.current / contentZoomRef.current,
+        })) {
           continue
         }
 
@@ -290,7 +327,7 @@ export function InkAnnotation({
   }, [paintDisplay])
 
   const clearAllInk = useCallback(() => {
-    clearInkDocumentState(docKeyRef.current, zoomKeyRef.current)
+    clearInkDocumentState(docKeyRef.current)
     eraserPathRef.current = []
     currentStrokeRef.current = []
     lineStartRef.current = null
@@ -317,7 +354,7 @@ export function InkAnnotation({
     }
 
     resizeDisplayCanvas()
-  }, [drawMode, zoomKey, docKey, resizeDisplayCanvas, resetErasing])
+  }, [drawMode, docKey, resizeDisplayCanvas, resetErasing])
 
   useEffect(() => {
     if (!drawMode) {
@@ -379,6 +416,20 @@ export function InkAnnotation({
       return
     }
 
+    const endPanSession = () => {
+      panSessionRef.current = null
+      canvas.classList.remove('ink-overlay-panning')
+    }
+
+    const onWheel = (event: WheelEvent) => {
+      if (!navigationRef.current) {
+        return
+      }
+
+      navigationRef.current.handleWheel(event)
+      scheduleRepaint()
+    }
+
     const beginErasing = (viewportPoint: InkPoint, pointerId: number) => {
       isDrawingRef.current = false
       currentStrokeRef.current = []
@@ -427,6 +478,7 @@ export function InkAnnotation({
           pointFromEvent(coalescedEvent, canvas),
           layer,
           viewport,
+          contentZoomRef.current,
         )
 
         if (shiftKey) {
@@ -450,6 +502,25 @@ export function InkAnnotation({
     }
 
     const onPointerDown = (event: PointerEvent) => {
+      if (
+        document.body.classList.contains('canvas-zoom-scrub-ready') ||
+        document.body.classList.contains('canvas-zoom-scrub-dragging')
+      ) {
+        return
+      }
+
+      if (event.button === 1 && navigationRef.current) {
+        event.preventDefault()
+        panSessionRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+          pointerId: event.pointerId,
+        }
+        canvas.setPointerCapture(event.pointerId)
+        canvas.classList.add('ink-overlay-panning')
+        return
+      }
+
       if (event.button === 2) {
         event.preventDefault()
         temporaryEraserRef.current = true
@@ -476,7 +547,7 @@ export function InkAnnotation({
       const layer = findOrCreateLayer()
       activeLayerRef.current = layer
       const viewport = getInkViewportRef.current()
-      const layerPoint = toLayerPoint(viewportPoint, layer, viewport)
+      const layerPoint = toLayerPoint(viewportPoint, layer, viewport, contentZoomRef.current)
       lineStartRef.current = { ...layerPoint }
       lineAxisRef.current = null
       currentStrokeRef.current = [{ ...layerPoint }]
@@ -484,6 +555,18 @@ export function InkAnnotation({
     }
 
     const onPointerMove = (event: PointerEvent) => {
+      const panSession = panSessionRef.current
+      if (panSession && panSession.pointerId === event.pointerId) {
+        event.preventDefault()
+        const deltaX = event.clientX - panSession.x
+        const deltaY = event.clientY - panSession.y
+        panSession.x = event.clientX
+        panSession.y = event.clientY
+        navigationRef.current?.panBy(deltaX, deltaY)
+        scheduleRepaint()
+        return
+      }
+
       if (!canvas.hasPointerCapture(event.pointerId)) {
         return
       }
@@ -514,6 +597,15 @@ export function InkAnnotation({
     }
 
     const finishPointer = (event: PointerEvent) => {
+      const panSession = panSessionRef.current
+      if (panSession && panSession.pointerId === event.pointerId) {
+        if (canvas.hasPointerCapture(event.pointerId)) {
+          canvas.releasePointerCapture(event.pointerId)
+        }
+        endPanSession()
+        return
+      }
+
       const hasCapture = canvas.hasPointerCapture(event.pointerId)
 
       if (hasCapture) {
@@ -563,6 +655,10 @@ export function InkAnnotation({
     }
 
     const onLostPointerCapture = () => {
+      if (panSessionRef.current) {
+        endPanSession()
+      }
+
       if (isErasingRef.current) {
         resetErasing()
         paintDisplay()
@@ -570,6 +666,7 @@ export function InkAnnotation({
     }
 
     canvas.addEventListener('contextmenu', onContextMenu)
+    canvas.addEventListener('wheel', onWheel, { passive: false, capture: true })
     canvas.addEventListener('pointerdown', onPointerDown)
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerup', finishPointer)
@@ -578,6 +675,7 @@ export function InkAnnotation({
 
     return () => {
       canvas.removeEventListener('contextmenu', onContextMenu)
+      canvas.removeEventListener('wheel', onWheel, { capture: true })
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerup', finishPointer)

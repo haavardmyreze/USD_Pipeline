@@ -95,18 +95,23 @@ export function strokeOutline(
   brush: InkBrushKind,
   isComplete: boolean,
   simulatePressure: boolean,
+  sizeScale = 1,
 ) {
   if (points.length === 0) {
     return null
   }
 
   const { options } = INK_BRUSH_STYLES[brush]
+  const scaledOptions = {
+    ...options,
+    size: options.size * sizeScale,
+  }
 
   if (points.length === 1) {
     const [point] = points
     return getStroke([{ x: point.x, y: point.y, pressure: point.pressure ?? 0.45 }], {
-      ...options,
-      size: options.size * 0.82,
+      ...scaledOptions,
+      size: scaledOptions.size * 0.82,
       simulatePressure,
       last: isComplete,
     })
@@ -119,7 +124,7 @@ export function strokeOutline(
       pressure: point.pressure,
     })),
     {
-      ...options,
+      ...scaledOptions,
       simulatePressure: simulatePressure && !strokeHasRealPressure(points),
       last: isComplete,
     },
@@ -157,9 +162,10 @@ export function drawInkStroke(
   brush: InkBrushKind,
   isComplete: boolean,
   simulatePressure: boolean,
+  sizeScale = 1,
 ) {
   const { opacity } = INK_BRUSH_STYLES[brush]
-  const outline = strokeOutline(points, brush, isComplete, simulatePressure)
+  const outline = strokeOutline(points, brush, isComplete, simulatePressure, sizeScale)
   if (!outline) {
     return
   }

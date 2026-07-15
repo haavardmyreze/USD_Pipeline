@@ -1,4 +1,5 @@
 import { clampPageZoom, stepPageZoom } from '../readerConfig'
+import { clampCanvasZoom, stepCanvasZoom } from '../canvas/canvasZoom'
 
 export type CsvViewportState = {
   panX: number
@@ -81,12 +82,46 @@ export function fitSheetInViewport(
   }
 }
 
+export function fitCanvasSheetInViewport(
+  sheetWidth: number,
+  sheetHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  padding = 40,
+  maxZoom = Number.POSITIVE_INFINITY,
+): CsvViewportState {
+  if (sheetWidth <= 0 || sheetHeight <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
+    return { panX: 0, panY: 0, zoom: 1 }
+  }
+
+  const scaleX = (viewportWidth - padding * 2) / sheetWidth
+  const scaleY = (viewportHeight - padding * 2) / sheetHeight
+  const zoom = clampCanvasZoom(Math.min(scaleX, scaleY, maxZoom))
+
+  return {
+    zoom,
+    panX: (viewportWidth - sheetWidth * zoom) / 2,
+    panY: (viewportHeight - sheetHeight * zoom) / 2,
+  }
+}
+
 export function stepZoomAtViewportCenter(
   state: CsvViewportState,
   direction: 'in' | 'out',
   viewportRect: DOMRect,
 ) {
   const nextZoom = stepPageZoom(state.zoom, direction)
+  const centerX = viewportRect.left + viewportRect.width / 2
+  const centerY = viewportRect.top + viewportRect.height / 2
+  return zoomAtPoint(state.panX, state.panY, state.zoom, nextZoom, centerX, centerY, viewportRect)
+}
+
+export function stepCanvasZoomAtViewportCenter(
+  state: CsvViewportState,
+  direction: 'in' | 'out',
+  viewportRect: DOMRect,
+) {
+  const nextZoom = stepCanvasZoom(state.zoom, direction)
   const centerX = viewportRect.left + viewportRect.width / 2
   const centerY = viewportRect.top + viewportRect.height / 2
   return zoomAtPoint(state.panX, state.panY, state.zoom, nextZoom, centerX, centerY, viewportRect)

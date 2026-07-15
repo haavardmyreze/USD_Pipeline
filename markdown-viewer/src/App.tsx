@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useState } from 'react'
+import { type ChangeEvent, useCallback, useEffect, useState } from 'react'
 import './App.css'
 import { adapterForFileName, adapterForFormat } from './documents/adapter'
 import {
@@ -13,7 +13,15 @@ import {
   type OpenDocument,
 } from './documentState'
 import Home from './Home'
-import { libraryDocs, type LibraryDoc } from './library'
+import { getLibraryDoc, libraryDocs, type LibraryDoc } from './library'
+import {
+  loadRecentDocuments,
+  rememberRecentDocument,
+  recentDocumentNeedsCache,
+  type RecentDocument,
+} from './recentDocuments'
+import { loadCachedRecentDocument } from './recentDocumentCache'
+import { GlobalFileDropOverlay } from './ui/GlobalFileDropOverlay'
 import { useTheme } from './ui/useTheme'
 import { withViewTransition } from './ui/viewTransition'
 
@@ -37,7 +45,12 @@ function rememberLibraryDoc(id: string) {
 
 function App() {
   const [state, setState] = useState<AppState>(() => stateFromLocation())
+  const [recentDocs, setRecentDocs] = useState<RecentDocument[]>(() => loadRecentDocuments())
   const { theme, themePreference, setThemePreference } = useTheme()
+
+  const refreshRecents = useCallback(() => {
+    setRecentDocs(loadRecentDocuments())
+  }, [])
 
   // Resolve external documents (?src=…) into an open document.
   useEffect(() => {
@@ -50,6 +63,8 @@ function App() {
 
     loadExternalDocument(src, controller.signal)
       .then((doc) => {
+        rememberRecentDocument(doc, { externalSrc: src })
+        refreshRecents()
         setState({ view: 'reader', doc })
       })
       .catch((error: unknown) => {
@@ -61,7 +76,7 @@ function App() {
       })
 
     return () => controller.abort()
-  }, [state])
+  }, [state, refreshRecents])
 
   // Browser back/forward: re-derive state from the location.
   useEffect(() => {
@@ -70,6 +85,17 @@ function App() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
+  useEffect(() => {
+    if (state.view === 'home') {
+      refreshRecents()
+      void Promise.all(
+        loadRecentDocuments()
+          .filter(recentDocumentNeedsCache)
+          .map((entry) => loadCachedRecentDocument(entry.docKey)),
+      )
+    }
+  }, [state.view, refreshRecents])
+
   /** Navigate to a state, updating history and scroll in one place. */
   const navigate = (next: AppState) => {
     withViewTransition(() => {
@@ -77,6 +103,11 @@ function App() {
     })
     window.scrollTo({ top: 0, behavior: 'auto' })
     window.history.pushState(null, '', urlForState(next))
+
+    if (next.view === 'reader') {
+      rememberRecentDocument(next.doc)
+      refreshRecents()
+    }
 
     if (next.view === 'reader' && next.doc.libraryId) {
       rememberLibraryDoc(next.doc.libraryId)
@@ -96,11 +127,11 @@ function App() {
     navigate({ view: 'reader', doc })
   }
 
-  const onImportFile = async (file: File) => {
+  const onImportFile = useCallback(async (file: File) => {
     const adapter = adapterForFileName(file.name)
     const { source, fingerprint } = await adapter.readFile(file)
     openImported({ source, fileName: file.name, libraryId: '', fingerprint })
-  }
+  }, [])
 
   const onFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -125,47 +156,84 @@ function App() {
     })
   }
 
-  if (state.view === 'home') {
+  const openRecentDocument = async (entry: RecentDocument) => {
+    const kind = entry.kind ?? (entry.libraryId ? 'library' : entry.externalSrc ? 'external' : 'import')
+
+    if (kind === 'library' && entry.libraryId) {
+      const doc = getLibraryDoc(entry.libraryId)
+      if (doc) {
+        openLibraryDoc(doc)
+      }
+      return
+    }
+
+    if (kind === 'external' && entry.externalSrc) {
+      navigate({
+        view: 'external',
+        src: entry.externalSrc,
+        fileName: entry.fileName,
+      })
+      return
+    }
+
+    const cached = await loadCachedRecentDocument(entry.docKey)
+    if (cached) {
+      openImported(cached)
+    }
+  }
+
+  const renderContent = () => {
+    if (state.view === 'home') {
+      return (
+        <Home
+          docs={libraryDocs}
+          recentDocs={recentDocs}
+          activeDocId={lastOpenedId()}
+          theme={theme}
+          themePreference={themePreference}
+          onSelectTheme={setThemePreference}
+          onOpen={openLibraryDoc}
+          onOpenRecent={openRecentDocument}
+          onImport={onFileUpload}
+          onImportFile={onImportFile}
+          onImportFromClipboard={onImportFromClipboard}
+        />
+      )
+    }
+
+    if (state.view === 'external') {
+      return (
+        <div className="reader-root">
+          <div className="pdf-loading-shell">
+            <p>Loading {parseFileNameFromSrc(state.src)}…</p>
+          </div>
+        </div>
+      )
+    }
+
+    const doc = state.doc
+    const adapter = adapterForFormat(doc.source.format)
+    const ReaderComponent = adapter.Reader
+
     return (
-      <Home
-        docs={libraryDocs}
-        activeDocId={lastOpenedId()}
+      <ReaderComponent
+        source={doc.source}
+        fileName={doc.fileName}
+        docKey={documentKeyFor(doc)}
         theme={theme}
         themePreference={themePreference}
         onSelectTheme={setThemePreference}
-        onOpen={openLibraryDoc}
-        onImport={onFileUpload}
-        onImportFile={onImportFile}
-        onImportFromClipboard={onImportFromClipboard}
+        onHome={goHome}
+        onOpenLibrary={openLibraryDoc}
       />
     )
   }
 
-  if (state.view === 'external') {
-    return (
-      <div className="reader-root">
-        <div className="pdf-loading-shell">
-          <p>Loading {parseFileNameFromSrc(state.src)}…</p>
-        </div>
-      </div>
-    )
-  }
-
-  const doc = state.doc
-  const adapter = adapterForFormat(doc.source.format)
-  const ReaderComponent = adapter.Reader
-
   return (
-    <ReaderComponent
-      source={doc.source}
-      fileName={doc.fileName}
-      docKey={documentKeyFor(doc)}
-      theme={theme}
-      themePreference={themePreference}
-      onSelectTheme={setThemePreference}
-      onHome={goHome}
-      onOpenLibrary={openLibraryDoc}
-    />
+    <>
+      <GlobalFileDropOverlay onImportFile={onImportFile} />
+      {renderContent()}
+    </>
   )
 }
 

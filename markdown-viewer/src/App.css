@@ -750,6 +750,208 @@
   color: var(--muted);
 }
 
+.doc-card-preview {
+  position: relative;
+  height: 8.5rem;
+  padding: 1.1rem 1.1rem 0;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--surface-raised) 70%, var(--bg)) 0%,
+    var(--bg) 100%
+  );
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: center;
+}
+
+.doc-card-preview-pdf {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, #d64545 12%, var(--surface-raised)) 0%,
+    var(--bg) 100%
+  );
+}
+
+.doc-card-preview-csv {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, #2f9e66 12%, var(--surface-raised)) 0%,
+    var(--bg) 100%
+  );
+}
+
+.doc-card-preview-image {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, #5b7fd7 12%, var(--surface-raised)) 0%,
+    var(--bg) 100%
+  );
+}
+
+.doc-card-format-badge {
+  position: absolute;
+  top: 0.65rem;
+  left: 0.65rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.45rem 0.18rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.doc-card-format-badge-markdown {
+  color: #4b5563;
+}
+
+.doc-card-format-badge-pdf {
+  color: #b42318;
+  border-color: color-mix(in srgb, #b42318 24%, var(--line-strong));
+}
+
+.doc-card-format-badge-csv {
+  color: #067647;
+  border-color: color-mix(in srgb, #067647 24%, var(--line-strong));
+}
+
+.doc-card-format-badge-image {
+  color: #3b5bcc;
+  border-color: color-mix(in srgb, #3b5bcc 24%, var(--line-strong));
+}
+
+.doc-card-format-sheet {
+  width: 100%;
+  max-width: 11rem;
+  border-radius: 6px 6px 0 0;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  padding: 0.85rem 0.9rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  overflow: hidden;
+}
+
+.doc-card-format-sheet-pdf {
+  background: #fff5f4;
+}
+
+.doc-card-format-sheet-title {
+  font-family: var(--font-display);
+  color: #7a1f18;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-card-format-sheet-block {
+  height: 0.34rem;
+  width: 100%;
+  border-radius: 2px;
+  background: color-mix(in srgb, #b42318 18%, #f3d9d7);
+}
+
+.doc-card-format-sheet-block.short {
+  width: 58%;
+}
+
+.doc-card-format-grid {
+  width: 100%;
+  max-width: 11rem;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.28rem;
+  padding: 0.35rem 0.2rem 0.75rem;
+}
+
+.doc-card-format-grid-cell {
+  aspect-ratio: 1.35;
+  border-radius: 3px;
+  background: color-mix(in srgb, #067647 14%, #e8f5ee);
+  border: 1px solid color-mix(in srgb, #067647 16%, transparent);
+}
+
+.doc-card-format-frame {
+  width: 100%;
+  max-width: 11rem;
+  aspect-ratio: 1.25;
+  margin-bottom: 0.35rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #3b5bcc 22%, transparent);
+  background: linear-gradient(180deg, #eef2ff 0%, #dbeafe 100%);
+  color: color-mix(in srgb, #3b5bcc 72%, #1e3a8a);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+
+.global-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+}
+
+.global-drop-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  width: min(18rem, 100%);
+  padding: 1.35rem 1.5rem 1.45rem;
+  background: color-mix(in srgb, var(--surface) 52%, transparent);
+  backdrop-filter: blur(24px) saturate(1.25);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 38%, transparent);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 4px 18px rgba(0, 0, 0, 0.18);
+  text-align: center;
+}
+
+.global-drop-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  border: 1px dashed var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.global-drop-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.global-drop-copy {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .doc-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
@@ -785,20 +987,6 @@
 
 .doc-card-active {
   border-color: var(--ink-soft);
-}
-
-/* Neutral faux "page" cover — consistent regardless of reading theme. */
-.doc-card-preview {
-  height: 8.5rem;
-  padding: 1.1rem 1.1rem 0;
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--surface-raised) 70%, var(--bg)) 0%,
-    var(--bg) 100%
-  );
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  justify-content: center;
 }
 
 .doc-card-page {
@@ -3294,6 +3482,63 @@ mark.find-highlight.find-current {
   user-select: none;
 }
 
+/* ================================================================== *
+ * Image reader — pan/zoom canvas (reuses CSV viewport shell)
+ * ================================================================== */
+.reader-canvas-image {
+  padding-bottom: 0;
+}
+
+body.canvas-zoom-scrub-ready .reader-canvas-image,
+body.canvas-zoom-scrub-ready .reader-canvas-image .csv-viewport,
+body.canvas-zoom-scrub-ready .reader-root .ink-overlay-canvas {
+  cursor: zoom-in;
+}
+
+body.canvas-zoom-scrub-dragging .reader-canvas-image,
+body.canvas-zoom-scrub-dragging .reader-canvas-image .csv-viewport,
+body.canvas-zoom-scrub-dragging .reader-root .ink-overlay-canvas {
+  cursor: zoom-in;
+}
+
+.image-paper {
+  display: block;
+  width: max-content;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--paper-radius);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.image-paper-message {
+  margin: 2rem;
+}
+
+.image-meta-bar {
+  margin: 0 0 calc(1rem * var(--image-meta-scale, 1));
+  color: var(--content-muted);
+  font-family: var(--font-ui);
+  font-size: calc(0.86rem * var(--image-meta-scale, 1));
+}
+
+.image-display-canvas {
+  display: block;
+  max-width: none;
+  border-radius: var(--paper-radius);
+}
+
+.image-loading-shell {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - var(--topbar-total) - 1rem);
+  color: var(--content-muted);
+  font-family: var(--font-ui);
+}
+
 .reader-root[data-draw-mode='true'] .topbar-shell,
 .reader-root[data-draw-mode='true'] .topbar-shell *,
 .reader-root[data-draw-mode='true'] .draw-toolbar-shell,
@@ -3373,4 +3618,8 @@ mark.find-highlight.find-current {
 
 .ink-overlay-eraser {
   cursor: cell;
+}
+
+.ink-overlay-panning {
+  cursor: grabbing;
 }

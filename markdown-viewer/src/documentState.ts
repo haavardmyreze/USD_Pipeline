@@ -97,7 +97,7 @@ export async function loadExternalDocument(
   const response = await fetch(src, {
     signal,
     headers:
-      format === 'pdf'
+      format === 'pdf' || format === 'image'
         ? undefined
         : { Accept: 'text/csv,text/plain,text/markdown;q=0.9,*/*;q=0.8' },
   })

@@ -2,12 +2,24 @@ import {
   type ChangeEvent,
   type ClipboardEvent,
   useCallback,
+  useMemo,
   useRef,
   useState,
 } from 'react'
 import { importAcceptString } from './documents/adapter'
-import { type LibraryDoc } from './library'
+import {
+  buildHomeDocuments,
+  homeDocumentActive,
+  homeDocumentDocKey,
+  homeDocumentExcerpt,
+  homeDocumentFormat,
+  homeDocumentLibraryDoc,
+  homeDocumentTitle,
+} from './homeDocuments'
+import { getLibraryDoc, type LibraryDoc } from './library'
+import { formatRecentFormatLabel, formatRecentOpenedAgo, type RecentDocument } from './recentDocuments'
 import { type Theme, type ThemePreference } from './theme'
+import { DocumentFormatPreview } from './ui/DocumentFormatPreview'
 import { ClipboardIcon, PlusIcon, SettingsIcon } from './ui/icons'
 import { CommandPalette } from './ui/CommandPalette'
 import { libraryPaletteGroup, themePaletteGroup } from './ui/paletteGroups'
@@ -17,30 +29,16 @@ import { useDismissablePopover } from './ui/usePopover'
 
 type HomeProps = {
   docs: LibraryDoc[]
+  recentDocs: RecentDocument[]
   activeDocId: string
   theme: Theme
   themePreference: ThemePreference
   onSelectTheme: (preference: ThemePreference) => void
   onOpen: (doc: LibraryDoc) => void
+  onOpenRecent: (entry: RecentDocument) => void
   onImport: (event: ChangeEvent<HTMLInputElement>) => void
   onImportFile: (file: File) => void | Promise<void>
   onImportFromClipboard: (content: string) => void
-}
-
-function PagePreview({ doc }: { doc: LibraryDoc }) {
-  return (
-    <div className="doc-card-preview" aria-hidden="true">
-      <div className="doc-card-page">
-        <span className="doc-card-page-title">{doc.title}</span>
-        <span className="doc-card-page-rule" />
-        <span className="doc-card-page-line" />
-        <span className="doc-card-page-line" />
-        <span className="doc-card-page-line short" />
-        <span className="doc-card-page-line" />
-        <span className="doc-card-page-line short" />
-      </div>
-    </div>
-  )
 }
 
 function ThemeMenu({
@@ -79,11 +77,13 @@ function ThemeMenu({
 
 function Home({
   docs,
+  recentDocs,
   activeDocId,
   theme,
   themePreference,
   onSelectTheme,
   onOpen,
+  onOpenRecent,
   onImport,
   onImportFile,
   onImportFromClipboard,
@@ -92,12 +92,10 @@ function Home({
   const [clipboardError, setClipboardError] = useState<string | null>(null)
   const [importDragOver, setImportDragOver] = useState(false)
 
-  // Library docs use their id as docKey, so the resume lookup is direct.
-  const resume = activeDocId ? loadReadingPosition(activeDocId) : null
-  const resumeLabel =
-    resume && resume.progress > 0.02
-      ? `Resume · ${Math.round(resume.progress * 100)}%`
-      : 'Last opened'
+  const homeDocuments = useMemo(
+    () => buildHomeDocuments(recentDocs, docs),
+    [recentDocs, docs],
+  )
 
   const paletteGroups = [
     libraryPaletteGroup(onOpen),
@@ -148,47 +146,84 @@ function Home({
         <div className="home-section-head">
           <h2>Documents</h2>
           <span className="home-count">
-            {docs.length} {docs.length === 1 ? 'document' : 'documents'}
+            {homeDocuments.length}{' '}
+            {homeDocuments.length === 1 ? 'document' : 'documents'}
           </span>
         </div>
 
         <div className="doc-grid">
-          {docs.map((doc) => (
-            <button
-              type="button"
-              key={doc.id}
-              className={
-                activeDocId === doc.id ? 'doc-card doc-card-active' : 'doc-card'
-              }
-              onClick={() => onOpen(doc)}
-            >
-              <PagePreview doc={doc} />
-              <div className="doc-card-body">
-                <span className="doc-card-title">{doc.title}</span>
-                {doc.excerpt ? (
-                  <span className="doc-card-excerpt">{doc.excerpt}</span>
-                ) : null}
-                <div className="doc-card-meta">
-                  <span>{doc.readingMinutes} min read</span>
-                  <span className="doc-card-dot" aria-hidden="true">
-                    ·
-                  </span>
-                  <span>{doc.headingCount} sections</span>
-                  {doc.folder ? (
-                    <>
-                      <span className="doc-card-dot" aria-hidden="true">
-                        ·
-                      </span>
-                      <span className="doc-card-folder">{doc.folder}</span>
-                    </>
+          {homeDocuments.map((item) => {
+            const libraryDoc = homeDocumentLibraryDoc(item, getLibraryDoc)
+            const title = homeDocumentTitle(item, getLibraryDoc)
+            const excerpt = homeDocumentExcerpt(item, getLibraryDoc)
+            const format = homeDocumentFormat(item)
+            const docKey = homeDocumentDocKey(item)
+            const isActive = homeDocumentActive(item, activeDocId)
+            const resume = loadReadingPosition(docKey)
+            const resumeLabel =
+              resume && resume.progress > 0.02
+                ? `Resume · ${Math.round(resume.progress * 100)}%`
+                : isActive
+                  ? 'Last opened'
+                  : null
+
+            return (
+              <button
+                key={item.key}
+                type="button"
+                className={isActive ? 'doc-card doc-card-active' : 'doc-card'}
+                onClick={() => {
+                  if (item.source === 'recent') {
+                    void onOpenRecent(item.entry)
+                    return
+                  }
+
+                  onOpen(item.doc)
+                }}
+              >
+                <DocumentFormatPreview format={format} title={title} />
+                <div className="doc-card-body">
+                  <span className="doc-card-title">{title}</span>
+                  {excerpt ? (
+                    <span className="doc-card-excerpt">{excerpt}</span>
                   ) : null}
+                  <div className="doc-card-meta">
+                    <span>{formatRecentFormatLabel(format)}</span>
+                    {item.source === 'recent' ? (
+                      <>
+                        <span className="doc-card-dot" aria-hidden="true">
+                          ·
+                        </span>
+                        <span>{formatRecentOpenedAgo(item.entry.openedAt)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="doc-card-dot" aria-hidden="true">
+                          ·
+                        </span>
+                        <span>{item.doc.readingMinutes} min read</span>
+                        <span className="doc-card-dot" aria-hidden="true">
+                          ·
+                        </span>
+                        <span>{item.doc.headingCount} sections</span>
+                      </>
+                    )}
+                    {libraryDoc?.folder ? (
+                      <>
+                        <span className="doc-card-dot" aria-hidden="true">
+                          ·
+                        </span>
+                        <span className="doc-card-folder">{libraryDoc.folder}</span>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-              {activeDocId === doc.id ? (
-                <span className="doc-card-badge">{resumeLabel}</span>
-              ) : null}
-            </button>
-          ))}
+                {resumeLabel ? (
+                  <span className="doc-card-badge">{resumeLabel}</span>
+                ) : null}
+              </button>
+            )
+          })}
 
           <label
             className={
@@ -228,7 +263,7 @@ function Home({
               <span className="doc-card-excerpt">
                 {importDragOver
                   ? 'Drop your file here'
-                  : 'Open a Markdown, PDF, or CSV file, or drag one here.'}
+                  : 'Open a file from disk, or drag one anywhere on screen.'}
               </span>
             </div>
             <input type="file" accept={importAcceptString()} onChange={onImport} />
@@ -261,7 +296,7 @@ function Home({
           </label>
         </div>
 
-        {docs.length === 0 ? (
+        {homeDocuments.length === 0 ? (
           <p className="home-empty">
             No library documents yet. Add <code>.md</code> files to{' '}
             <code>markdown-viewer/library/</code>, import one from disk, or paste

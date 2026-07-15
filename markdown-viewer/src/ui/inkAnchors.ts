@@ -10,6 +10,32 @@ function viewportBucketHeight() {
 export type InkViewport = {
   anchorX: number
   anchorY: number
+  /** Pan/zoom viewport origin in ink-overlay coordinates (0 when unset). */
+  contentOffsetX?: number
+  contentOffsetY?: number
+}
+
+function inkOverlayTop() {
+  const topbar = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--topbar-total'),
+  )
+  return Number.isFinite(topbar) ? topbar : 72
+}
+
+/** Map a pan/zoom content viewport to ink-overlay coordinates. */
+export function panZoomInkContentOffset(viewportElement: HTMLElement | null): Pick<
+  InkViewport,
+  'contentOffsetX' | 'contentOffsetY'
+> {
+  if (!viewportElement) {
+    return { contentOffsetX: 0, contentOffsetY: 0 }
+  }
+
+  const rect = viewportElement.getBoundingClientRect()
+  return {
+    contentOffsetX: rect.left,
+    contentOffsetY: rect.top - inkOverlayTop(),
+  }
 }
 
 /** Document scroll position for markdown and PDF readers. */

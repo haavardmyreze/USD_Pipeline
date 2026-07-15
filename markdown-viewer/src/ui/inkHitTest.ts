@@ -41,8 +41,12 @@ export function hitTestStrokePoints(
   x: number,
   y: number,
   brush: InkBrushKind = 'pen',
+  options?: {
+    radiusScale?: number
+  },
 ) {
-  const radius = eraserRadiusForBrush(brush)
+  const radiusScale = options?.radiusScale ?? 1
+  const radius = eraserRadiusForBrush(brush) * radiusScale
   const radiusSquared = radius * radius
 
   if (points.length === 0) {

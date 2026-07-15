@@ -108,3 +108,39 @@ export const EraserIcon = (props: IconProps = {}) => (
     <path d="m19 12-6.5 6.5a2.12 2.12 0 0 1-3 0L5 13.5a2.12 2.12 0 0 1 0-3L11.5 4a2.12 2.12 0 0 1 3 0L19 8.5" />
   </svg>
 )
+
+export const MarkdownFormatIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs({ size: 18, strokeWidth: 1.8, ...props })}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <path d="M14 2v6h6" />
+    <path d="M8 13h8" />
+    <path d="M8 17h5" />
+  </svg>
+)
+
+export const PdfFormatIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs({ size: 18, strokeWidth: 1.8, ...props })}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <path d="M14 2v6h6" />
+    <path d="M8 11h8" />
+    <path d="M8 15h6" />
+  </svg>
+)
+
+export const CsvFormatIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs({ size: 18, strokeWidth: 1.8, ...props })}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M3 10h18" />
+    <path d="M3 16h18" />
+    <path d="M9 4v16" />
+    <path d="M15 4v16" />
+  </svg>
+)
+
+export const ImageFormatIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs({ size: 18, strokeWidth: 1.8, ...props })}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <circle cx="9" cy="10" r="1.5" />
+    <path d="m21 17-5.5-5.5a1.5 1.5 0 0 0-2.12 0L7 18" />
+  </svg>
+)

@@ -10,6 +10,8 @@ import { hashArrayBuffer } from '../documentKey'
 import MarkdownReader from '../Reader'
 import PdfReader from '../pdf/PdfReader'
 import CsvReader from '../csv/CsvReader'
+import ImageReader from '../image/ImageReader'
+import { IMAGE_EXTENSIONS_LIST } from '../image/imageFormat'
 
 export type ReaderProps = {
   source: DocumentSource
@@ -124,6 +126,24 @@ const pdfAdapter: DocumentAdapter = {
   Reader: PdfAdapterReader,
 }
 
+function ImageAdapterReader(props: ReaderProps) {
+  if (props.source.format !== 'image') {
+    return null
+  }
+  return (
+    <ImageReader
+      imageData={props.source.data}
+      fileName={props.fileName}
+      docKey={props.docKey}
+      theme={props.theme}
+      themePreference={props.themePreference}
+      onSelectTheme={props.onSelectTheme}
+      onHome={props.onHome}
+      onOpenLibrary={props.onOpenLibrary}
+    />
+  )
+}
+
 const csvAdapter: DocumentAdapter = {
   format: 'csv',
   label: 'CSV',
@@ -140,10 +160,63 @@ const csvAdapter: DocumentAdapter = {
   Reader: CsvAdapterReader,
 }
 
+const imageAdapter: DocumentAdapter = {
+  format: 'image',
+  label: 'Image',
+  extensions: IMAGE_EXTENSIONS_LIST,
+  mimeTypes: [
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+    'image/gif',
+    'image/bmp',
+    'image/tiff',
+    'image/x-exr',
+    'image/vnd.radiance',
+  ],
+  readFile: async (file) => {
+    const data = await file.arrayBuffer()
+    return {
+      source: { format: 'image', data, fileName: file.name },
+      fingerprint: hashArrayBuffer(data),
+    }
+  },
+  readResponse: async (response) => {
+    const data = await response.arrayBuffer()
+    const fileName = parseFileNameFromResponse(response)
+    return {
+      source: { format: 'image', data, fileName },
+      fingerprint: hashArrayBuffer(data),
+    }
+  },
+  Reader: ImageAdapterReader,
+}
+
+function parseFileNameFromResponse(response: Response) {
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const match = disposition.match(/filename=\"?([^\";]+)\"?/i)
+  if (match?.[1]) {
+    return match[1]
+  }
+
+  try {
+    const url = new URL(response.url)
+    const base = decodeURIComponent(url.pathname.split('/').pop() ?? '')
+    if (base) {
+      return base
+    }
+  } catch {
+    // ignore
+  }
+
+  return 'image.png'
+}
+
 export const DOCUMENT_ADAPTERS: DocumentAdapter[] = [
   markdownAdapter,
   pdfAdapter,
   csvAdapter,
+  imageAdapter,
 ]
 
 const FALLBACK_ADAPTER = markdownAdapter

@@ -94,9 +94,17 @@ export function isZoomWheelEvent(event: { ctrlKey: boolean; metaKey: boolean }) 
 export function attachDocumentZoomWheel(
   root: HTMLElement,
   onZoom: (direction: 'in' | 'out', event: WheelEvent) => void,
+  options?: {
+    /** Return false to ignore the event without blocking other handlers. */
+    shouldHandle?: (event: WheelEvent) => boolean
+  },
 ) {
   const onWheel = (event: WheelEvent) => {
     if (!isZoomWheelEvent(event) || isEditableKeyboardTarget(event.target)) {
+      return
+    }
+
+    if (options?.shouldHandle && !options.shouldHandle(event)) {
       return
     }
 
