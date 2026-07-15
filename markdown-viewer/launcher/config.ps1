@@ -48,3 +48,5 @@ $Script:AssociationLabel = 'Quiet Reader'
 
 # How long the temporary localhost server stays available for large files.
 $Script:LocalServerMinutes = 15
+
+$Script:LauncherIconFile = 'quiet-reader.ico'

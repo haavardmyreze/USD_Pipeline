@@ -12,6 +12,8 @@ cd markdown-viewer/launcher
 powershell -ExecutionPolicy Bypass -File .\Register-ViewerAssociations.ps1
 ```
 
+This also installs `quiet-reader.ico` for the **Quiet Reader** app and associated file types.
+
 3. In Explorer, right-click a supported file → **Open with** → **Quiet Reader** → **Always**.
 
 Supported extensions: `.md`, `.markdown`, `.pdf`, `.csv`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff`, `.exr`, `.hdr`.
@@ -33,7 +35,7 @@ This opens `library/welcome.md` and prints diagnostics. If something fails, chec
 - **Quiet Reader is not in the Open with list:** run `Register-ViewerAssociations.ps1` again, then use **Open with → Choose another app → Browse** and select `Open-InViewer.bat`.
 - **A blank tab flashes and nothing opens:** open the log file above and re-run `Test-Launcher.ps1`.
 - **The browser opens but the document is empty:** wait for Vercel to finish deploying the latest `main` branch, then try again. Large files rely on a temporary localhost server — keep the launcher window/job alive for a few seconds after opening.
-- **"Uri string is too long":** update to the latest launcher scripts from `main` (large files now use localhost instead of embedding the whole file in the URL).
+- **Icons still look blank or generic:** re-run `Register-ViewerAssociations.ps1`, then restart Explorer (Task Manager → Windows Explorer → Restart) or sign out and back in.
 - **Very large files:** drag the file into an already-open Quiet Reader tab instead.
 
 ## How it works

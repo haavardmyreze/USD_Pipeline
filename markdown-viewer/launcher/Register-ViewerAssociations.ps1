@@ -10,11 +10,21 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot\config.ps1"
+. "$PSScriptRoot\Ensure-LauncherIcon.ps1"
 
 $launcherBat = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'Open-InViewer.bat'))
 $launcherCommand = "`"$launcherBat`" `"%1`""
 $progId = 'QuietReader.Document'
 $appName = 'Open-InViewer.bat'
+$iconPath = Ensure-LauncherIcon -OutputPath (Join-Path $PSScriptRoot $Script:LauncherIconFile)
+$iconRef = "`"$iconPath`",0"
+
+function Set-RegistryDefaultIcon {
+  param([string]$KeyPath)
+
+  New-Item -Path $KeyPath -Force | Out-Null
+  Set-ItemProperty -Path $KeyPath -Name '(default)' -Value $iconRef
+}
 
 function Register-Extension {
   param([string]$Extension)
@@ -29,6 +39,7 @@ function Register-Extension {
 
   New-Item -Path "HKCU:\Software\Classes\$progId" -Force | Out-Null
   Set-ItemProperty -Path "HKCU:\Software\Classes\$progId" -Name '(default)' -Value $Script:AssociationLabel
+  Set-RegistryDefaultIcon -KeyPath "HKCU:\Software\Classes\$progId\DefaultIcon"
 
   New-Item -Path $openWithListKey -Force | Out-Null
   New-ItemProperty -Path $openWithListKey -Name $appName -PropertyType String -Force | Out-Null
@@ -49,7 +60,7 @@ function Register-Application {
 
   New-Item -Path $appKey -Force | Out-Null
   Set-ItemProperty -Path $appKey -Name 'FriendlyAppName' -Value $Script:AssociationLabel
-  Set-ItemProperty -Path $appKey -Name 'DefaultIcon' -Value "$launcherBat,0"
+  Set-RegistryDefaultIcon -KeyPath "$appKey\DefaultIcon"
 
   New-Item -Path $commandKey -Force | Out-Null
   Set-ItemProperty -Path $commandKey -Name '(default)' -Value $launcherCommand
@@ -99,11 +110,14 @@ foreach ($extension in $Script:SupportedExtensions) {
 
 Write-Host "Registered Quiet Reader for: $($Script:SupportedExtensions -join ', ')"
 Write-Host "Launcher: $launcherBat"
+Write-Host "Icon:     $iconPath"
 Write-Host ''
 Write-Host 'Next steps:'
 Write-Host '  1. Right-click a supported file in Explorer'
 Write-Host '  2. Choose Open with -> Quiet Reader'
 Write-Host '  3. Click "Always" if you want it as the default app'
+Write-Host ''
+Write-Host 'If icons look stale, restart Explorer or sign out and back in.'
 Write-Host ''
 Write-Host 'If Quiet Reader is missing from the list, choose "Choose another app"'
 Write-Host 'and browse to:'
