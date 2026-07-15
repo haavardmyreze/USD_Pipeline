@@ -1,6 +1,7 @@
-import { applyToneMapping, readExr, readHdr, type ToneMappingType } from 'hdrify'
+import { applyToneMapping, readHdr, type ToneMappingType } from 'hdrify'
 import UTIF from 'utif'
 import { resolveImageKind, type ImageKind } from './imageFormat'
+import { readExrBroad } from './readExrBroad'
 
 export type HdrDisplayOptions = {
   exposure: number
@@ -89,7 +90,7 @@ function decodeTiffImage(data: ArrayBuffer) {
 
 function decodeHdrImage(data: ArrayBuffer, kind: 'exr' | 'hdr', hdrOptions: HdrDisplayOptions) {
   const bytes = new Uint8Array(data)
-  const hdrImage = kind === 'exr' ? readExr(bytes) : readHdr(bytes)
+  const hdrImage = kind === 'exr' ? readExrBroad(bytes) : readHdr(bytes)
   const rgb = applyToneMapping(hdrImage.data, hdrImage.width, hdrImage.height, {
     exposure: hdrOptions.exposure,
     toneMapping: hdrOptions.toneMapping,
