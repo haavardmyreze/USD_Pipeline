@@ -1,12 +1,26 @@
-import { type ChangeEvent, type ClipboardEvent, useEffect, useRef, useState } from 'react'
+import {
+  type ChangeEvent,
+  type ClipboardEvent,
+  useCallback,
+  useRef,
+  useState,
+} from 'react'
+import { importAcceptString } from './documents/adapter'
 import { type LibraryDoc } from './library'
-import { type Theme, THEMES } from './theme'
+import { type Theme, type ThemePreference } from './theme'
+import { ClipboardIcon, PlusIcon, SettingsIcon } from './ui/icons'
+import { CommandPalette } from './ui/CommandPalette'
+import { libraryPaletteGroup, themePaletteGroup } from './ui/paletteGroups'
+import { loadReadingPosition } from './readingPosition'
+import { ThemePicker } from './ui/ThemePicker'
+import { useDismissablePopover } from './ui/usePopover'
 
 type HomeProps = {
   docs: LibraryDoc[]
   activeDocId: string
   theme: Theme
-  onSelectTheme: (theme: Theme) => void
+  themePreference: ThemePreference
+  onSelectTheme: (preference: ThemePreference) => void
   onOpen: (doc: LibraryDoc) => void
   onImport: (event: ChangeEvent<HTMLInputElement>) => void
   onImportFile: (file: File) => void | Promise<void>
@@ -30,36 +44,17 @@ function PagePreview({ doc }: { doc: LibraryDoc }) {
 }
 
 function ThemeMenu({
-  theme,
-  onSelectTheme,
+  preference,
+  onSelect,
 }: {
-  theme: Theme
-  onSelectTheme: (theme: Theme) => void
+  preference: ThemePreference
+  onSelect: (preference: ThemePreference) => void
 }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const close = useCallback(() => setOpen(false), [])
 
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    const onPointerDown = (event: Event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open])
+  useDismissablePopover(menuRef, open, close)
 
   return (
     <div className="home-theme" ref={menuRef}>
@@ -70,40 +65,12 @@ function ThemeMenu({
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
+        <SettingsIcon />
       </button>
 
       {open ? (
         <div className="settings-popover home-theme-popover" role="dialog" aria-label="Settings">
-          <div className="settings-group">
-            <p className="settings-label">Theme</p>
-            <div className="theme-grid">
-              {THEMES.map((option) => (
-                <button
-                  type="button"
-                  key={option.id}
-                  className={theme === option.id ? 'theme-chip active' : 'theme-chip'}
-                  onClick={() => onSelectTheme(option.id)}
-                >
-                  <span className="theme-swatch" data-theme={option.id} />
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <ThemePicker preference={preference} onSelect={onSelect} />
         </div>
       ) : null}
     </div>
@@ -114,6 +81,7 @@ function Home({
   docs,
   activeDocId,
   theme,
+  themePreference,
   onSelectTheme,
   onOpen,
   onImport,
@@ -123,6 +91,18 @@ function Home({
   const pasteInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [clipboardError, setClipboardError] = useState<string | null>(null)
   const [importDragOver, setImportDragOver] = useState(false)
+
+  // Library docs use their id as docKey, so the resume lookup is direct.
+  const resume = activeDocId ? loadReadingPosition(activeDocId) : null
+  const resumeLabel =
+    resume && resume.progress > 0.02
+      ? `Resume · ${Math.round(resume.progress * 100)}%`
+      : 'Last opened'
+
+  const paletteGroups = [
+    libraryPaletteGroup(onOpen),
+    themePaletteGroup(themePreference, onSelectTheme),
+  ]
 
   const handleClipboardPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     event.preventDefault()
@@ -148,7 +128,8 @@ function Home({
   }
 
   return (
-    <main className="home-shell">
+    <main className="home-shell" data-theme={theme}>
+      <CommandPalette groups={paletteGroups} />
       <div className="topbar-shell home-topbar-shell">
         <div className="home-topbar-row">
           <div className="home-brand">
@@ -157,7 +138,7 @@ function Home({
           </div>
           <header className="app-topbar topbar-pill home-header">
             <div className="home-actions">
-              <ThemeMenu theme={theme} onSelectTheme={onSelectTheme} />
+              <ThemeMenu preference={themePreference} onSelect={onSelectTheme} />
             </div>
           </header>
         </div>
@@ -204,7 +185,7 @@ function Home({
                 </div>
               </div>
               {activeDocId === doc.id ? (
-                <span className="doc-card-badge">Last opened</span>
+                <span className="doc-card-badge">{resumeLabel}</span>
               ) : null}
             </button>
           ))}
@@ -240,19 +221,7 @@ function Home({
             }}
           >
             <div className="doc-card-import-icon" aria-hidden="true">
-              <svg
-                width="26"
-                height="26"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
+              <PlusIcon />
             </div>
             <div className="doc-card-body">
               <span className="doc-card-title">Import from disk</span>
@@ -262,11 +231,7 @@ function Home({
                   : 'Open a Markdown, PDF, or CSV file, or drag one here.'}
               </span>
             </div>
-            <input
-              type="file"
-              accept=".md,.markdown,.pdf,.csv,text/markdown,text/plain,text/csv,application/pdf"
-              onChange={onImport}
-            />
+            <input type="file" accept={importAcceptString()} onChange={onImport} />
           </label>
 
           <label
@@ -274,19 +239,7 @@ function Home({
             onClick={() => pasteInputRef.current?.focus()}
           >
             <div className="doc-card-import-icon" aria-hidden="true">
-              <svg
-                width="26"
-                height="26"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="8" y="2" width="8" height="4" rx="1" />
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-              </svg>
+              <ClipboardIcon />
             </div>
             <div className="doc-card-body">
               <span className="doc-card-title">Paste from clipboard</span>

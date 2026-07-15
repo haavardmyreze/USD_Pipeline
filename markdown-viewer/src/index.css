@@ -27,8 +27,9 @@
   --content-table-head: #e8f0f8;
   --content-highlight: #f4efe2;
 
-  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Times New Roman', serif;
-  --font-body: 'Charter', 'Georgia', 'Times New Roman', serif;
+  /* Literata is self-hosted (fontsource) so every OS sees the same face. */
+  --font-display: 'Literata Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Times New Roman', serif;
+  --font-body: 'Literata Variable', 'Charter', 'Georgia', 'Times New Roman', serif;
   --font-ui: Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
   /* Layout + shape tokens (shared across all themes) */
@@ -49,33 +50,30 @@
     0 10px 30px rgba(0, 0, 0, 0.28);
 }
 
-[data-theme='crimson'] {
-  --bg: #100d0e;
-  --paper: #f7f3f3;
-  --surface: #2a2424;
-  --surface-raised: #3a3030;
-  --ink: #ece4e4;
-  --ink-soft: #c9bcbc;
-  --muted: #8f7e7e;
-  --line: #3c3232;
-  --line-strong: #574848;
-  --ui-border: #d3c6c6;
+/* Sepia Night — the dark pairing of Sepia: warm candlelit paper. */
+[data-theme='sepia-night'] {
+  --bg: #14100b;
+  --paper: #201a12;
+  --surface: #2a231a;
+  --surface-raised: #362e22;
+  --ink: #ede0c4;
+  --ink-soft: #d6c5a0;
+  --muted: #a08a62;
+  --line: #3a3226;
+  --line-strong: #52462f;
+  --ui-border: #453a28;
 
-  --content-ink: #271c1c;
-  --content-ink-soft: #3d2d2d;
-  --content-muted: #876b6b;
-  --content-line: #e1d2d2;
-  --content-code-bg: #f4e9e9;
-  --content-accent: #9a3b3b;
-  --content-accent-strong: #a52121;
-  --content-heading: #6e1f1f;
-  --content-heading-soft: #8a2e2e;
-  --content-table-head: #f2e1e1;
-  --content-highlight: #f6e8e3;
-
-  /* Bold slab/editorial serif — newspaper headline energy. */
-  --font-display: 'Rockwell', 'Roboto Slab', 'Bookman Old Style', Georgia, serif;
-  --font-body: Georgia, 'Times New Roman', 'Liberation Serif', serif;
+  --content-ink: #e6d7b8;
+  --content-ink-soft: #cdbb96;
+  --content-muted: #9c8a66;
+  --content-line: #423825;
+  --content-code-bg: #2a2418;
+  --content-accent: #c89a52;
+  --content-accent-strong: #e0b46a;
+  --content-heading: #f0e2c2;
+  --content-heading-soft: #d8c7a2;
+  --content-table-head: #2e2719;
+  --content-highlight: #3b3320;
 }
 
 [data-theme='sepia'] {
@@ -185,8 +183,8 @@
   --content-table-head: #262626;
   --content-highlight: #3d3426;
 
-  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Times New Roman', serif;
-  --font-body: 'Charter', 'Georgia', 'Times New Roman', serif;
+  --font-display: 'Literata Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Times New Roman', serif;
+  --font-body: 'Literata Variable', 'Charter', 'Georgia', 'Times New Roman', serif;
 }
 
 /* Ash — warm neutral dark sans */

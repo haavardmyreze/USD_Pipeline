@@ -10,9 +10,13 @@
     "package:firefox-extension": "npm run build:firefox-extension && node ./scripts/package-firefox-extension.mjs",
     "sign:firefox-extension": "npm run build:firefox-extension && node ./scripts/sign-firefox-extension.mjs",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@fontsource-variable/literata": "^5.2.8",
+    "highlight.js": "^11.11.1",
     "papaparse": "^5.5.4",
     "pdfjs-dist": "^6.1.200",
     "react": "^19.2.7",
@@ -33,6 +37,7 @@
     "oxlint": "^1.69.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.0",
+    "vitest": "^4.1.10",
     "web-ext": "^8.9.0"
   }
 }

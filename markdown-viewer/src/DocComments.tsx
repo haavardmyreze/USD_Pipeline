@@ -42,6 +42,9 @@ type DocCommentsProps = {
     scope: HTMLElement,
   ) => CommentAnchor | null
   scrollToAnchor?: (commentId: string, anchor: CommentAnchor) => void
+  /** Draft anchor resolved externally (selection menu) before comment mode
+   *  re-rendered the document and cleared the selection. */
+  externalDraft?: { anchor: CommentAnchor; tick: number } | null
 }
 
 function getCommentHighlightElement(scope: HTMLElement, commentId: string) {
@@ -73,6 +76,7 @@ function DocComments({
   onDeleteComment,
   resolveSelectionAnchor: resolveSelectionAnchorOverride,
   scrollToAnchor,
+  externalDraft,
 }: DocCommentsProps) {
   const cardRefs = useRef(new Map<string, HTMLElement>())
   const railScrollRef = useRef<HTMLDivElement | null>(null)
@@ -322,6 +326,24 @@ function DocComments({
       scope.removeEventListener('mouseup', onMouseUp)
     }
   }, [docColRef, editingId, markdown, open, resolveSelectionAnchorOverride, setActiveCommentId, toc])
+
+  // Consume an externally resolved draft anchor exactly once per tick.
+  const lastExternalDraftTickRef = useRef(0)
+  useEffect(() => {
+    if (
+      !open ||
+      !externalDraft ||
+      externalDraft.tick === lastExternalDraftTickRef.current
+    ) {
+      return
+    }
+
+    lastExternalDraftTickRef.current = externalDraft.tick
+    setDraft({ anchor: externalDraft.anchor })
+    setDraftBody('')
+    setEditingId('')
+    setActiveCommentId('draft')
+  }, [externalDraft, open, setActiveCommentId])
 
   useEffect(() => {
     if (!open) {

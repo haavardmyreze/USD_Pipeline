@@ -10,13 +10,34 @@ import DocAssistant from '../DocAssistant'
 import DocComments from '../DocComments'
 import type { CommentAnchor } from '../documentComments'
 import { useDocumentComments } from '../documentComments'
-import { type Theme, THEMES } from '../theme'
+import { type Theme, type ThemePreference } from '../theme'
 import {
   applyZoomKeyboardShortcut,
   attachDocumentZoomWheel,
   clampPageZoom,
+  isEditableKeyboardTarget,
   stepPageZoom,
 } from '../readerConfig'
+import { AskIcon, CommentsIcon, ContentsIcon, SearchIcon } from '../ui/icons'
+import { ReaderTopbar, type TopbarAction } from '../ui/ReaderTopbar'
+import { SearchPanel } from '../ui/SearchPanel'
+import { ThemePicker } from '../ui/ThemePicker'
+import { usePanels } from '../ui/usePanels'
+import { CommandPalette } from '../ui/CommandPalette'
+import { SelectionMenu } from '../ui/SelectionMenu'
+import { TocRail } from '../ui/TocRail'
+import {
+  actionsPaletteGroup,
+  libraryPaletteGroup,
+  sectionsPaletteGroup,
+  themePaletteGroup,
+} from '../ui/paletteGroups'
+import {
+  currentScrollProgress,
+  loadReadingPosition,
+  saveReadingPosition,
+} from '../readingPosition'
+import type { LibraryDoc } from '../library'
 import { resolvePdfSelectionAnchor } from './pdfCommentAnchors'
 import {
   buildPdfDocumentIndex,
@@ -33,48 +54,10 @@ type PdfReaderProps = {
   docKey: string
   pdfSource: ArrayBuffer | string
   theme: Theme
-  onSelectTheme: (theme: Theme) => void
+  themePreference: ThemePreference
+  onSelectTheme: (preference: ThemePreference) => void
   onHome: () => void
-}
-
-const SettingsIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-  </svg>
-)
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function highlightMatches(text: string, query: string) {
-  const tokens = query
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2)
-
-  if (!text || tokens.length === 0) {
-    return text
-  }
-
-  const pattern = new RegExp(`(${tokens.map(escapeRegExp).join('|')})`, 'gi')
-  const exactPattern = new RegExp(`^(${tokens.map(escapeRegExp).join('|')})$`, 'i')
-  const parts = text.split(pattern)
-
-  return parts.map((part, index) =>
-    exactPattern.test(part) ? <mark key={`${part}-${index}`}>{part}</mark> : part,
-  )
+  onOpenLibrary: (doc: LibraryDoc) => void
 }
 
 export default function PdfReader({
@@ -82,26 +65,38 @@ export default function PdfReader({
   docKey,
   pdfSource,
   theme,
+  themePreference,
   onSelectTheme,
   onHome,
+  onOpenLibrary,
 }: PdfReaderProps) {
   const docColRef = useRef<HTMLDivElement | null>(null)
   const readerRootRef = useRef<HTMLDivElement | null>(null)
   const docStageRef = useRef<HTMLDivElement | null>(null)
-  const settingsRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const positionReadyRef = useRef(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [pdf, setPdf] = useState<Awaited<ReturnType<typeof loadPdfDocument>> | null>(null)
   const [index, setIndex] = useState<PdfDocumentIndex | null>(null)
   const [pageZoom, setPageZoom] = useState(1.1)
-  const [tocOpen, setTocOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [commentsOpen, setCommentsOpen] = useState(false)
-  const [assistantOpen, setAssistantOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeSectionId, setActiveSectionId] = useState('')
+  const [externalDraft, setExternalDraft] = useState<{
+    anchor: CommentAnchor
+    tick: number
+  } | null>(null)
+  const [assistantPrefill, setAssistantPrefill] = useState<{
+    text: string
+    tick: number
+  } | null>(null)
+
+  const panels = usePanels()
+  const { closeAll: closeAllPanels, open: openPanel } = panels
+  const tocOpen = panels.isOpen('toc')
+  const searchOpen = panels.isOpen('search')
+  const commentsOpen = panels.isOpen('comments')
+  const assistantOpen = panels.isOpen('assistant')
 
   const commentSource = useMemo(
     () => ({
@@ -153,6 +148,10 @@ export default function PdfReader({
     setPageZoom((current) => stepPageZoom(current, direction))
   }, [])
 
+  const focusSearchInput = useCallback(() => {
+    window.requestAnimationFrame(() => searchInputRef.current?.focus())
+  }, [])
+
   useEffect(() => {
     const root = readerRootRef.current
     if (!root) {
@@ -199,28 +198,47 @@ export default function PdfReader({
   }, [pdfSource])
 
   useEffect(() => {
-    setTocOpen(false)
-    setSearchOpen(false)
-    setCommentsOpen(false)
-    setAssistantOpen(false)
-    setSettingsOpen(false)
+    closeAllPanels()
     setSearchQuery('')
-  }, [docKey, pdfSource])
+  }, [docKey, pdfSource, closeAllPanels])
 
+  // Restore the last reading position once the document index is ready.
   useEffect(() => {
-    if (!settingsOpen) {
+    if (!index) {
       return
     }
 
-    const onPointerDown = (event: Event) => {
-      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
-        setSettingsOpen(false)
-      }
+    positionReadyRef.current = false
+    const saved = window.location.hash ? null : loadReadingPosition(docKey)
+    if (saved?.anchorId) {
+      const pageNumber = pageNumberFromSectionId(saved.anchorId)
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          document
+            .getElementById(`pdf-page-${pageNumber}`)
+            ?.scrollIntoView({ behavior: 'auto', block: 'start' })
+          setActiveSectionId(saved.anchorId)
+        })
+      })
     }
 
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [settingsOpen])
+    const timer = window.setTimeout(() => {
+      positionReadyRef.current = true
+    }, 1200)
+    return () => window.clearTimeout(timer)
+  }, [index, docKey])
+
+  // Remember the current page/section per document.
+  useEffect(() => {
+    if (!positionReadyRef.current || !activeSectionId) {
+      return
+    }
+    saveReadingPosition(docKey, {
+      anchorId: activeSectionId,
+      progress: currentScrollProgress(),
+      updatedAt: Date.now(),
+    })
+  }, [activeSectionId, docKey])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -228,28 +246,16 @@ export default function PdfReader({
         return
       }
 
-      if (event.key === '/' && !searchOpen && !assistantOpen && !commentsOpen) {
-        const target = event.target
-        if (
-          target instanceof HTMLElement &&
-          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-        ) {
-          return
-        }
-
+      if (event.key === '/' && !isEditableKeyboardTarget(event.target)) {
         event.preventDefault()
-        setSearchOpen(true)
-        setTocOpen(false)
-        setCommentsOpen(false)
-        setAssistantOpen(false)
-        setSettingsOpen(false)
-        window.requestAnimationFrame(() => searchInputRef.current?.focus())
+        openPanel('search')
+        focusSearchInput()
       }
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [assistantOpen, commentsOpen, searchOpen, stepZoom])
+  }, [focusSearchInput, openPanel, stepZoom])
 
   useEffect(() => {
     const root = docColRef.current
@@ -328,9 +334,41 @@ export default function PdfReader({
     [addComment],
   )
 
-  const focusSearchInput = () => {
-    window.requestAnimationFrame(() => searchInputRef.current?.focus())
-  }
+  // Selection menu: resolve the anchor before comment mode re-renders the
+  // page layer and clears the selection.
+  const commentOnSelection = useCallback(() => {
+    const scope = docColRef.current
+    const selection = window.getSelection()
+    if (
+      !scope ||
+      !selection ||
+      selection.isCollapsed ||
+      selection.rangeCount === 0 ||
+      !index
+    ) {
+      return
+    }
+
+    const anchor = resolvePdfSelectionAnchor(selection, scope, index.pages)
+    if (!anchor) {
+      return
+    }
+
+    setExternalDraft({ anchor, tick: Date.now() })
+    openPanel('comments')
+  }, [index, openPanel])
+
+  const askAboutSelection = useCallback(
+    (text: string) => {
+      const quoted = text.length > 600 ? `${text.slice(0, 600)}…` : text
+      setAssistantPrefill({
+        text: `Regarding this passage:\n\n"${quoted}"\n\n`,
+        tick: Date.now(),
+      })
+      openPanel('assistant')
+    },
+    [openPanel],
+  )
 
   if (loading) {
     return (
@@ -356,156 +394,163 @@ export default function PdfReader({
     )
   }
 
+  const topbarActions: TopbarAction[] = [
+    {
+      id: 'toc',
+      label: 'Contents',
+      icon: <ContentsIcon />,
+      active: tocOpen,
+      onToggle: () => panels.toggle('toc'),
+    },
+    {
+      id: 'search',
+      label: 'Search',
+      icon: <SearchIcon />,
+      active: searchOpen || Boolean(trimmedSearchQuery),
+      onToggle: () => {
+        panels.toggle('search')
+        if (!searchOpen) {
+          focusSearchInput()
+        }
+      },
+    },
+    {
+      id: 'comments',
+      label: 'Comments',
+      icon: <CommentsIcon />,
+      active: commentsOpen,
+      badge: comments.length || undefined,
+      onToggle: () => panels.toggle('comments'),
+    },
+    {
+      id: 'assistant',
+      label: 'Ask',
+      icon: <AskIcon />,
+      active: assistantOpen,
+      onToggle: () => panels.toggle('assistant'),
+    },
+  ]
+
+  const settingsContent = (
+    <>
+      <div className="settings-group">
+        <p className="settings-label">Zoom</p>
+        <div className="zoom-controls">
+          <button type="button" className="seg" onClick={() => stepZoom('out')}>
+            −
+          </button>
+          <span>{Math.round(pageZoom * 100)}%</span>
+          <button type="button" className="seg" onClick={() => stepZoom('in')}>
+            +
+          </button>
+        </div>
+        <div className="pdf-fit-actions">
+          <button type="button" className="seg" onClick={() => applyFitZoom('width')}>
+            Fit width
+          </button>
+          <button type="button" className="seg" onClick={() => applyFitZoom('height')}>
+            Fit height
+          </button>
+          <button type="button" className="seg" onClick={() => setPageZoom(clampPageZoom(1))}>
+            100%
+          </button>
+        </div>
+      </div>
+      <ThemePicker preference={themePreference} onSelect={onSelectTheme} />
+    </>
+  )
+
+  const paletteGroups = [
+    sectionsPaletteGroup(index.sections, navigateToSection),
+    actionsPaletteGroup([
+      {
+        id: 'search',
+        title: 'Search pages',
+        keywords: 'find text',
+        action: () => {
+          openPanel('search')
+          focusSearchInput()
+        },
+      },
+      {
+        id: 'comments',
+        title: 'Toggle comments',
+        keywords: 'notes annotate',
+        action: () => panels.toggle('comments'),
+      },
+      {
+        id: 'ask',
+        title: 'Ask about this document',
+        keywords: 'ai assistant chat',
+        action: () => panels.toggle('assistant'),
+      },
+      {
+        id: 'fit-width',
+        title: 'Zoom: Fit width',
+        keywords: 'zoom scale',
+        action: () => applyFitZoom('width'),
+      },
+      {
+        id: 'fit-height',
+        title: 'Zoom: Fit height',
+        keywords: 'zoom scale',
+        action: () => applyFitZoom('height'),
+      },
+      {
+        id: 'library',
+        title: 'Back to library',
+        keywords: 'home close',
+        action: onHome,
+      },
+    ]),
+    libraryPaletteGroup(onOpenLibrary, fileName),
+    themePaletteGroup(themePreference, onSelectTheme),
+  ]
+
   return (
     <div className="reader-root" ref={readerRootRef}>
-      <div className="topbar-shell reader-topbar-shell">
-        <header className="app-topbar topbar-pill reader-topbar">
-          <div className="topbar-lead">
-            <button type="button" className="ghost-button home-link" onClick={onHome}>
-              <span>Library</span>
-            </button>
-            <span className="topbar-divider" aria-hidden="true" />
-            <p className="doc-name" title={fileName}>
-              {fileName}
-            </p>
-          </div>
-          <div className="controls">
-            <button
-              type="button"
-              className="ghost-button toc-toggle"
-              aria-expanded={tocOpen}
-              onClick={() => {
-                setTocOpen((value) => !value)
-                setSearchOpen(false)
-                setCommentsOpen(false)
-                setAssistantOpen(false)
-                setSettingsOpen(false)
-              }}
-            >
-              <span>Contents</span>
-            </button>
-            <button
-              type="button"
-              className={searchOpen ? 'ghost-button active' : 'ghost-button'}
-              aria-expanded={searchOpen}
-              onClick={() => {
-                setSearchOpen((value) => !value)
-                setTocOpen(false)
-                setCommentsOpen(false)
-                setAssistantOpen(false)
-                setSettingsOpen(false)
-              }}
-            >
-              <span>Search</span>
-            </button>
-            <button
-              type="button"
-              className={commentsOpen ? 'ghost-button active' : 'ghost-button'}
-              aria-expanded={commentsOpen}
-              onClick={() => {
-                setCommentsOpen((value) => !value)
-                setSearchOpen(false)
-                setAssistantOpen(false)
-                setSettingsOpen(false)
-                setTocOpen(false)
-              }}
-            >
-              <span>Comments</span>
-              {comments.length > 0 ? (
-                <span className="comment-count-badge">{comments.length}</span>
-              ) : null}
-            </button>
-            <button
-              type="button"
-              className="ghost-button assistant-toggle"
-              aria-expanded={assistantOpen}
-              onClick={() => {
-                setAssistantOpen((value) => !value)
-                setSearchOpen(false)
-                setCommentsOpen(false)
-                setSettingsOpen(false)
-                setTocOpen(false)
-              }}
-            >
-              <span>Ask</span>
-            </button>
-            <div className="controls-actions" ref={settingsRef}>
-              <button
-                type="button"
-                className={settingsOpen ? 'icon-button active' : 'icon-button'}
-                aria-expanded={settingsOpen}
-                onClick={() => setSettingsOpen((value) => !value)}
-              >
-                <SettingsIcon />
-              </button>
-              {settingsOpen ? (
-                <div className="settings-popover" role="dialog" aria-label="Settings">
-                  <div className="settings-group">
-                    <p className="settings-label">Zoom</p>
-                    <div className="zoom-controls">
-                      <button
-                        type="button"
-                        className="seg"
-                        onClick={() => stepZoom('out')}
-                      >
-                        −
-                      </button>
-                      <span>{Math.round(pageZoom * 100)}%</span>
-                      <button
-                        type="button"
-                        className="seg"
-                        onClick={() => stepZoom('in')}
-                      >
-                        +
-                      </button>
-                    </div>
-                    <div className="pdf-fit-actions">
-                      <button type="button" className="seg" onClick={() => applyFitZoom('width')}>
-                        Fit width
-                      </button>
-                      <button type="button" className="seg" onClick={() => applyFitZoom('height')}>
-                        Fit height
-                      </button>
-                      <button type="button" className="seg" onClick={() => setPageZoom(clampPageZoom(1))}>
-                        100%
-                      </button>
-                    </div>
-                  </div>
-                  <div className="settings-group">
-                    <p className="settings-label">Theme</p>
-                    <div className="theme-grid">
-                      {THEMES.map((option) => (
-                        <button
-                          type="button"
-                          key={option.id}
-                          className={theme === option.id ? 'theme-chip active' : 'theme-chip'}
-                          onClick={() => onSelectTheme(option.id)}
-                        >
-                          <span className="theme-swatch" data-theme={option.id} />
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </header>
-      </div>
+      <CommandPalette groups={paletteGroups} />
+      <SelectionMenu
+        scopeRef={docColRef}
+        disabled={commentsOpen}
+        actions={[
+          { id: 'comment', label: 'Comment', onRun: () => commentOnSelection() },
+          { id: 'ask', label: 'Ask', onRun: askAboutSelection },
+          {
+            id: 'copy',
+            label: 'Copy',
+            onRun: (text) => {
+              void navigator.clipboard?.writeText(text)
+            },
+          },
+        ]}
+      />
+      <TocRail
+        sections={index.sections}
+        activeId={activeSectionId}
+        hidden={tocOpen || commentsOpen}
+        onNavigate={navigateToSection}
+      />
+      <ReaderTopbar
+        fileName={fileName}
+        onHome={onHome}
+        actions={topbarActions}
+        settings={settingsContent}
+      />
 
       <DocAssistant
         open={assistantOpen}
-        onClose={() => setAssistantOpen(false)}
+        onClose={() => panels.close('assistant')}
         markdown={index.fullText}
         fileName={fileName}
         sections={index.sections}
         onNavigateToSection={navigateToSection}
+        prefill={assistantPrefill}
       />
 
       <DocComments
         open={commentsOpen}
-        onClose={() => setCommentsOpen(false)}
+        onClose={() => panels.close('comments')}
         docColRef={docColRef}
         markdown=""
         toc={index.sections}
@@ -517,82 +562,20 @@ export default function PdfReader({
         onDeleteComment={deleteComment}
         resolveSelectionAnchor={resolveSelectionAnchor}
         scrollToAnchor={scrollToAnchor}
+        externalDraft={externalDraft}
       />
 
-      {searchOpen ? (
-        <aside className="search-panel" aria-label="Document search">
-          <div className="search-panel-header">
-            <h2>Search</h2>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Close search"
-              onClick={() => setSearchOpen(false)}
-            >
-              Close
-            </button>
-          </div>
-          <div className="search-panel-body">
-            <div className="search-panel-input-row">
-              <input
-                ref={searchInputRef}
-                type="search"
-                className="search-panel-input"
-                value={searchQuery}
-                placeholder="Search pages"
-                aria-label="Search this document"
-                spellCheck={false}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
-              {trimmedSearchQuery ? (
-                <button
-                  type="button"
-                  className="search-panel-clear"
-                  onClick={() => {
-                    setSearchQuery('')
-                    focusSearchInput()
-                  }}
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-
-            {trimmedSearchQuery ? (
-              <p className="search-panel-hint">
-                {searchResults.length === 0
-                  ? 'No matching pages.'
-                  : `${searchResults.length} matching page${searchResults.length === 1 ? '' : 's'}.`}
-              </p>
-            ) : (
-              <p className="search-panel-hint">Tip: press / to focus search.</p>
-            )}
-
-            <div className="search-results" role="list" aria-label="Search results">
-              {trimmedSearchQuery
-                ? searchResults.map((result) => (
-                    <button
-                      type="button"
-                      key={`${result.page}-${result.score}`}
-                      className="search-result"
-                      onClick={() => navigateToSection(result.id)}
-                    >
-                      <span className="search-result-title">
-                        {highlightMatches(result.text, trimmedSearchQuery)}
-                      </span>
-                      <span className="search-result-reason">{result.reason}</span>
-                      {result.snippet ? (
-                        <span className="search-result-snippet">
-                          {highlightMatches(result.snippet, trimmedSearchQuery)}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))
-                : null}
-            </div>
-          </div>
-        </aside>
-      ) : null}
+      <SearchPanel
+        open={searchOpen}
+        onClose={() => panels.close('search')}
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        inputRef={searchInputRef}
+        placeholder="Search pages"
+        resultNoun="page"
+        results={searchResults}
+        onSelect={(result) => navigateToSection(result.id)}
+      />
 
       <div
         className="reader-canvas"

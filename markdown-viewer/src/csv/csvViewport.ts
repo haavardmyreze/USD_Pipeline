@@ -95,3 +95,36 @@ export function stepZoomAtViewportCenter(
 export function wheelZoomDelta(deltaY: number) {
   return deltaY > 0 ? -0.08 : 0.08
 }
+
+/**
+ * Keep the panned sheet from leaving the viewport entirely. At least `margin`
+ * pixels of the sheet stay visible on every edge, so the document can never be
+ * flung completely off-screen.
+ */
+export function clampPan(
+  panX: number,
+  panY: number,
+  zoom: number,
+  sheetWidth: number,
+  sheetHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  margin = 96,
+): { panX: number; panY: number } {
+  return {
+    panX: clampAxis(panX, sheetWidth * zoom, viewportWidth, margin),
+    panY: clampAxis(panY, sheetHeight * zoom, viewportHeight, margin),
+  }
+}
+
+function clampAxis(pan: number, scaledSize: number, viewportSize: number, margin: number) {
+  // Cap the margin so a sheet smaller than the margin still stays reachable.
+  const keep = Math.min(margin, scaledSize, viewportSize)
+  const min = keep - scaledSize
+  const max = viewportSize - keep
+  if (min > max) {
+    // Sheet fits within the viewport: pin it so it can't drift out.
+    return Math.min(Math.max(pan, max), min)
+  }
+  return Math.min(Math.max(pan, min), max)
+}

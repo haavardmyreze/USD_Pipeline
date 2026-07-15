@@ -2,6 +2,7 @@ import {
   type CSSProperties,
   type MouseEvent,
   type ReactNode,
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -9,253 +10,84 @@ import {
   useRef,
   useState,
 } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
-import { unified } from 'unified'
-import remarkParse from 'remark-parse'
-import { visit } from 'unist-util-visit'
-import { type Theme, THEMES } from './theme'
+import { type Theme, type ThemePreference } from './theme'
 import DocAssistant from './DocAssistant'
 import DocComments from './DocComments'
-import { injectCommentHighlights } from './commentAnchors'
+import { injectCommentHighlights, resolveSelectionAnchor } from './commentAnchors'
 import { buildSearchSections, searchSections } from './documentSearch'
-import { useDocumentComments } from './documentComments'
+import { useDocumentComments, type CommentAnchor } from './documentComments'
+import { headingId } from './headings'
+import {
+  computeBlockMeta,
+  splitMarkdownBlocks,
+  splitMarkdownIntoCards,
+  type PageData,
+} from './markdown/blocks'
+import { extractToc, shouldShowTocEntry, type TocEntry } from './markdown/toc'
+import {
+  packBlocksIntoPages,
+  pageContentHeightPx,
+  PAGE_SIZES,
+} from './markdown/paginate'
+import {
+  captureAnchorFromViewport,
+  flashHighlightInDocument,
+  getHeadingElement,
+} from './markdown/flashHighlight'
 import {
   clampPageZoom,
+  clampTypeScale,
   applyZoomKeyboardShortcut,
   attachDocumentZoomWheel,
+  isEditableKeyboardTarget,
   loadReaderPreferences,
   PAGE_ZOOM_MAX,
   PAGE_ZOOM_MIN,
   stepPageZoom,
   saveReaderPreferences,
+  TYPE_LEADING_OPTIONS,
+  TYPE_SCALE_MAX,
+  TYPE_SCALE_MIN,
   type DocumentViewMode,
   type PageSize,
 } from './readerConfig'
+import { AskIcon, CommentsIcon, ContentsIcon, SearchIcon } from './ui/icons'
+import { ReaderTopbar, type TopbarAction } from './ui/ReaderTopbar'
+import { SearchPanel } from './ui/SearchPanel'
+import { ThemePicker } from './ui/ThemePicker'
+import { usePanels } from './ui/usePanels'
+import { CommandPalette } from './ui/CommandPalette'
+import { SelectionMenu } from './ui/SelectionMenu'
+import { TocRail } from './ui/TocRail'
+import { Lightbox } from './ui/Lightbox'
+import { markdownCodeComponents } from './markdown/CodeBlocks'
+import { applyFindHighlights, type FindHighlights } from './markdown/findHighlights'
+import { LinkPreview } from './ui/LinkPreview'
+import {
+  actionsPaletteGroup,
+  libraryPaletteGroup,
+  sectionsPaletteGroup,
+  themePaletteGroup,
+} from './ui/paletteGroups'
+import {
+  currentScrollProgress,
+  loadReadingPosition,
+  saveReadingPosition,
+} from './readingPosition'
+import type { LibraryDoc } from './library'
 
 type ReaderProps = {
   markdown: string
   fileName: string
   docKey: string
   theme: Theme
-  onSelectTheme: (theme: Theme) => void
+  themePreference: ThemePreference
+  onSelectTheme: (preference: ThemePreference) => void
   onHome: () => void
-}
-
-type TocEntry = {
-  id: string
-  text: string
-  level: number
-  chapterId: string
-  sectionId: string
-}
-
-type PageData = {
-  content: string
-  header: string
-}
-
-const PAGE_SIZES: Record<
-  PageSize,
-  {
-    widthMm: number
-    heightMm: number
-    paddingTopMm: number
-    paddingHorizontalMm: number
-  }
-> = {
-  A3: { widthMm: 297, heightMm: 420, paddingTopMm: 24, paddingHorizontalMm: 20 },
-  A4: { widthMm: 210, heightMm: 297, paddingTopMm: 22, paddingHorizontalMm: 18 },
-  A5: { widthMm: 148, heightMm: 210, paddingTopMm: 16, paddingHorizontalMm: 13 },
-}
-
-const MM_TO_PX = 3.7795275591
-
-function splitMarkdownBlocks(source: string) {
-  const lines = source.split('\n')
-  const blocks: string[] = []
-  let current: string[] = []
-  let fenceToken = ''
-
-  const flush = () => {
-    if (current.length > 0) {
-      const text = current.join('\n').trim()
-      if (text) {
-        blocks.push(text)
-      }
-      current = []
-    }
-  }
-
-  for (const line of lines) {
-    const fenceMatch = /^\s*(```+|~~~+)/.exec(line)
-
-    if (fenceMatch) {
-      const token = fenceMatch[1]
-      if (!fenceToken) {
-        fenceToken = token.slice(0, 3)
-      } else if (line.trim().startsWith(fenceToken)) {
-        fenceToken = ''
-      }
-      current.push(line)
-      continue
-    }
-
-    if (!fenceToken && line.trim() === '') {
-      flush()
-    } else {
-      current.push(line)
-    }
-  }
-
-  flush()
-  return blocks
-}
-
-function cleanInline(text: string) {
-  return text.replace(/[`*_]/g, '').trim()
-}
-
-function computeBlockMeta(sourceBlocks: string[]) {
-  let h1 = ''
-  let h2 = ''
-  return sourceBlocks.map((block) => {
-    const firstLine = block.split('\n', 1)[0]?.trim() ?? ''
-    const h1Match = /^#(?!#)\s+(.+)$/.exec(firstLine)
-    const h2Match = /^##(?!#)\s+(.+)$/.exec(firstLine)
-    const h3Match = /^###(?!#)\s+(.+)$/.exec(firstLine)
-
-    let isBreak = false
-    let isSubHeader = false
-    if (h1Match) {
-      h1 = cleanInline(h1Match[1])
-      h2 = ''
-    } else if (h2Match) {
-      h2 = cleanInline(h2Match[1])
-      isBreak = true
-      isSubHeader = true
-    } else if (h3Match) {
-      isSubHeader = true
-    }
-
-    return { isBreak, isSubHeader, header: h2 || h1 }
-  })
-}
-
-function splitMarkdownIntoCards(source: string): PageData[] {
-  const sourceBlocks = splitMarkdownBlocks(source)
-  const meta = computeBlockMeta(sourceBlocks)
-  const cards: PageData[] = []
-  let startIndex = 0
-
-  const pushCard = (endIndex: number) => {
-    const content = sourceBlocks.slice(startIndex, endIndex).join('\n\n').trim()
-    if (content) {
-      cards.push({
-        content,
-        header: meta[startIndex]?.header ?? '',
-      })
-    }
-  }
-
-  for (let index = 0; index < sourceBlocks.length; index += 1) {
-    if (index > startIndex && meta[index]?.isBreak) {
-      pushCard(index)
-      startIndex = index
-    }
-  }
-
-  pushCard(sourceBlocks.length)
-
-  return cards.length > 0 ? cards : [{ content: source, header: '' }]
-}
-
-import { headingId } from './headings'
-type MdastNode = { type: string; value?: string; children?: MdastNode[] }
-
-function mdastText(node: MdastNode): string {
-  if (typeof node.value === 'string') {
-    return node.value
-  }
-  if (Array.isArray(node.children)) {
-    return node.children.map(mdastText).join('')
-  }
-  return ''
-}
-
-function extractToc(markdown: string) {
-  const entries: TocEntry[] = []
-  let currentChapterId = ''
-  let currentSectionId = ''
-  const headingCounts = new Map<string, number>()
-  const tree = unified().use(remarkParse).parse(markdown)
-  let hasH1 = false
-
-  visit(tree, 'heading', (node: MdastNode & { depth: number }) => {
-    if (node.depth === 1) {
-      hasH1 = true
-    }
-  })
-
-  visit(tree, 'heading', (node: MdastNode & { depth: number }) => {
-    if (node.depth < 1 || node.depth > 3) {
-      return
-    }
-
-    const text = mdastText(node).trim()
-
-    if (!text) {
-      return
-    }
-
-    const baseId = headingId(text)
-    const seenCount = headingCounts.get(baseId) ?? 0
-    const id = seenCount === 0 ? baseId : `${baseId}-${seenCount + 1}`
-    headingCounts.set(baseId, seenCount + 1)
-    if (node.depth === 1) {
-      currentChapterId = id
-      currentSectionId = id
-    } else if (node.depth === 2) {
-      if (!hasH1) {
-        currentChapterId = id
-      }
-      currentSectionId = id
-    }
-
-    entries.push({
-      id,
-      text,
-      level: node.depth,
-      chapterId: currentChapterId || id,
-      sectionId: currentSectionId || id,
-    })
-  })
-
-  return entries
-}
-
-function shouldShowTocEntry(
-  entry: TocEntry,
-  activeChapterId: string,
-  activeSectionId: string,
-  hasTopLevelChapters: boolean,
-) {
-  if (entry.level === 1) {
-    return true
-  }
-
-  if (entry.level === 2) {
-    return hasTopLevelChapters ? entry.chapterId === activeChapterId : true
-  }
-
-  if (entry.level === 3) {
-    return hasTopLevelChapters
-      ? entry.chapterId === activeChapterId && entry.sectionId === activeSectionId
-      : entry.sectionId === activeSectionId
-  }
-
-  return false
+  onOpenLibrary: (doc: LibraryDoc) => void
 }
 
 function getNodeText(node: ReactNode): string {
@@ -275,264 +107,198 @@ function getNodeText(node: ReactNode): string {
   return ''
 }
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+// Heading text as it will appear when rendered: links/images resolved to
+// their text, inline markup stripped.
+function headingTextFromLine(line: string): string {
+  return line
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[`*_~]/g, '')
+    .trim()
+    .toLowerCase()
 }
 
-function highlightMatches(text: string, query: string) {
-  const tokens = query
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2)
+// Ordered heading texts (h1–h3) in a markdown fragment, fence-aware.
+function extractHeadingTexts(content: string): string[] {
+  const texts: string[] = []
+  let fenceToken = ''
 
-  if (!text || tokens.length === 0) {
-    return text
-  }
-
-  const pattern = new RegExp(`(${tokens.map(escapeRegExp).join('|')})`, 'gi')
-  const exactPattern = new RegExp(`^(${tokens.map(escapeRegExp).join('|')})$`, 'i')
-  const parts = text.split(pattern)
-
-  return parts.map((part, index) =>
-    exactPattern.test(part) ? <mark key={`${part}-${index}`}>{part}</mark> : part,
-  )
-}
-
-function createSearchRegex(query: string) {
-  const tokens = query
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2)
-
-  if (tokens.length === 0) {
-    return null
-  }
-
-  return new RegExp(`(${tokens.map(escapeRegExp).join('|')})`, 'gi')
-}
-
-function getSectionRange(scope: HTMLElement, sectionId: string) {
-  const heading = scope.querySelector<HTMLElement>(`#${CSS.escape(sectionId)}`)
-  if (!heading) {
-    return null
-  }
-
-  const levelMatch = /^H([1-3])$/i.exec(heading.tagName)
-  if (!levelMatch) {
-    return null
-  }
-  const level = Number(levelMatch[1])
-
-  const headings = Array.from(scope.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id]'))
-  const currentIndex = headings.findIndex((item) => item.id === sectionId)
-  if (currentIndex === -1) {
-    return null
-  }
-
-  let endBoundary: HTMLElement | null = null
-  for (let index = currentIndex + 1; index < headings.length; index += 1) {
-    const candidate = headings[index]
-    const candidateLevel = Number(candidate.tagName.slice(1))
-    if (candidateLevel <= level) {
-      endBoundary = candidate
-      break
+  for (const line of content.split('\n')) {
+    const fenceMatch = /^\s*(```+|~~~+)/.exec(line)
+    if (fenceMatch) {
+      const token = fenceMatch[1].slice(0, 3)
+      if (!fenceToken) {
+        fenceToken = token
+      } else if (line.trim().startsWith(fenceToken)) {
+        fenceToken = ''
+      }
+      continue
     }
-  }
-
-  const range = document.createRange()
-  range.setStartBefore(heading)
-  if (endBoundary) {
-    range.setEndBefore(endBoundary)
-  } else {
-    range.setEnd(scope, scope.childNodes.length)
-  }
-
-  return range
-}
-
-function flashHighlightInDocument(
-  scope: HTMLElement,
-  query: string,
-  sectionId = '',
-  autoScrollToFirstMatch = false,
-) {
-  const pattern = createSearchRegex(query)
-  if (!pattern) {
-    return () => {}
-  }
-
-  const sectionRange = sectionId ? getSectionRange(scope, sectionId) : null
-  const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT)
-  const edited: HTMLElement[] = []
-  let totalMatches = 0
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode as Text
-    const value = node.nodeValue ?? ''
-    if (!value.trim()) {
+    if (fenceToken) {
       continue
     }
 
-    const parent = node.parentElement
-    if (!parent) {
-      continue
+    const match = /^#{1,3}\s+(.+)$/.exec(line.trim())
+    if (match) {
+      texts.push(headingTextFromLine(match[1]))
     }
+  }
 
-    if (sectionRange && !sectionRange.intersectsNode(node)) {
-      continue
-    }
+  return texts
+}
 
-    if (
-      parent.closest(
-        'pre, code, mark, .page-running-header, .page-number, .comment-rail-fixed, .assistant-panel, .search-panel',
+/**
+ * Build heading components for one render unit (a page, card, or the whole
+ * document). Ids resolve deterministically from the document TOC: each unit
+ * knows how many same-text headings precede it, so duplicate headings keep
+ * stable, unique ids across re-renders — no shared mutable counter.
+ */
+function buildUnitHeadingComponents(
+  idsByHeadingText: Map<string, string[]>,
+  occurrenceOffsets: Map<string, number>,
+): { components: Components; resetIds: () => void } {
+  let localCounts = new Map<string, number>()
+
+  const resolveId = (children?: ReactNode) => {
+    const text = getNodeText(children).trim()
+    const key = text.toLowerCase()
+    const local = localCounts.get(key) ?? 0
+    localCounts.set(key, local + 1)
+    const globalIndex = (occurrenceOffsets.get(key) ?? 0) + local
+    return idsByHeadingText.get(key)?.[globalIndex] ?? headingId(text)
+  }
+
+  const makeHeading =
+    (tagName: 'h1' | 'h2' | 'h3') =>
+    ({ children }: { children?: ReactNode }) => {
+      const id = resolveId(children)
+      return tagName === 'h1' ? (
+        <h1 id={id}>{children}</h1>
+      ) : tagName === 'h2' ? (
+        <h2 id={id}>{children}</h2>
+      ) : (
+        <h3 id={id}>{children}</h3>
       )
-    ) {
-      continue
     }
 
-    const matches = [...value.matchAll(pattern)]
-    if (matches.length === 0) {
-      continue
-    }
-
-    const fragment = document.createDocumentFragment()
-    let lastIndex = 0
-
-    for (const match of matches) {
-      const index = match.index ?? 0
-      const found = match[0]
-
-      if (index > lastIndex) {
-        fragment.appendChild(document.createTextNode(value.slice(lastIndex, index)))
-      }
-
-      const marker = document.createElement('mark')
-      marker.className = 'search-flash-highlight'
-      marker.textContent = found
-      fragment.appendChild(marker)
-      edited.push(marker)
-
-      totalMatches += 1
-      lastIndex = index + found.length
-      if (totalMatches >= 180) {
-        break
-      }
-    }
-
-    if (lastIndex < value.length) {
-      fragment.appendChild(document.createTextNode(value.slice(lastIndex)))
-    }
-
-    node.parentNode?.replaceChild(fragment, node)
-
-    if (totalMatches >= 180) {
-      break
-    }
-  }
-
-  if (autoScrollToFirstMatch && edited.length > 0) {
-    const first = edited[0]
-    const rect = first.getBoundingClientRect()
-    if (rect.top < 120 || rect.bottom > window.innerHeight - 120) {
-      first.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }
-
-  return () => {
-    edited.forEach((marker) => {
-      const parent = marker.parentNode
-      if (!parent) {
-        return
-      }
-      parent.replaceChild(document.createTextNode(marker.textContent ?? ''), marker)
-      parent.normalize()
-    })
+  return {
+    components: {
+      h1: makeHeading('h1'),
+      h2: makeHeading('h2'),
+      h3: makeHeading('h3'),
+    },
+    // Called at the start of every render pass of the owning unit so
+    // re-renders (including StrictMode double-renders) resolve the same ids.
+    resetIds: () => {
+      localCounts = new Map()
+    },
   }
 }
 
-function getHeadingElement(id: string, scope?: ParentNode | null) {
-  const escapedId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id
-  const root = scope ?? document
-  return root.querySelector<HTMLElement>(`#${escapedId}`)
+type UnitRenderInfo = {
+  components: Components
+  resetIds: () => void
 }
 
-function captureAnchorFromViewport(scope: ParentNode | null, headingIds: string[]) {
-  if (headingIds.length === 0) {
-    return ''
+function buildUnitRenderInfos(
+  toc: TocEntry[],
+  unitContents: string[],
+): UnitRenderInfo[] {
+  const idsByHeadingText = new Map<string, string[]>()
+  for (const entry of toc) {
+    const key = entry.text.trim().toLowerCase()
+    const list = idsByHeadingText.get(key) ?? []
+    list.push(entry.id)
+    idsByHeadingText.set(key, list)
   }
 
-  const activationLine = Math.max(160, window.innerHeight * 0.35)
-  let anchorId = headingIds[0]
+  const runningCounts = new Map<string, number>()
 
-  for (const id of headingIds) {
-    const element = getHeadingElement(id, scope)
-    if (!element) {
-      continue
+  return unitContents.map((content) => {
+    const offsets = new Map(runningCounts)
+    for (const text of extractHeadingTexts(content)) {
+      runningCounts.set(text, (runningCounts.get(text) ?? 0) + 1)
     }
-
-    if (element.getBoundingClientRect().top - activationLine <= 0) {
-      anchorId = id
-    } else {
-      break
-    }
-  }
-
-  return anchorId
+    return buildUnitHeadingComponents(idsByHeadingText, offsets)
+  })
 }
 
-const SettingsIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-  </svg>
-)
+const MarkdownUnit = memo(function MarkdownUnit({
+  content,
+  unit,
+}: {
+  content: string
+  unit: UnitRenderInfo
+}) {
+  // Deterministic per-pass id resolution (safe under StrictMode re-renders).
+  unit.resetIds()
+  return (
+    <ReactMarkdown
+      components={{ ...markdownCodeComponents, ...unit.components }}
+      rehypePlugins={[rehypeRaw]}
+      remarkPlugins={[remarkGfm]}
+    >
+      {content}
+    </ReactMarkdown>
+  )
+})
 
 function Reader({
   markdown,
   fileName,
   docKey,
   theme,
+  themePreference,
   onSelectTheme,
   onHome,
+  onOpenLibrary,
 }: ReaderProps) {
   const [viewMode, setViewMode] = useState<DocumentViewMode>(
     () => loadReaderPreferences().viewMode,
   )
   const [pageSize, setPageSize] = useState<PageSize>(() => loadReaderPreferences().pageSize)
   const [activeHeadingId, setActiveHeadingId] = useState<string>('')
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [assistantOpen, setAssistantOpen] = useState(false)
-  const [commentsOpen, setCommentsOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [tocOpen, setTocOpen] = useState(false)
   const [pageZoom, setPageZoom] = useState(() => loadReaderPreferences().pageZoom)
+  const [typeScale, setTypeScale] = useState(() => loadReaderPreferences().typeScale)
+  const [typeLeading, setTypeLeading] = useState(
+    () => loadReaderPreferences().typeLeading,
+  )
   const [searchQuery, setSearchQuery] = useState('')
   const [flashSearchQuery, setFlashSearchQuery] = useState('')
   const [flashSearchSectionId, setFlashSearchSectionId] = useState('')
   const [flashAutoScroll, setFlashAutoScroll] = useState(false)
   const [flashSearchTick, setFlashSearchTick] = useState(0)
+  const [measureTick, setMeasureTick] = useState(0)
+  const [findCount, setFindCount] = useState(0)
+  const [findIndex, setFindIndex] = useState(0)
+  const findMarksRef = useRef<HTMLElement[]>([])
   const [pagedContent, setPagedContent] = useState<PageData[]>([
     { content: markdown, header: '' },
   ])
+  const [externalDraft, setExternalDraft] = useState<{
+    anchor: CommentAnchor
+    tick: number
+  } | null>(null)
+  const [assistantPrefill, setAssistantPrefill] = useState<{
+    text: string
+    tick: number
+  } | null>(null)
+
+  const panels = usePanels()
+  const { closeAll: closeAllPanels, open: openPanel, close: closePanel } = panels
+  const tocOpen = panels.isOpen('toc')
+  const searchOpen = panels.isOpen('search')
+  const commentsOpen = panels.isOpen('comments')
+  const assistantOpen = panels.isOpen('assistant')
 
   const measureHostRef = useRef<HTMLDivElement | null>(null)
   const tocPanelRef = useRef<HTMLElement | null>(null)
-  const settingsRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const docColRef = useRef<HTMLDivElement | null>(null)
   const readerRootRef = useRef<HTMLDivElement | null>(null)
   const docStageRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollAnchorRef = useRef<string | null>(null)
+  const positionReadyRef = useRef(false)
 
   const commentSource = useMemo(
     () => ({ format: 'markdown' as const, markdown }),
@@ -579,8 +345,8 @@ function Reader({
   const trimmedSearchQuery = searchQuery.trim()
 
   useEffect(() => {
-    saveReaderPreferences({ viewMode, pageSize, pageZoom })
-  }, [viewMode, pageSize, pageZoom])
+    saveReaderPreferences({ viewMode, pageSize, pageZoom, typeScale, typeLeading })
+  }, [viewMode, pageSize, pageZoom, typeScale, typeLeading])
 
   const activeChapterId = useMemo(() => {
     const activeEntry = toc.find((entry) => entry.id === activeHeadingId)
@@ -606,73 +372,63 @@ function Reader({
     return activeEntry.level === 3 ? activeEntry.sectionId : activeEntry.id
   }, [toc, activeHeadingId])
 
-  const markdownComponents = useMemo(() => {
-    const idsByHeadingText = new Map<string, string[]>()
-    for (const entry of toc) {
-      const key = entry.text.trim().toLowerCase()
-      const list = idsByHeadingText.get(key) ?? []
-      list.push(entry.id)
-      idsByHeadingText.set(key, list)
+  // One render unit per page/card (or one for the whole continuous view),
+  // each with deterministic heading-id components.
+  const renderUnits = useMemo(() => {
+    if (viewMode === 'paged') {
+      return pagedContent
     }
-    const usedByHeadingText = new Map<string, number>()
-
-    const resolveRenderedHeadingId = (children?: ReactNode) => {
-      const text = getNodeText(children).trim()
-      const key = text.toLowerCase()
-      const used = usedByHeadingText.get(key) ?? 0
-      usedByHeadingText.set(key, used + 1)
-      const candidate = idsByHeadingText.get(key)?.[used]
-      return candidate ?? headingId(text)
+    if (viewMode === 'cards') {
+      return cardContent
     }
+    return [{ content: displayMarkdown, header: '' }]
+  }, [viewMode, pagedContent, cardContent, displayMarkdown])
 
-    const makeHeading =
-      (tagName: 'h1' | 'h2' | 'h3') =>
-      ({ children }: { children?: ReactNode }) => {
-        const id = resolveRenderedHeadingId(children)
-        return tagName === 'h1' ? (
-          <h1 id={id}>{children}</h1>
-        ) : tagName === 'h2' ? (
-          <h2 id={id}>{children}</h2>
-        ) : (
-          <h3 id={id}>{children}</h3>
-        )
-      }
-
-    return {
-      h1: makeHeading('h1'),
-      h2: makeHeading('h2'),
-      h3: makeHeading('h3'),
-    }
-  }, [toc])
-
-  const renderDocumentMarkdown = useCallback(
-    (content: string) => (
-      <ReactMarkdown
-        components={markdownComponents}
-        rehypePlugins={[rehypeRaw]}
-        remarkPlugins={[remarkGfm]}
-      >
-        {content}
-      </ReactMarkdown>
-    ),
-    [markdownComponents],
+  const unitRenderInfos = useMemo(
+    () =>
+      buildUnitRenderInfos(
+        toc,
+        renderUnits.map((unit) => unit.content),
+      ),
+    [toc, renderUnits],
   )
 
   // Reset reading position when the document changes.
   useEffect(() => {
     setActiveHeadingId('')
-    setTocOpen(false)
-    setSettingsOpen(false)
-    setAssistantOpen(false)
-    setCommentsOpen(false)
-    setSearchOpen(false)
+    closeAllPanels()
     setSearchQuery('')
     setFlashSearchQuery('')
     setFlashSearchSectionId('')
     setFlashAutoScroll(false)
     setFlashSearchTick(0)
     pendingScrollAnchorRef.current = null
-  }, [markdown])
+  }, [markdown, closeAllPanels])
+
+  // Restore the last reading position (deep-link hashes win).
+  useEffect(() => {
+    positionReadyRef.current = false
+    const saved = window.location.hash ? null : loadReadingPosition(docKey)
+    if (saved?.anchorId) {
+      pendingScrollAnchorRef.current = saved.anchorId
+    }
+    const timer = window.setTimeout(() => {
+      positionReadyRef.current = true
+    }, 1200)
+    return () => window.clearTimeout(timer)
+  }, [docKey])
+
+  // Remember where the reader is, per document.
+  useEffect(() => {
+    if (!positionReadyRef.current || !activeHeadingId) {
+      return
+    }
+    saveReadingPosition(docKey, {
+      anchorId: activeHeadingId,
+      progress: currentScrollProgress(),
+      updatedAt: Date.now(),
+    })
+  }, [activeHeadingId, docKey])
 
   useEffect(() => {
     if (!flashSearchQuery || flashSearchTick === 0) {
@@ -713,6 +469,58 @@ function Reader({
     cardContent,
   ])
 
+  // Persistent find: highlight every match while the panel has a query.
+  useEffect(() => {
+    if (!searchOpen || !trimmedSearchQuery) {
+      findMarksRef.current = []
+      setFindCount(0)
+      setFindIndex(0)
+      return
+    }
+
+    const scope = docColRef.current
+    if (!scope) {
+      return
+    }
+
+    let controller: FindHighlights | null = null
+    const timer = window.setTimeout(() => {
+      controller = applyFindHighlights(scope, trimmedSearchQuery)
+      findMarksRef.current = controller.marks
+      setFindCount(controller.marks.length)
+      setFindIndex(0)
+    }, 220)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller?.clear()
+      findMarksRef.current = []
+    }
+  }, [searchOpen, trimmedSearchQuery, viewMode, pagedContent, cardContent, displayMarkdown])
+
+  // Track the current match: accent it and bring it into view.
+  useEffect(() => {
+    const marks = findMarksRef.current
+    if (marks.length === 0) {
+      return
+    }
+
+    marks.forEach((mark, index) => {
+      mark.classList.toggle('find-current', index === findIndex)
+    })
+    marks[findIndex]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [findIndex, findCount])
+
+  const stepFind = useCallback((direction: 1 | -1) => {
+    setFindIndex((current) => {
+      const count = findMarksRef.current.length
+      if (count === 0) {
+        return 0
+      }
+      return (current + direction + count) % count
+    })
+  }, [])
+
   const focusSearchInput = useCallback(() => {
     window.requestAnimationFrame(() => {
       searchInputRef.current?.focus()
@@ -745,16 +553,48 @@ function Reader({
     setPageSize(size)
   }
 
-  const changePageZoom = (zoom: number) => {
-    const clamped = clampPageZoom(zoom)
-    if (clamped === pageZoom) {
-      return
-    }
-    captureScrollAnchor()
-    setPageZoom(clamped)
-  }
+  const changePageZoom = useCallback(
+    (zoom: number) => {
+      setPageZoom((current) => {
+        const clamped = clampPageZoom(zoom)
+        if (clamped === current) {
+          return current
+        }
+        captureScrollAnchor()
+        return clamped
+      })
+    },
+    [captureScrollAnchor],
+  )
 
-  const stepZoomFromWheel = useCallback(
+  const changeTypeScale = useCallback(
+    (value: number) => {
+      setTypeScale((current) => {
+        const next = clampTypeScale(value)
+        if (next === current) {
+          return current
+        }
+        captureScrollAnchor()
+        return next
+      })
+    },
+    [captureScrollAnchor],
+  )
+
+  const changeTypeLeading = useCallback(
+    (value: number) => {
+      setTypeLeading((current) => {
+        if (value === current) {
+          return current
+        }
+        captureScrollAnchor()
+        return value
+      })
+    },
+    [captureScrollAnchor],
+  )
+
+  const stepZoom = useCallback(
     (direction: 'in' | 'out') => {
       setPageZoom((current) => {
         const next = stepPageZoom(current, direction)
@@ -775,36 +615,26 @@ function Reader({
     }
 
     return attachDocumentZoomWheel(root, (direction) => {
-      stepZoomFromWheel(direction)
+      stepZoom(direction)
     })
-  }, [stepZoomFromWheel])
+  }, [stepZoom])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (applyZoomKeyboardShortcut(event, (direction) => {
-        changePageZoom(stepPageZoom(pageZoom, direction))
-      })) {
+      if (applyZoomKeyboardShortcut(event, stepZoom)) {
         return
       }
 
-      const target = event.target as HTMLElement | null
-      const tagName = target?.tagName ?? ''
-      const isEditable =
-        target?.isContentEditable ||
-        tagName === 'INPUT' ||
-        tagName === 'TEXTAREA' ||
-        tagName === 'SELECT'
-
-      if (!isEditable && event.key === '/') {
+      if (!isEditableKeyboardTarget(event.target) && event.key === '/') {
         event.preventDefault()
-        setSearchOpen(true)
+        openPanel('search')
         focusSearchInput()
       }
     }
 
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [changePageZoom, focusSearchInput, pageZoom])
+  }, [focusSearchInput, openPanel, stepZoom])
 
   // After layout reflows from a view-mode or page-size change, restore scroll
   // position by anchoring to the same heading — not a raw scroll offset.
@@ -844,10 +674,10 @@ function Reader({
     return () => {
       cancelled = true
     }
-  }, [viewMode, pageSize, pageZoom, pagedContent, cardContent, comments])
+  }, [viewMode, pageSize, pageZoom, typeScale, typeLeading, pagedContent, cardContent, comments])
 
-  // Layout-aware pagination: measure real element heights off-screen, then pack
-  // blocks into pages, forcing a break before every h2.
+  // Layout-aware pagination: measure real element heights off-screen, then
+  // pack blocks into pages (pure algorithm in markdown/paginate.ts).
   useLayoutEffect(() => {
     if (!isPaged) {
       setPagedContent([{ content: displayMarkdown, header: blockMeta[0]?.header ?? '' }])
@@ -866,74 +696,47 @@ function Reader({
       return
     }
 
-    const page = PAGE_SIZES[pageSize]
-    // Small safety margin: pages have a fixed height with overflow hidden, so
-    // err toward breaking a hair early rather than clipping the last block.
-    const SAFETY_PX = 6
-    const contentHeightPx =
-      (page.heightMm - page.paddingTopMm * 2) * MM_TO_PX - SAFETY_PX
+    // Images load after first measure; re-measure when they settle so page
+    // breaks account for real image heights.
+    const pendingImages = Array.from(
+      pageEl.querySelectorAll<HTMLImageElement>('img'),
+    ).filter((img) => !img.complete)
+    const onImageSettled = () => setMeasureTick((tick) => tick + 1)
+    for (const img of pendingImages) {
+      img.addEventListener('load', onImageSettled, { once: true })
+      img.addEventListener('error', onImageSettled, { once: true })
+    }
 
     const sampleLine = pageEl.querySelector<HTMLElement>('p, li, h2, h3')
     const lineHeightPx = sampleLine
       ? parseFloat(getComputedStyle(sampleLine).lineHeight) || 25
       : 25
     const WIDOW_LINES = 4
-    const widowThresholdPx = lineHeightPx * WIDOW_LINES
 
-    const nextPages: PageData[] = []
-    let startIndex = 0
-    let pageTop = children[0].offsetTop
-
-    const pushPage = (endIndex: number) => {
-      const content = blocks.slice(startIndex, endIndex).join('\n\n').trim()
-      if (content) {
-        nextPages.push({
-          content,
-          header: blockMeta[startIndex]?.header ?? '',
-        })
-      }
-    }
-
-    for (let index = 0; index < children.length; index += 1) {
-      const element = children[index]
-      const isSectionStart = blockMeta[index]?.isBreak ?? false
-      const isSubHeader = blockMeta[index]?.isSubHeader ?? false
-
-      if (index > startIndex && isSectionStart) {
-        pushPage(index)
-        startIndex = index
-        pageTop = element.offsetTop
-        continue
-      }
-
-      // Avoid sub-headers (h2/h3) sitting alone at the bottom of a page with
-      // only a few lines of space — break to the next page instead.
-      if (index > startIndex && isSubHeader) {
-        const spaceLeft = contentHeightPx - (element.offsetTop - pageTop)
-        if (spaceLeft < widowThresholdPx) {
-          pushPage(index)
-          startIndex = index
-          pageTop = element.offsetTop
-          continue
-        }
-      }
-
-      const elementBottom = element.offsetTop + element.offsetHeight
-      if (index > startIndex && elementBottom - pageTop > contentHeightPx) {
-        pushPage(index)
-        startIndex = index
-        pageTop = element.offsetTop
-      }
-    }
-
-    pushPage(children.length)
+    const nextPages = packBlocksIntoPages({
+      blocks,
+      meta: blockMeta,
+      measurements: children.map((element) => ({
+        top: element.offsetTop,
+        height: element.offsetHeight,
+      })),
+      contentHeightPx: pageContentHeightPx(pageSize),
+      widowThresholdPx: lineHeightPx * WIDOW_LINES,
+    })
 
     setPagedContent(
       nextPages.length > 0
         ? nextPages
         : [{ content: displayMarkdown, header: blockMeta[0]?.header ?? '' }],
     )
-  }, [blocks, blockMeta, displayMarkdown, isPaged, pageSize])
+
+    return () => {
+      for (const img of pendingImages) {
+        img.removeEventListener('load', onImageSettled)
+        img.removeEventListener('error', onImageSettled)
+      }
+    }
+  }, [blocks, blockMeta, displayMarkdown, isPaged, pageSize, measureTick, typeScale, typeLeading])
 
   // Scroll-spy: activate the heading occupying the reading zone (~35% down).
   useEffect(() => {
@@ -1001,33 +804,6 @@ function Reader({
   }, [])
 
   useEffect(() => {
-    if (!settingsOpen) {
-      return
-    }
-
-    const onPointerDown = (event: Event) => {
-      if (
-        settingsRef.current &&
-        !settingsRef.current.contains(event.target as Node)
-      ) {
-        setSettingsOpen(false)
-      }
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setSettingsOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [settingsOpen])
-
-  useEffect(() => {
     if (!activeHeadingId || !tocPanelRef.current) {
       return
     }
@@ -1067,9 +843,9 @@ function Reader({
         setActiveHeadingId(id)
       }
 
-      setTocOpen(false)
+      closePanel('toc')
     },
-    [toc],
+    [toc, closePanel],
   )
 
   const navigateToHeading = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
@@ -1077,19 +853,48 @@ function Reader({
     navigateToSection(id)
   }
 
-  const toggleSearch = () => {
-    if (searchOpen) {
-      setSearchOpen(false)
+  // Selection menu: resolve the comment anchor from the live selection BEFORE
+  // comment mode re-renders the document (which clears the selection).
+  const commentOnSelection = useCallback(() => {
+    const scope = docColRef.current
+    const selection = window.getSelection()
+    if (!scope || !selection || selection.isCollapsed || selection.rangeCount === 0) {
       return
     }
 
-    setSearchOpen(true)
-    setAssistantOpen(false)
-    setCommentsOpen(false)
-    setSettingsOpen(false)
-    setTocOpen(false)
-    focusSearchInput()
-  }
+    const anchor = resolveSelectionAnchor(markdown, selection, scope, toc)
+    if (!anchor) {
+      return
+    }
+
+    setExternalDraft({ anchor, tick: Date.now() })
+    openPanel('comments')
+  }, [markdown, openPanel, toc])
+
+  const askAboutSelection = useCallback(
+    (text: string) => {
+      const quoted = text.length > 600 ? `${text.slice(0, 600)}…` : text
+      setAssistantPrefill({
+        text: `Regarding this passage:\n\n"${quoted}"\n\n`,
+        tick: Date.now(),
+      })
+      openPanel('assistant')
+    },
+    [openPanel],
+  )
+
+  const askQuery = useCallback(
+    (text: string) => {
+      setAssistantPrefill({ text, tick: Date.now() })
+      openPanel('assistant')
+    },
+    [openPanel],
+  )
+
+  const tocRailSections = useMemo(
+    () => toc.filter((entry) => entry.level <= 2),
+    [toc],
+  )
 
   const documentSections = useMemo(
     () =>
@@ -1109,294 +914,296 @@ function Reader({
     '--page-pad-x': `${page.paddingHorizontalMm}mm`,
     '--page-pad-y': `${page.paddingTopMm}mm`,
     '--page-scale': pageZoom,
+    '--type-scale': typeScale,
+    ...(typeLeading > 0 ? { '--type-leading': typeLeading } : {}),
   } as CSSProperties
 
   const pageZoomPercent = Math.round(pageZoom * 100)
 
-  return (
-    <div className="reader-root" ref={readerRootRef}>
-      <div className="topbar-shell reader-topbar-shell">
-        <header className="app-topbar topbar-pill reader-topbar">
-        <div className="topbar-lead">
+  const topbarActions: TopbarAction[] = [
+    {
+      id: 'toc',
+      label: 'Contents',
+      icon: <ContentsIcon />,
+      active: tocOpen,
+      onToggle: () => panels.toggle('toc'),
+    },
+    {
+      id: 'search',
+      label: 'Search',
+      icon: <SearchIcon />,
+      active: searchOpen || Boolean(trimmedSearchQuery),
+      onToggle: () => {
+        panels.toggle('search')
+        if (!searchOpen) {
+          focusSearchInput()
+        }
+      },
+    },
+    {
+      id: 'comments',
+      label: 'Comments',
+      icon: <CommentsIcon />,
+      active: commentsOpen,
+      badge: comments.length || undefined,
+      onToggle: () => panels.toggle('comments'),
+    },
+    {
+      id: 'assistant',
+      label: 'Ask',
+      icon: <AskIcon />,
+      active: assistantOpen,
+      onToggle: () => panels.toggle('assistant'),
+    },
+  ]
+
+  const settingsContent = (
+    <>
+      <div className="settings-group">
+        <p className="settings-label">View</p>
+        <div className="segmented segmented-view">
           <button
             type="button"
-            className="ghost-button home-link"
-            onClick={onHome}
-            aria-label="Back to library"
+            className={viewMode === 'continuous' ? 'seg active' : 'seg'}
+            onClick={() => changeViewMode('continuous')}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-            <span>Library</span>
+            Continuous
           </button>
-          <span className="topbar-divider" aria-hidden="true" />
-          <p className="doc-name" title={fileName}>
-            {fileName}
-          </p>
+          <button
+            type="button"
+            className={viewMode === 'cards' ? 'seg active' : 'seg'}
+            onClick={() => changeViewMode('cards')}
+          >
+            Cards
+          </button>
+          <button
+            type="button"
+            className={viewMode === 'paged' ? 'seg active' : 'seg'}
+            onClick={() => changeViewMode('paged')}
+          >
+            Pages
+          </button>
         </div>
-        <div className="controls">
-          <button
-            type="button"
-            className="ghost-button toc-toggle"
-            aria-label="Toggle contents"
-            aria-expanded={tocOpen}
-            onClick={() => setTocOpen((value) => !value)}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M8 6h13" />
-              <path d="M8 12h13" />
-              <path d="M8 18h13" />
-              <path d="M3 6h.01" />
-              <path d="M3 12h.01" />
-              <path d="M3 18h.01" />
-            </svg>
-            <span>Contents</span>
-          </button>
+      </div>
 
-          <button
-            type="button"
-            className={trimmedSearchQuery ? 'ghost-button active' : 'ghost-button'}
-            aria-label="Search document"
-            aria-expanded={searchOpen}
-            onClick={toggleSearch}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <span>Search</span>
-          </button>
-
-          <button
-            type="button"
-            className={commentsOpen ? 'ghost-button active' : 'ghost-button'}
-            aria-label="Document comments"
-            aria-expanded={commentsOpen}
-            onClick={() => {
-              setCommentsOpen((value) => !value)
-              setAssistantOpen(false)
-              setSearchOpen(false)
-              setSettingsOpen(false)
-              setTocOpen(false)
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
-              <path d="M8 9h8" />
-              <path d="M8 13h5" />
-            </svg>
-            <span>Comments</span>
-            {comments.length > 0 ? (
-              <span className="comment-count-badge">{comments.length}</span>
-            ) : null}
-          </button>
-
-          <button
-            type="button"
-            className="ghost-button assistant-toggle"
-            aria-label="Ask about this document"
-            aria-expanded={assistantOpen}
-            onClick={() => {
-              setAssistantOpen((value) => !value)
-              setSettingsOpen(false)
-              setTocOpen(false)
-              setSearchOpen(false)
-              setCommentsOpen(false)
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
-            </svg>
-            <span>Ask</span>
-          </button>
-
-          <div className="controls-actions" ref={settingsRef}>
+      <div className="settings-group">
+        <p className="settings-label">Page size</p>
+        <div className="segmented">
+          {(['A3', 'A4', 'A5'] as PageSize[]).map((size) => (
             <button
               type="button"
-              className={settingsOpen ? 'icon-button active' : 'icon-button'}
-              aria-label="Settings"
-              aria-expanded={settingsOpen}
-              onClick={() => {
-                setSettingsOpen((value) => !value)
-                setAssistantOpen(false)
-                setCommentsOpen(false)
-                setSearchOpen(false)
-              }}
+              key={size}
+              className={pageSize === size ? 'seg active' : 'seg'}
+              onClick={() => changePageSize(size)}
             >
-              <SettingsIcon />
+              {size}
             </button>
-
-            {settingsOpen ? (
-              <div className="settings-popover" role="dialog" aria-label="Settings">
-                <div className="settings-group">
-                  <p className="settings-label">View</p>
-                  <div className="segmented segmented-view">
-                    <button
-                      type="button"
-                      className={viewMode === 'continuous' ? 'seg active' : 'seg'}
-                      onClick={() => changeViewMode('continuous')}
-                    >
-                      Continuous
-                    </button>
-                    <button
-                      type="button"
-                      className={viewMode === 'cards' ? 'seg active' : 'seg'}
-                      onClick={() => changeViewMode('cards')}
-                    >
-                      Cards
-                    </button>
-                    <button
-                      type="button"
-                      className={viewMode === 'paged' ? 'seg active' : 'seg'}
-                      onClick={() => changeViewMode('paged')}
-                    >
-                      Pages
-                    </button>
-                  </div>
-                </div>
-
-                <div className="settings-group">
-                  <p className="settings-label">Page size</p>
-                  <div className="segmented">
-                    {(['A3', 'A4', 'A5'] as PageSize[]).map((size) => (
-                      <button
-                        type="button"
-                        key={size}
-                        className={pageSize === size ? 'seg active' : 'seg'}
-                        onClick={() => changePageSize(size)}
-                      >
-                        {size}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="settings-group">
-                  <div className="settings-label-row">
-                    <p className="settings-label">Scale</p>
-                    <span className="scale-value" aria-live="polite">
-                      {pageZoomPercent}%
-                    </span>
-                  </div>
-                  <div className="scale-control">
-                    <button
-                      type="button"
-                      className="scale-step"
-                      aria-label="Zoom out"
-                      onClick={() => changePageZoom(stepPageZoom(pageZoom, 'out'))}
-                      disabled={pageZoom <= PAGE_ZOOM_MIN}
-                    >
-                      −
-                    </button>
-                    <input
-                      type="range"
-                      className="scale-slider"
-                      min={PAGE_ZOOM_MIN * 100}
-                      max={PAGE_ZOOM_MAX * 100}
-                      step={1}
-                      value={pageZoomPercent}
-                      aria-label="Page scale"
-                      onChange={(event) =>
-                        changePageZoom(Number(event.target.value) / 100)
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="scale-step"
-                      aria-label="Zoom in"
-                      onClick={() => changePageZoom(stepPageZoom(pageZoom, 'in'))}
-                      disabled={pageZoom >= PAGE_ZOOM_MAX}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                <div className="settings-group">
-                  <p className="settings-label">Theme</p>
-                  <div className="theme-grid">
-                    {THEMES.map((option) => (
-                      <button
-                        type="button"
-                        key={option.id}
-                        className={theme === option.id ? 'theme-chip active' : 'theme-chip'}
-                        onClick={() => onSelectTheme(option.id)}
-                      >
-                        <span className="theme-swatch" data-theme={option.id} />
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
+          ))}
         </div>
-      </header>
       </div>
+
+      <div className="settings-group">
+        <div className="settings-label-row">
+          <p className="settings-label">Scale</p>
+          <span className="scale-value" aria-live="polite">
+            {pageZoomPercent}%
+          </span>
+        </div>
+        <div className="scale-control">
+          <button
+            type="button"
+            className="scale-step"
+            aria-label="Zoom out"
+            onClick={() => stepZoom('out')}
+            disabled={pageZoom <= PAGE_ZOOM_MIN}
+          >
+            −
+          </button>
+          <input
+            type="range"
+            className="scale-slider"
+            min={PAGE_ZOOM_MIN * 100}
+            max={PAGE_ZOOM_MAX * 100}
+            step={1}
+            value={pageZoomPercent}
+            aria-label="Page scale"
+            onChange={(event) => changePageZoom(Number(event.target.value) / 100)}
+          />
+          <button
+            type="button"
+            className="scale-step"
+            aria-label="Zoom in"
+            onClick={() => stepZoom('in')}
+            disabled={pageZoom >= PAGE_ZOOM_MAX}
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-group">
+        <div className="settings-label-row">
+          <p className="settings-label">Text size</p>
+          <span className="scale-value" aria-live="polite">
+            {Math.round(typeScale * 100)}%
+          </span>
+        </div>
+        <div className="scale-control">
+          <button
+            type="button"
+            className="scale-step"
+            aria-label="Smaller text"
+            onClick={() => changeTypeScale(typeScale - 0.05)}
+            disabled={typeScale <= TYPE_SCALE_MIN}
+          >
+            −
+          </button>
+          <input
+            type="range"
+            className="scale-slider"
+            min={TYPE_SCALE_MIN * 100}
+            max={TYPE_SCALE_MAX * 100}
+            step={5}
+            value={Math.round(typeScale * 100)}
+            aria-label="Text size"
+            onChange={(event) => changeTypeScale(Number(event.target.value) / 100)}
+          />
+          <button
+            type="button"
+            className="scale-step"
+            aria-label="Larger text"
+            onClick={() => changeTypeScale(typeScale + 0.05)}
+            disabled={typeScale >= TYPE_SCALE_MAX}
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-group">
+        <p className="settings-label">Line spacing</p>
+        <div className="segmented">
+          {TYPE_LEADING_OPTIONS.map((option) => (
+            <button
+              type="button"
+              key={option.label}
+              className={typeLeading === option.value ? 'seg active' : 'seg'}
+              onClick={() => changeTypeLeading(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ThemePicker preference={themePreference} onSelect={onSelectTheme} />
+    </>
+  )
+
+  const paletteGroups = [
+    sectionsPaletteGroup(documentSections, navigateToSection),
+    actionsPaletteGroup([
+      {
+        id: 'toggle-toc',
+        title: 'Toggle contents',
+        keywords: 'toc outline headings',
+        action: () => panels.toggle('toc'),
+      },
+      {
+        id: 'search',
+        title: 'Search document',
+        keywords: 'find text',
+        action: () => {
+          openPanel('search')
+          focusSearchInput()
+        },
+      },
+      {
+        id: 'comments',
+        title: 'Toggle comments',
+        keywords: 'notes annotate',
+        action: () => panels.toggle('comments'),
+      },
+      {
+        id: 'ask',
+        title: 'Ask about this document',
+        keywords: 'ai assistant chat',
+        action: () => panels.toggle('assistant'),
+      },
+      {
+        id: 'view-continuous',
+        title: 'View: Continuous',
+        keywords: 'layout mode scroll',
+        action: () => changeViewMode('continuous'),
+      },
+      {
+        id: 'view-cards',
+        title: 'View: Cards',
+        keywords: 'layout mode',
+        action: () => changeViewMode('cards'),
+      },
+      {
+        id: 'view-pages',
+        title: 'View: Pages',
+        keywords: 'layout mode paper paged',
+        action: () => changeViewMode('paged'),
+      },
+      {
+        id: 'library',
+        title: 'Back to library',
+        keywords: 'home close',
+        action: onHome,
+      },
+    ]),
+    libraryPaletteGroup(onOpenLibrary, fileName),
+    themePaletteGroup(themePreference, onSelectTheme),
+  ]
+
+  return (
+    <div className="reader-root" ref={readerRootRef}>
+      <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
+      <SelectionMenu
+        scopeRef={docColRef}
+        disabled={commentsOpen}
+        actions={[
+          { id: 'comment', label: 'Comment', onRun: () => commentOnSelection() },
+          { id: 'ask', label: 'Ask', onRun: askAboutSelection },
+          {
+            id: 'copy',
+            label: 'Copy',
+            onRun: (text) => {
+              void navigator.clipboard?.writeText(text)
+            },
+          },
+        ]}
+      />
+      <TocRail
+        sections={tocRailSections}
+        activeId={activeSectionId || activeChapterId}
+        hidden={tocOpen || commentsOpen}
+        onNavigate={navigateToSection}
+      />
+      <Lightbox scopeRef={docColRef} />
+      <ReaderTopbar
+        fileName={fileName}
+        onHome={onHome}
+        actions={topbarActions}
+        settings={settingsContent}
+      />
 
       <DocAssistant
         open={assistantOpen}
-        onClose={() => setAssistantOpen(false)}
+        onClose={() => panels.close('assistant')}
         markdown={markdown}
         fileName={fileName}
         sections={documentSections}
         onNavigateToSection={navigateToSection}
+        prefill={assistantPrefill}
       />
 
       <DocComments
         open={commentsOpen}
-        onClose={() => setCommentsOpen(false)}
+        onClose={() => panels.close('comments')}
         docColRef={docColRef}
         markdown={markdown}
         toc={toc}
@@ -1406,105 +1213,32 @@ function Reader({
         onAddComment={handleAddComment}
         onUpdateComment={updateComment}
         onDeleteComment={deleteComment}
+        externalDraft={externalDraft}
       />
 
-      {searchOpen ? (
-        <aside className="search-panel" aria-label="Document search">
-          <div className="search-panel-header">
-            <h2>Search</h2>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Close search"
-              onClick={() => setSearchOpen(false)}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M18 6 6 18" />
-                <path d="m6 6 12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="search-panel-body">
-            <div className="search-panel-input-row">
-              <input
-                ref={searchInputRef}
-                type="search"
-                className="search-panel-input"
-                value={searchQuery}
-                placeholder="Search headings and sections"
-                aria-label="Search this document"
-                spellCheck={false}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
-              {trimmedSearchQuery ? (
-                <button
-                  type="button"
-                  className="search-panel-clear"
-                  onClick={() => {
-                    setSearchQuery('')
-                    focusSearchInput()
-                  }}
-                  aria-label="Clear search"
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-
-            {trimmedSearchQuery ? (
-              <p className="search-panel-hint">
-                {searchResults.length === 0
-                  ? 'No matching sections.'
-                  : `${searchResults.length} matching section${searchResults.length === 1 ? '' : 's'}.`}
-              </p>
-            ) : (
-              <p className="search-panel-hint">Tip: press / to focus search.</p>
-            )}
-
-            <div className="search-results" role="list" aria-label="Search results">
-              {trimmedSearchQuery
-                ? searchResults.map((result) => (
-                    <button
-                      key={result.id}
-                      type="button"
-                      className={`search-result search-l${result.level}`}
-                      onClick={() => {
-                        navigateToSection(result.id)
-                        if (trimmedSearchQuery) {
-                          setFlashSearchQuery(trimmedSearchQuery)
-                          setFlashSearchSectionId(result.id)
-                          setFlashAutoScroll(result.reason !== 'Strong heading match' && result.reason !== 'Exact heading match')
-                          setFlashSearchTick(Date.now())
-                        }
-                      }}
-                    >
-                      <span className="search-result-title">
-                        {highlightMatches(result.text, trimmedSearchQuery)}
-                      </span>
-                      <span className="search-result-reason">{result.reason}</span>
-                      {result.snippet ? (
-                        <span className="search-result-snippet">
-                          {highlightMatches(result.snippet, trimmedSearchQuery)}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))
-                : null}
-            </div>
-          </div>
-        </aside>
-      ) : null}
+      <SearchPanel
+        open={searchOpen}
+        onClose={() => panels.close('search')}
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        inputRef={searchInputRef}
+        placeholder="Search headings and sections"
+        resultNoun="section"
+        results={searchResults}
+        find={{ count: findCount, index: findIndex, onStep: stepFind }}
+        onSelect={(result) => {
+          navigateToSection(result.id)
+          if (trimmedSearchQuery) {
+            setFlashSearchQuery(trimmedSearchQuery)
+            setFlashSearchSectionId(result.id)
+            setFlashAutoScroll(
+              result.reason !== 'Strong heading match' &&
+                result.reason !== 'Exact heading match',
+            )
+            setFlashSearchTick(Date.now())
+          }
+        }}
+      />
 
       <div
         className="reader-canvas"
@@ -1568,11 +1302,16 @@ function Reader({
           >
             {viewMode === 'paged' ? (
               <section className="page-stack">
-                {pagedContent.map((pageData, index) => (
+                {renderUnits.map((pageData, index) => (
                   <article className="paper-page" key={`page-${index}`}>
                     <div className="page-running-header">{pageData.header}</div>
                     <div className="page-body">
-                      {renderDocumentMarkdown(pageData.content)}
+                      {unitRenderInfos[index] ? (
+                        <MarkdownUnit
+                          content={pageData.content}
+                          unit={unitRenderInfos[index]}
+                        />
+                      ) : null}
                     </div>
                     <div className="page-number">{index + 1}</div>
                   </article>
@@ -1580,24 +1319,37 @@ function Reader({
               </section>
             ) : viewMode === 'cards' ? (
               <section className="card-stack">
-                {cardContent.map((cardData, index) => (
+                {renderUnits.map((cardData, index) => (
                   <article className="paper-scroll paper-card" key={`card-${index}`}>
-                    {renderDocumentMarkdown(cardData.content)}
+                    {unitRenderInfos[index] ? (
+                      <MarkdownUnit
+                        content={cardData.content}
+                        unit={unitRenderInfos[index]}
+                      />
+                    ) : null}
                   </article>
                 ))}
               </section>
             ) : (
               <article className="paper-scroll">
-                {renderDocumentMarkdown(displayMarkdown)}
+                {unitRenderInfos[0] ? (
+                  <MarkdownUnit content={displayMarkdown} unit={unitRenderInfos[0]} />
+                ) : null}
               </article>
             )}
           </div>
         </div>
 
+        <LinkPreview scopeRef={docColRef} />
+
         {isPaged ? (
           <div className="measure-host" ref={measureHostRef} aria-hidden="true">
             <div className="paper-page measure-page">
-              <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                components={markdownCodeComponents}
+                rehypePlugins={[rehypeRaw]}
+                remarkPlugins={[remarkGfm]}
+              >
                 {displayMarkdown}
               </ReactMarkdown>
             </div>

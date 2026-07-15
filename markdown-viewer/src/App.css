@@ -164,7 +164,7 @@
 
 /* Contents toggle only appears on narrow screens (see media query). */
 .toc-toggle {
-  display: none;
+  display: inline-flex;
 }
 
 /* ================================================================== *
@@ -181,14 +181,13 @@
   color: var(--content-ink-soft);
   min-height: calc(100vh - var(--topbar-total));
   display: grid;
-  grid-template-columns: var(--toc-width) minmax(0, 1fr);
-  column-gap: clamp(1.25rem, 3vw, 2.75rem);
+  grid-template-columns: minmax(0, 1fr);
   padding: clamp(1.5rem, 3vw, 2.75rem) var(--gutter) 5rem;
   overflow: clip;
 }
 
 .doc-stage {
-  grid-column: 2;
+  grid-column: 1;
   position: relative;
   min-width: 0;
   display: flex;
@@ -209,11 +208,13 @@
   user-select: text;
 }
 .toc-panel {
-  position: sticky;
-  top: var(--topbar-total);
-  align-self: start;
-  z-index: 4;
-  max-height: calc(100vh - var(--topbar-total));
+  display: none;
+  position: fixed;
+  top: calc(var(--topbar-total) + 0.5rem);
+  left: var(--gutter);
+  width: min(19rem, calc(100vw - 2 * var(--gutter)));
+  z-index: 30;
+  max-height: min(72vh, calc(100vh - var(--topbar-total) - 2rem));
   overflow-y: auto;
   padding: 0.95rem 0.9rem 1rem;
   background: color-mix(in srgb, var(--surface) 88%, transparent);
@@ -645,8 +646,8 @@
   background: linear-gradient(135deg, #0e0e0e 50%, #2f5f8f 50%);
 }
 
-.theme-swatch[data-theme='crimson'] {
-  background: linear-gradient(135deg, #100d0e 50%, #a52121 50%);
+.theme-swatch[data-theme='sepia-night'] {
+  background: linear-gradient(135deg, #14100b 50%, #c89a52 50%);
 }
 
 .theme-swatch[data-theme='sepia'] {
@@ -1010,6 +1011,7 @@
   box-shadow: var(--shadow-soft);
   color: var(--content-ink-soft);
   overflow: hidden;
+  font-size: calc(1rem * var(--type-scale, 1));
 }
 
 .paper-scroll {
@@ -1114,7 +1116,8 @@
 .paper-page li {
   color: var(--content-ink-soft);
   font-family: var(--font-body);
-  font-size: 1.05rem;
+  font-size: 1.05em;
+  line-height: var(--type-leading, normal);
 }
 
 .paper-scroll h1,
@@ -1157,8 +1160,8 @@
 .reader-canvas[data-theme='ink-night'] .paper-page p,
 .reader-canvas[data-theme='ink-night'] .paper-page li {
   letter-spacing: 0.03em;
-  line-height: 1.7;
-  font-size: 1rem;
+  line-height: var(--type-leading, 1.7);
+  font-size: 1em;
 }
 
 .reader-canvas[data-theme='ink'] .paper-scroll h2,
@@ -2595,9 +2598,13 @@
 
 .reader-canvas.reader-canvas-csv {
   grid-template-columns: minmax(0, 1fr);
-  padding-top: 0.75rem;
+  /* Pull the themed canvas up behind the floating topbar pill so its background
+     is continuous there — otherwise the dark page body shows as a black bar
+     behind the pill while the sheet pans. */
+  margin-top: calc(-1 * var(--topbar-total));
+  padding-top: calc(var(--topbar-total) + 0.75rem);
   padding-bottom: 0;
-  min-height: calc(100vh - var(--topbar-total));
+  min-height: 100vh;
 }
 
 .csv-stage {
@@ -2713,4 +2720,545 @@
   padding-left: 1.2rem;
 }
 
+/* ================================================================== *
+ * Receding chrome — the topbar gets out of the way while reading.
+ * ================================================================== */
+.reader-topbar-shell {
+  transition: transform 0.28s ease, opacity 0.28s ease;
+}
 
+.reader-topbar-shell.topbar-hidden {
+  transform: translateY(calc(-100% - 6px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reader-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--content-accent, #4b6b88);
+  opacity: 0.85;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  transition: transform 0.15s linear;
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* ================================================================== *
+ * Command palette (Ctrl/Cmd+K)
+ * ================================================================== */
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(3rem, 14vh, 9rem) 1rem 1rem;
+}
+
+.palette {
+  width: min(620px, 100%);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+  font-family: var(--font-ui);
+}
+
+.palette-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.palette-input::placeholder {
+  color: var(--muted);
+}
+
+.palette-list {
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  padding: 0.4rem;
+}
+
+.palette-group-label {
+  margin: 0.5rem 0.6rem 0.2rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.6rem;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.palette-item.active {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.palette-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-item-hint {
+  color: var(--muted);
+  font-size: 0.72rem;
+  flex: 0 0 auto;
+}
+
+.palette-empty {
+  margin: 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.palette-footer {
+  margin: 0;
+  padding: 0.5rem 1.1rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.palette-footer kbd {
+  font-family: inherit;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+}
+
+/* ================================================================== *
+ * TOC panel open state (all widths — panel is a summoned overlay now)
+ * ================================================================== */
+.toc-panel.toc-open {
+  display: block;
+}
+
+/* ================================================================== *
+ * TOC rail — margin ticks that bloom into the contents on hover
+ * ================================================================== */
+.toc-rail {
+  position: fixed;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 72vh;
+  padding: 0.5rem 0.4rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  overflow: hidden;
+}
+
+.toc-rail-expanded {
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: blur(20px) saturate(1.2);
+  border-color: color-mix(in srgb, var(--line-strong) 45%, transparent);
+  box-shadow: var(--shadow-soft);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.toc-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 0;
+  background: none;
+  padding: 0.18rem 0.3rem;
+  cursor: pointer;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.toc-rail-tick {
+  width: 12px;
+  height: 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 26%, transparent);
+  flex: 0 0 auto;
+  transition: background 0.15s ease;
+}
+
+.toc-rail-l1 .toc-rail-tick {
+  width: 18px;
+}
+
+.toc-rail-l3 .toc-rail-tick {
+  width: 8px;
+}
+
+.toc-rail-item:hover .toc-rail-tick {
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.toc-rail-item.active {
+  color: var(--ink);
+}
+
+.toc-rail-item.active .toc-rail-tick {
+  background: var(--ink);
+}
+
+.toc-rail-label {
+  display: none;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-rail-expanded .toc-rail-label {
+  display: inline;
+}
+
+.toc-rail-expanded .toc-rail-item:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+@media (max-width: 1280px) {
+  .toc-rail {
+    display: none;
+  }
+}
+
+/* ================================================================== *
+ * Selection menu — the selection is the interface
+ * ================================================================== */
+.selection-menu {
+  position: fixed;
+  z-index: 70;
+  transform: translate(-50%, calc(-100% - 10px));
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.25rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  box-shadow: var(--shadow-soft);
+  font-family: var(--font-ui);
+}
+
+.selection-menu-button {
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.selection-menu-button:hover {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+/* ================================================================== *
+ * Code blocks — copy button + quiet theme-derived highlighting
+ * ================================================================== */
+.code-block {
+  position: relative;
+  margin: 1em 0;
+}
+
+.code-block pre {
+  margin: 0;
+}
+
+.code-copy {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 2;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  padding: 0.22rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--content-line);
+  background: color-mix(in srgb, var(--paper) 85%, transparent);
+  color: var(--content-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.code-block:hover .code-copy,
+.code-copy:focus-visible {
+  opacity: 1;
+}
+
+.code-copy:hover {
+  color: var(--content-ink);
+}
+
+/* Token colors derive from the theme so every palette stays coherent. */
+.reader-canvas .hljs-comment,
+.reader-canvas .hljs-quote {
+  color: var(--content-muted);
+  font-style: italic;
+}
+
+.reader-canvas .hljs-keyword,
+.reader-canvas .hljs-selector-tag,
+.reader-canvas .hljs-built_in,
+.reader-canvas .hljs-tag {
+  color: var(--content-accent-strong);
+}
+
+.reader-canvas .hljs-string,
+.reader-canvas .hljs-attr,
+.reader-canvas .hljs-attribute,
+.reader-canvas .hljs-symbol,
+.reader-canvas .hljs-regexp {
+  color: var(--content-heading-soft);
+}
+
+.reader-canvas .hljs-number,
+.reader-canvas .hljs-literal,
+.reader-canvas .hljs-addition {
+  color: var(--content-accent);
+}
+
+.reader-canvas .hljs-title,
+.reader-canvas .hljs-name,
+.reader-canvas .hljs-section {
+  color: var(--content-heading);
+  font-weight: 600;
+}
+
+.reader-canvas .hljs-type,
+.reader-canvas .hljs-selector-class,
+.reader-canvas .hljs-selector-id {
+  color: var(--content-accent-strong);
+}
+
+.reader-canvas .hljs-meta,
+.reader-canvas .hljs-doctag,
+.reader-canvas .hljs-deletion {
+  color: var(--content-muted);
+}
+
+.reader-canvas .hljs-variable,
+.reader-canvas .hljs-template-variable,
+.reader-canvas .hljs-params {
+  color: var(--content-ink);
+}
+
+.reader-canvas .hljs-emphasis {
+  font-style: italic;
+}
+
+.reader-canvas .hljs-strong {
+  font-weight: 700;
+}
+
+/* ================================================================== *
+ * Image lightbox
+ * ================================================================== */
+.paper-scroll :not(a) > img,
+.paper-page :not(a) > img {
+  cursor: zoom-in;
+}
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.84);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem;
+  cursor: zoom-out;
+}
+
+.lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 6px;
+  box-shadow: var(--shadow-soft);
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 1rem;
+  right: 1.25rem;
+}
+
+/* ================================================================== *
+ * Persistent find-in-document
+ * ================================================================== */
+mark.find-highlight {
+  background: color-mix(in srgb, var(--content-accent) 24%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+mark.find-highlight.find-current {
+  background: var(--content-accent-strong);
+  color: var(--paper);
+}
+
+.find-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  padding: 0.3rem 0.45rem 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.find-count {
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+
+.find-controls {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.find-step {
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.find-step:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.find-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ================================================================== *
+ * Link previews — follow a reference without losing your place
+ * ================================================================== */
+.link-preview {
+  position: fixed;
+  z-index: 65;
+  width: min(380px, calc(100vw - 2rem));
+  max-height: 260px;
+  overflow: hidden;
+  background: var(--paper);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  pointer-events: none;
+}
+
+.link-preview-above {
+  transform: translateY(-100%);
+}
+
+.link-preview-body {
+  padding: 0.9rem 1.05rem;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--content-ink-soft);
+}
+
+.link-preview-body h1,
+.link-preview-body h2,
+.link-preview-body h3,
+.link-preview-body h4 {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--content-heading);
+}
+
+.link-preview-body p,
+.link-preview-body li {
+  margin: 0 0 0.5rem;
+}
+
+.link-preview-body pre {
+  background: var(--content-code-bg);
+  border: 1px solid var(--content-line);
+  border-radius: 6px;
+  padding: 0.6rem;
+  font-size: 0.78rem;
+  overflow: hidden;
+}
+
+.link-preview-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.link-preview-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Fade the bottom edge so truncation reads as "there's more". */
+.link-preview::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.4rem;
+  background: linear-gradient(to bottom, transparent, var(--paper));
+  pointer-events: none;
+}

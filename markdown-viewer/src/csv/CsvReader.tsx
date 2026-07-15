@@ -12,13 +12,27 @@ import DocAssistant from '../DocAssistant'
 import DocComments from '../DocComments'
 import type { CommentAnchor } from '../documentComments'
 import { useDocumentComments } from '../documentComments'
-import { type Theme, THEMES } from '../theme'
+import { type Theme, type ThemePreference } from '../theme'
 import {
   applyZoomKeyboardShortcut,
   attachDocumentZoomWheel,
   clampPageZoom,
+  isEditableKeyboardTarget,
   isZoomWheelEvent,
 } from '../readerConfig'
+import { AskIcon, CommentsIcon, SearchIcon } from '../ui/icons'
+import { ReaderTopbar, type TopbarAction } from '../ui/ReaderTopbar'
+import { SearchPanel } from '../ui/SearchPanel'
+import { ThemePicker } from '../ui/ThemePicker'
+import { usePanels } from '../ui/usePanels'
+import { CommandPalette } from '../ui/CommandPalette'
+import {
+  actionsPaletteGroup,
+  libraryPaletteGroup,
+  sectionsPaletteGroup,
+  themePaletteGroup,
+} from '../ui/paletteGroups'
+import type { LibraryDoc } from '../library'
 import { resolveCsvSelectionAnchor } from './csvCommentAnchors'
 import { buildCsvDocumentIndex, rowSectionFromId } from './csvDocument'
 import { getCsvCellHighlight } from './csvHighlights'
@@ -30,6 +44,7 @@ import {
 } from './csvViewConfig'
 import {
   centerPanOnElement,
+  clampPan,
   fitSheetInViewport,
   stepZoomAtViewportCenter,
   type CsvViewportState,
@@ -42,48 +57,10 @@ type CsvReaderProps = {
   docKey: string
   csvContent: string
   theme: Theme
-  onSelectTheme: (theme: Theme) => void
+  themePreference: ThemePreference
+  onSelectTheme: (preference: ThemePreference) => void
   onHome: () => void
-}
-
-const SettingsIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-  </svg>
-)
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function highlightMatches(text: string, query: string) {
-  const tokens = query
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2)
-
-  if (!text || tokens.length === 0) {
-    return text
-  }
-
-  const pattern = new RegExp(`(${tokens.map(escapeRegExp).join('|')})`, 'gi')
-  const exactPattern = new RegExp(`^(${tokens.map(escapeRegExp).join('|')})$`, 'i')
-  const parts = text.split(pattern)
-
-  return parts.map((part, index) =>
-    exactPattern.test(part) ? <mark key={`${part}-${index}`}>{part}</mark> : part,
-  )
+  onOpenLibrary: (doc: LibraryDoc) => void
 }
 
 function canStartPan(event: ReactPointerEvent<HTMLDivElement>) {
@@ -95,29 +72,36 @@ export default function CsvReader({
   docKey,
   csvContent,
   theme,
+  themePreference,
   onSelectTheme,
   onHome,
+  onOpenLibrary,
 }: CsvReaderProps) {
   const docColRef = useRef<HTMLDivElement | null>(null)
   const readerRootRef = useRef<HTMLDivElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const sheetRef = useRef<HTMLDivElement | null>(null)
-  const settingsRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const panSessionRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [commentsOpen, setCommentsOpen] = useState(false)
-  const [assistantOpen, setAssistantOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [wrapText, setWrapText] = useState(() => loadCsvWrapTextPreference())
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCellId, setActiveCellId] = useState('')
+  const [assistantPrefill, setAssistantPrefill] = useState<{
+    text: string
+    tick: number
+  } | null>(null)
   const [isPanning, setIsPanning] = useState(false)
   const [viewport, setViewport] = useState<CsvViewportState>({
     panX: 0,
     panY: 0,
     zoom: 1,
   })
+
+  const panels = usePanels()
+  const { closeAll: closeAllPanels, open: openPanel } = panels
+  const searchOpen = panels.isOpen('search')
+  const commentsOpen = panels.isOpen('comments')
+  const assistantOpen = panels.isOpen('assistant')
 
   const index = useMemo(() => buildCsvDocumentIndex(csvContent), [csvContent])
 
@@ -191,6 +175,35 @@ export default function CsvReader({
     window.requestAnimationFrame(() => searchInputRef.current?.focus())
   }, [])
 
+  const askQuery = useCallback(
+    (text: string) => {
+      setAssistantPrefill({ text, tick: Date.now() })
+      openPanel('assistant')
+    },
+    [openPanel],
+  )
+
+  const clampViewportPan = useCallback((next: CsvViewportState): CsvViewportState => {
+    const sheet = sheetRef.current
+    const viewportElement = viewportRef.current
+    if (!sheet || !viewportElement) {
+      return next
+    }
+
+    return {
+      ...next,
+      ...clampPan(
+        next.panX,
+        next.panY,
+        next.zoom,
+        sheet.offsetWidth,
+        sheet.offsetHeight,
+        viewportElement.clientWidth,
+        viewportElement.clientHeight,
+      ),
+    }
+  }, [])
+
   const focusElementInViewport = useCallback((element: HTMLElement | null) => {
     const sheet = sheetRef.current
     const viewportElement = viewportRef.current
@@ -253,12 +266,14 @@ export default function CsvReader({
     }
 
     event.preventDefault()
-    setViewport((current) => ({
-      ...current,
-      panX: current.panX - event.deltaX,
-      panY: current.panY - event.deltaY,
-    }))
-  }, [])
+    setViewport((current) =>
+      clampViewportPan({
+        ...current,
+        panX: current.panX - event.deltaX,
+        panY: current.panY - event.deltaY,
+      }),
+    )
+  }, [clampViewportPan])
 
   useEffect(() => {
     const root = readerRootRef.current
@@ -326,12 +341,14 @@ export default function CsvReader({
       return
     }
 
-    setViewport((current) => ({
-      ...current,
-      panX: session.panX + (event.clientX - session.x),
-      panY: session.panY + (event.clientY - session.y),
-    }))
-  }, [])
+    setViewport((current) =>
+      clampViewportPan({
+        ...current,
+        panX: session.panX + (event.clientX - session.x),
+        panY: session.panY + (event.clientY - session.y),
+      }),
+    )
+  }, [clampViewportPan])
 
   const endPan = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!panSessionRef.current) {
@@ -347,15 +364,12 @@ export default function CsvReader({
   }, [])
 
   useEffect(() => {
-    setSearchOpen(false)
-    setCommentsOpen(false)
-    setAssistantOpen(false)
-    setSettingsOpen(false)
+    closeAllPanels()
     setSearchQuery('')
     setActiveCellId('')
     setIsPanning(false)
     panSessionRef.current = null
-  }, [csvContent, docKey])
+  }, [csvContent, docKey, closeAllPanels])
 
   useLayoutEffect(() => {
     if (!index.headers.length) {
@@ -374,47 +388,21 @@ export default function CsvReader({
   }, [wrapText])
 
   useEffect(() => {
-    if (!settingsOpen) {
-      return
-    }
-
-    const onPointerDown = (event: Event) => {
-      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
-        setSettingsOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [settingsOpen])
-
-  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (applyZoomKeyboardShortcut(event, stepZoom)) {
         return
       }
 
-      if (event.key === '/' && !searchOpen && !assistantOpen && !commentsOpen) {
-        const target = event.target
-        if (
-          target instanceof HTMLElement &&
-          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-        ) {
-          return
-        }
-
+      if (event.key === '/' && !isEditableKeyboardTarget(event.target)) {
         event.preventDefault()
-        setSearchOpen(true)
-        setCommentsOpen(false)
-        setAssistantOpen(false)
-        setSettingsOpen(false)
+        openPanel('search')
         focusSearchInput()
       }
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [assistantOpen, commentsOpen, focusSearchInput, searchOpen, stepZoom])
+  }, [focusSearchInput, openPanel, stepZoom])
 
   const hasData = index.headers.length > 0
   const sheetStyle = {
@@ -424,161 +412,165 @@ export default function CsvReader({
     .filter(Boolean)
     .join(' ')
 
+  const topbarActions: TopbarAction[] = [
+    {
+      id: 'search',
+      label: 'Search',
+      icon: <SearchIcon />,
+      active: searchOpen || Boolean(trimmedSearchQuery),
+      onToggle: () => {
+        panels.toggle('search')
+        if (!searchOpen) {
+          focusSearchInput()
+        }
+      },
+    },
+    {
+      id: 'comments',
+      label: 'Comments',
+      icon: <CommentsIcon />,
+      active: commentsOpen,
+      badge: comments.length || undefined,
+      onToggle: () => panels.toggle('comments'),
+    },
+    {
+      id: 'assistant',
+      label: 'Ask',
+      icon: <AskIcon />,
+      active: assistantOpen,
+      onToggle: () => panels.toggle('assistant'),
+    },
+  ]
+
+  const settingsContent = (
+    <>
+      <div className="settings-group">
+        <div className="settings-label-row">
+          <p className="settings-label">Zoom</p>
+          <span className="scale-value" aria-live="polite">
+            {Math.round(viewport.zoom * 100)}%
+          </span>
+        </div>
+        <div className="scale-control">
+          <button
+            type="button"
+            className="scale-step"
+            aria-label="Zoom out"
+            onClick={() => stepZoom('out')}
+          >
+            −
+          </button>
+          <div className="segmented settings-inline-seg">
+            <button type="button" className="seg" onClick={fitSheet}>
+              Fit
+            </button>
+            <button type="button" className="seg" onClick={resetZoomTo100}>
+              100%
+            </button>
+          </div>
+          <button
+            type="button"
+            className="scale-step"
+            aria-label="Zoom in"
+            onClick={() => stepZoom('in')}
+          >
+            +
+          </button>
+        </div>
+      </div>
+      <div className="settings-group">
+        <p className="settings-label">Text</p>
+        <div className="segmented">
+          <button
+            type="button"
+            className={wrapText ? 'seg' : 'seg active'}
+            onClick={() => setWrapText(false)}
+          >
+            Single line
+          </button>
+          <button
+            type="button"
+            className={wrapText ? 'seg active' : 'seg'}
+            onClick={() => setWrapText(true)}
+          >
+            Wrap long
+          </button>
+        </div>
+      </div>
+      <ThemePicker preference={themePreference} onSelect={onSelectTheme} />
+    </>
+  )
+
+  const paletteGroups = [
+    sectionsPaletteGroup(index.sections, navigateToSection),
+    actionsPaletteGroup([
+      {
+        id: 'search',
+        title: 'Search cells',
+        keywords: 'find text',
+        action: () => {
+          openPanel('search')
+          focusSearchInput()
+        },
+      },
+      {
+        id: 'comments',
+        title: 'Toggle comments',
+        keywords: 'notes annotate',
+        action: () => panels.toggle('comments'),
+      },
+      {
+        id: 'ask',
+        title: 'Ask about this spreadsheet',
+        keywords: 'ai assistant chat',
+        action: () => panels.toggle('assistant'),
+      },
+      {
+        id: 'fit',
+        title: 'Zoom: Fit sheet',
+        keywords: 'zoom scale',
+        action: fitSheet,
+      },
+      {
+        id: 'zoom-100',
+        title: 'Zoom: 100%',
+        keywords: 'zoom scale reset',
+        action: resetZoomTo100,
+      },
+      {
+        id: 'library',
+        title: 'Back to library',
+        keywords: 'home close',
+        action: onHome,
+      },
+    ]),
+    libraryPaletteGroup(onOpenLibrary, fileName),
+    themePaletteGroup(themePreference, onSelectTheme),
+  ]
+
   return (
     <div className="reader-root" ref={readerRootRef}>
-      <div className="topbar-shell reader-topbar-shell">
-        <header className="app-topbar topbar-pill reader-topbar">
-          <div className="topbar-lead">
-            <button type="button" className="ghost-button home-link" onClick={onHome}>
-              <span>Library</span>
-            </button>
-            <span className="topbar-divider" aria-hidden="true" />
-            <p className="doc-name" title={fileName}>
-              {fileName}
-            </p>
-          </div>
-          <div className="controls">
-            <button
-              type="button"
-              className={searchOpen ? 'ghost-button active' : 'ghost-button'}
-              aria-expanded={searchOpen}
-              onClick={() => {
-                setSearchOpen((value) => !value)
-                setCommentsOpen(false)
-                setAssistantOpen(false)
-                setSettingsOpen(false)
-              }}
-            >
-              <span>Search</span>
-            </button>
-            <button
-              type="button"
-              className={commentsOpen ? 'ghost-button active' : 'ghost-button'}
-              aria-expanded={commentsOpen}
-              onClick={() => {
-                setCommentsOpen((value) => !value)
-                setSearchOpen(false)
-                setAssistantOpen(false)
-                setSettingsOpen(false)
-              }}
-            >
-              <span>Comments</span>
-              {comments.length > 0 ? (
-                <span className="comment-count-badge">{comments.length}</span>
-              ) : null}
-            </button>
-            <button
-              type="button"
-              className="ghost-button assistant-toggle"
-              aria-expanded={assistantOpen}
-              onClick={() => {
-                setAssistantOpen((value) => !value)
-                setSearchOpen(false)
-                setCommentsOpen(false)
-                setSettingsOpen(false)
-              }}
-            >
-              <span>Ask</span>
-            </button>
-            <div className="controls-actions" ref={settingsRef}>
-              <button
-                type="button"
-                className={settingsOpen ? 'icon-button active' : 'icon-button'}
-                aria-expanded={settingsOpen}
-                onClick={() => setSettingsOpen((value) => !value)}
-              >
-                <SettingsIcon />
-              </button>
-              {settingsOpen ? (
-                <div className="settings-popover" role="dialog" aria-label="Settings">
-                  <div className="settings-group">
-                    <div className="settings-label-row">
-                      <p className="settings-label">Zoom</p>
-                      <span className="scale-value" aria-live="polite">
-                        {Math.round(viewport.zoom * 100)}%
-                      </span>
-                    </div>
-                    <div className="scale-control">
-                      <button
-                        type="button"
-                        className="scale-step"
-                        aria-label="Zoom out"
-                        onClick={() => stepZoom('out')}
-                      >
-                        −
-                      </button>
-                      <div className="segmented settings-inline-seg">
-                        <button type="button" className="seg" onClick={fitSheet}>
-                          Fit
-                        </button>
-                        <button type="button" className="seg" onClick={resetZoomTo100}>
-                          100%
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        className="scale-step"
-                        aria-label="Zoom in"
-                        onClick={() => stepZoom('in')}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                  <div className="settings-group">
-                    <p className="settings-label">Text</p>
-                    <div className="segmented">
-                      <button
-                        type="button"
-                        className={wrapText ? 'seg' : 'seg active'}
-                        onClick={() => setWrapText(false)}
-                      >
-                        Single line
-                      </button>
-                      <button
-                        type="button"
-                        className={wrapText ? 'seg active' : 'seg'}
-                        onClick={() => setWrapText(true)}
-                      >
-                        Wrap long
-                      </button>
-                    </div>
-                  </div>
-                  <div className="settings-group">
-                    <p className="settings-label">Theme</p>
-                    <div className="theme-grid">
-                      {THEMES.map((option) => (
-                        <button
-                          type="button"
-                          key={option.id}
-                          className={theme === option.id ? 'theme-chip active' : 'theme-chip'}
-                          onClick={() => onSelectTheme(option.id)}
-                        >
-                          <span className="theme-swatch" data-theme={option.id} />
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </header>
-      </div>
+      <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
+      <ReaderTopbar
+        fileName={fileName}
+        onHome={onHome}
+        actions={topbarActions}
+        settings={settingsContent}
+      />
 
       <DocAssistant
         open={assistantOpen}
-        onClose={() => setAssistantOpen(false)}
+        onClose={() => panels.close('assistant')}
         markdown={index.fullText}
         fileName={fileName}
         sections={index.sections}
         onNavigateToSection={navigateToSection}
+        prefill={assistantPrefill}
       />
 
       <DocComments
         open={commentsOpen}
-        onClose={() => setCommentsOpen(false)}
+        onClose={() => panels.close('comments')}
         docColRef={docColRef}
         markdown=""
         toc={index.sections}
@@ -592,80 +584,27 @@ export default function CsvReader({
         scrollToAnchor={scrollToAnchor}
       />
 
-      {searchOpen ? (
-        <aside className="search-panel" aria-label="Document search">
-          <div className="search-panel-header">
-            <h2>Search</h2>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Close search"
-              onClick={() => setSearchOpen(false)}
-            >
-              Close
-            </button>
-          </div>
-          <div className="search-panel-body">
-            <div className="search-panel-input-row">
-              <input
-                ref={searchInputRef}
-                type="search"
-                className="search-panel-input"
-                value={searchQuery}
-                placeholder="Search cells"
-                aria-label="Search this spreadsheet"
-                spellCheck={false}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
-              {trimmedSearchQuery ? (
-                <button
-                  type="button"
-                  className="search-panel-clear"
-                  onClick={() => {
-                    setSearchQuery('')
-                    focusSearchInput()
-                  }}
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-
-            {trimmedSearchQuery ? (
-              <p className="search-panel-hint">
-                {searchResults.length === 0
-                  ? 'No matching cells.'
-                  : `${searchResults.length} matching cell${searchResults.length === 1 ? '' : 's'}.`}
-              </p>
-            ) : (
-              <p className="search-panel-hint">Tip: press / to focus search.</p>
-            )}
-
-            <div className="search-results" role="list" aria-label="Search results">
-              {trimmedSearchQuery
-                ? searchResults.map((result) => (
-                    <button
-                      type="button"
-                      key={result.id}
-                      className={
-                        activeCellId === result.id ? 'search-result active' : 'search-result'
-                      }
-                      onClick={() => scrollToCell(result.row, result.col)}
-                    >
-                      <span className="search-result-title">
-                        Row {result.row + 1} ·{' '}
-                        {highlightMatches(result.columnName, trimmedSearchQuery)}
-                      </span>
-                      <span className="search-result-snippet">
-                        {highlightMatches(result.snippet, trimmedSearchQuery)}
-                      </span>
-                    </button>
-                  ))
-                : null}
-            </div>
-          </div>
-        </aside>
-      ) : null}
+      <SearchPanel
+        open={searchOpen}
+        onClose={() => panels.close('search')}
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        inputRef={searchInputRef}
+        placeholder="Search cells"
+        resultNoun="cell"
+        results={searchResults.map((result) => ({
+          id: result.id,
+          text: `Row ${result.row + 1} · ${result.columnName}`,
+          snippet: result.snippet,
+        }))}
+        activeResultId={activeCellId}
+        onSelect={(item) => {
+          const result = searchResults.find((candidate) => candidate.id === item.id)
+          if (result) {
+            scrollToCell(result.row, result.col)
+          }
+        }}
+      />
 
       <div
         className="reader-canvas reader-canvas-csv"

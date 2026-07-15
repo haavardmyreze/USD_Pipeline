@@ -55,6 +55,8 @@ type DocAssistantProps = {
   fileName: string
   sections: SectionRef[]
   onNavigateToSection: (id: string) => void
+  /** Text to place in the input (e.g. a quoted selection), once per tick. */
+  prefill?: { text: string; tick: number } | null
 }
 
 type AssistantMessage = {
@@ -122,9 +124,11 @@ function DocAssistant({
   fileName,
   sections,
   onNavigateToSection,
+  prefill,
 }: DocAssistantProps) {
   const [messages, setMessages] = useState<AssistantMessage[]>([])
   const [input, setInput] = useState('')
+  const lastPrefillTickRef = useRef(0)
   const [loading, setLoading] = useState(false)
   const [warming, setWarming] = useState(false)
   const [error, setError] = useState('')
@@ -145,6 +149,15 @@ function DocAssistant({
   const contextInfo = useMemo(() => getDocumentContextInfo(markdown), [markdown])
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  // Selection-menu "Ask": drop the quoted passage into the input.
+  useEffect(() => {
+    if (!open || !prefill || prefill.tick === lastPrefillTickRef.current) {
+      return
+    }
+    lastPrefillTickRef.current = prefill.tick
+    setInput(prefill.text)
+  }, [open, prefill])
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)

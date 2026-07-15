@@ -1,0 +1,86 @@
+// Shared UI icons. One source of truth — never inline these in components.
+
+type IconProps = {
+  size?: number
+  strokeWidth?: number
+}
+
+function iconAttrs({ size = 16, strokeWidth = 1.9 }: IconProps) {
+  return {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  } as const
+}
+
+export const SettingsIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs({ size: 18, strokeWidth: 1.8, ...props })}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+)
+
+export const BackIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <path d="M15 18l-6-6 6-6" />
+  </svg>
+)
+
+export const ContentsIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <path d="M8 6h13" />
+    <path d="M8 12h13" />
+    <path d="M8 18h13" />
+    <path d="M3 6h.01" />
+    <path d="M3 12h.01" />
+    <path d="M3 18h.01" />
+  </svg>
+)
+
+export const SearchIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </svg>
+)
+
+export const CommentsIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+    <path d="M8 9h8" />
+    <path d="M8 13h5" />
+  </svg>
+)
+
+export const AskIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+  </svg>
+)
+
+export const CloseIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs(props)}>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </svg>
+)
+
+export const PlusIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs({ size: 26, strokeWidth: 1.6, ...props })}>
+    <path d="M12 5v14" />
+    <path d="M5 12h14" />
+  </svg>
+)
+
+export const ClipboardIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs({ size: 26, strokeWidth: 1.6, ...props })}>
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+  </svg>
+)

@@ -1,366 +1,105 @@
-import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, useEffect, useState } from 'react'
 import './App.css'
-import { detectFormatFromFileName, detectFormatFromSrc } from './documents/detectFormat'
-import type { DocumentFormat } from './documents/types'
-import Home from './Home'
-import PdfReader from './pdf/PdfReader'
-import CsvReader from './csv/CsvReader'
-import Reader from './Reader'
-import { hashArrayBuffer, makeDocumentKey } from './documentKey'
+import { adapterForFileName, adapterForFormat } from './documents/adapter'
 import {
-  getDocIdFromUrl,
-  getLibraryContent,
-  getLibraryDoc,
-  libraryDocs,
-  type LibraryDoc,
-} from './library'
-import { resolveTheme, type Theme } from './theme'
+  documentKeyFor,
+  externalErrorDocument,
+  libraryDocumentState,
+  loadExternalDocument,
+  parseFileNameFromSrc,
+  stateFromLocation,
+  urlForState,
+  type AppState,
+  type OpenDocument,
+} from './documentState'
+import Home from './Home'
+import { libraryDocs, type LibraryDoc } from './library'
+import { useTheme } from './ui/useTheme'
+import { withViewTransition } from './ui/viewTransition'
 
-type ViewMode = 'home' | 'reader'
+const LAST_LIBRARY_DOC_KEY = 'mdv-library-doc'
 
 function lastOpenedId() {
   try {
-    return localStorage.getItem('mdv-library-doc') ?? ''
+    return localStorage.getItem(LAST_LIBRARY_DOC_KEY) ?? ''
   } catch {
     return ''
   }
 }
 
-function getSrcFromUrl() {
-  return new URLSearchParams(window.location.search).get('src')
-}
-
-function parseFileNameFromSrc(src: string) {
+function rememberLibraryDoc(id: string) {
   try {
-    const url = new URL(src)
-    const base = decodeURIComponent(url.pathname.split('/').pop() ?? '')
-    return base || 'document.md'
+    localStorage.setItem(LAST_LIBRARY_DOC_KEY, id)
   } catch {
-    return 'document.md'
-  }
-}
-
-function resolveInitialState() {
-  const src = getSrcFromUrl()
-  if (src) {
-    return {
-      view: 'reader' as ViewMode,
-      format: detectFormatFromSrc(src),
-      content: '',
-      fileName: parseFileNameFromSrc(src),
-      libraryId: '',
-      externalSrc: src,
-      pdfSource: null as ArrayBuffer | string | null,
-      csvContent: '',
-      fingerprint: '',
-    }
-  }
-
-  const fromUrl = getDocIdFromUrl()
-  if (fromUrl) {
-    const doc = getLibraryDoc(fromUrl)
-    const content = getLibraryContent(fromUrl)
-    if (doc && content) {
-      return {
-        view: 'reader' as ViewMode,
-        format: 'markdown' as DocumentFormat,
-        content,
-        fileName: doc.fileName,
-        libraryId: doc.id,
-        externalSrc: '',
-        pdfSource: null as ArrayBuffer | string | null,
-        csvContent: '',
-        fingerprint: content,
-      }
-    }
-  }
-
-  return {
-    view: 'home' as ViewMode,
-    format: 'markdown' as DocumentFormat,
-    content: '',
-    fileName: '',
-    libraryId: lastOpenedId(),
-    externalSrc: '',
-    pdfSource: null as ArrayBuffer | string | null,
-    csvContent: '',
-    fingerprint: '',
+    // ignore persistence errors (e.g. private mode)
   }
 }
 
 function App() {
-  const initial = useMemo(() => resolveInitialState(), [])
-  const [view, setView] = useState<ViewMode>(initial.view)
-  const [documentFormat, setDocumentFormat] = useState<DocumentFormat>(initial.format)
-  const [markdown, setMarkdown] = useState(initial.content)
-  const [fileName, setFileName] = useState(initial.fileName)
-  const [activeLibraryId, setActiveLibraryId] = useState(initial.libraryId)
-  const [externalSrc, setExternalSrc] = useState(initial.externalSrc)
-  const [pdfSource, setPdfSource] = useState<ArrayBuffer | string | null>(initial.pdfSource)
-  const [csvContent, setCsvContent] = useState(initial.csvContent ?? '')
-  const [contentFingerprint, setContentFingerprint] = useState(initial.fingerprint)
-  const [theme, setTheme] = useState<Theme>(() => {
-    try {
-      return resolveTheme(localStorage.getItem('mdv-theme'))
-    } catch {
-      return resolveTheme(null)
-    }
-  })
+  const [state, setState] = useState<AppState>(() => stateFromLocation())
+  const { theme, themePreference, setThemePreference } = useTheme()
 
-  const docKey = useMemo(
-    () => makeDocumentKey(activeLibraryId, fileName, contentFingerprint),
-    [activeLibraryId, fileName, contentFingerprint],
-  )
-
+  // Resolve external documents (?src=…) into an open document.
   useEffect(() => {
-    if (!externalSrc) {
+    if (state.view !== 'external') {
       return
     }
 
+    const src = state.src
     const controller = new AbortController()
-    let cancelled = false
-    const format = detectFormatFromSrc(externalSrc)
-    setDocumentFormat(format)
-    setMarkdown('')
-    setPdfSource(null)
-    setCsvContent('')
-    setContentFingerprint('')
-    setView('reader')
-    setActiveLibraryId('')
 
-    const loadExternalDocument = async () => {
-      try {
-        if (format === 'pdf') {
-          const response = await fetch(externalSrc, {
-            signal: controller.signal,
-          })
-          if (!response.ok) {
-            throw new Error(`Could not load PDF (${response.status})`)
-          }
-
-          const data = await response.arrayBuffer()
-          if (!cancelled) {
-            setPdfSource(data)
-            setContentFingerprint(hashArrayBuffer(data))
-          }
+    loadExternalDocument(src, controller.signal)
+      .then((doc) => {
+        setState({ view: 'reader', doc })
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') {
           return
         }
+        const message = error instanceof Error ? error.message : 'Unknown error.'
+        setState({ view: 'reader', doc: externalErrorDocument(src, message) })
+      })
 
-        const response = await fetch(externalSrc, {
-          signal: controller.signal,
-          headers: {
-            Accept: 'text/csv,text/plain,text/markdown;q=0.9,*/*;q=0.8',
-          },
-        })
-        if (!response.ok) {
-          throw new Error(`Could not load document (${response.status})`)
-        }
-        const content = await response.text()
-        if (!cancelled) {
-          if (format === 'csv') {
-            setCsvContent(content)
-          } else {
-            setMarkdown(content)
-          }
-          setContentFingerprint(content)
-        }
-      } catch (error) {
-        if (cancelled || (error instanceof DOMException && error.name === 'AbortError')) {
-          return
-        }
+    return () => controller.abort()
+  }, [state])
 
-        if (format === 'pdf') {
-          setPdfSource(null)
-          setContentFingerprint('')
-        } else if (format === 'csv') {
-          setCsvContent('')
-          setContentFingerprint('')
-        } else {
-          setMarkdown(
-            `# Unable to load document\n\nSource: \`${externalSrc}\`\n\n${error instanceof Error ? error.message : 'Unknown error.'}`,
-          )
-          setContentFingerprint(externalSrc)
-        }
-      }
-    }
-
-    void loadExternalDocument()
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [externalSrc])
-
+  // Browser back/forward: re-derive state from the location.
   useEffect(() => {
-    try {
-      localStorage.setItem('mdv-theme', theme)
-    } catch {
-      // ignore persistence errors (e.g. private mode)
-    }
-  }, [theme])
-
-  useEffect(() => {
-    const onPopState = () => {
-      const src = getSrcFromUrl()
-      if (src) {
-        setExternalSrc(src)
-        setFileName(parseFileNameFromSrc(src))
-        setActiveLibraryId('')
-        setDocumentFormat(detectFormatFromSrc(src))
-        setPdfSource(null)
-        setMarkdown('')
-        setCsvContent('')
-        setContentFingerprint('')
-        setView('reader')
-        return
-      }
-
-      const docId = getDocIdFromUrl()
-      if (docId) {
-        const doc = getLibraryDoc(docId)
-        const content = getLibraryContent(docId)
-        if (doc && content) {
-          setMarkdown(content)
-          setFileName(doc.fileName)
-          setActiveLibraryId(doc.id)
-          setExternalSrc('')
-          setDocumentFormat('markdown')
-          setPdfSource(null)
-          setCsvContent('')
-          setContentFingerprint(content)
-          setView('reader')
-          return
-        }
-      }
-
-      setExternalSrc('')
-      setDocumentFormat('markdown')
-      setPdfSource(null)
-      setCsvContent('')
-      setContentFingerprint('')
-      setView('home')
-    }
-
+    const onPopState = () => setState(stateFromLocation())
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  const openDoc = (doc: LibraryDoc) => {
-    const content = getLibraryContent(doc.id)
-    if (!content) {
-      return
-    }
-
-    setMarkdown(content)
-    setFileName(doc.fileName)
-    setActiveLibraryId(doc.id)
-    setExternalSrc('')
-    setDocumentFormat('markdown')
-    setPdfSource(null)
-    setCsvContent('')
-    setContentFingerprint(content)
-    setView('reader')
+  /** Navigate to a state, updating history and scroll in one place. */
+  const navigate = (next: AppState) => {
+    withViewTransition(() => {
+      setState(next)
+    })
     window.scrollTo({ top: 0, behavior: 'auto' })
+    window.history.pushState(null, '', urlForState(next))
 
-    const url = new URL(window.location.href)
-    url.searchParams.set('doc', doc.id)
-    url.searchParams.delete('src')
-    url.hash = ''
-    window.history.pushState(null, '', url)
-
-    try {
-      localStorage.setItem('mdv-library-doc', doc.id)
-    } catch {
-      // ignore persistence errors (e.g. private mode)
+    if (next.view === 'reader' && next.doc.libraryId) {
+      rememberLibraryDoc(next.doc.libraryId)
     }
   }
 
-  const goHome = () => {
-    setView('home')
-    setExternalSrc('')
-    setDocumentFormat('markdown')
-    setPdfSource(null)
-    setCsvContent('')
-    setContentFingerprint('')
-    window.scrollTo({ top: 0, behavior: 'auto' })
-
-    const url = new URL(window.location.href)
-    url.searchParams.delete('doc')
-    url.searchParams.delete('src')
-    url.hash = ''
-    window.history.pushState(null, '', url)
+  const openLibraryDoc = (doc: LibraryDoc) => {
+    const next = libraryDocumentState(doc.id)
+    if (next) {
+      navigate(next)
+    }
   }
 
-  const openImportedMarkdown = (content: string, importedFileName: string) => {
-    setMarkdown(content)
-    setFileName(importedFileName)
-    setActiveLibraryId('')
-    setExternalSrc('')
-    setDocumentFormat('markdown')
-    setPdfSource(null)
-    setCsvContent('')
-    setContentFingerprint(content)
-    setView('reader')
-    window.scrollTo({ top: 0, behavior: 'auto' })
+  const goHome = () => navigate({ view: 'home' })
 
-    const url = new URL(window.location.href)
-    url.searchParams.delete('doc')
-    url.searchParams.delete('src')
-    url.hash = ''
-    window.history.pushState(null, '', url)
-  }
-
-  const openImportedPdf = (data: ArrayBuffer, importedFileName: string) => {
-    setMarkdown('')
-    setCsvContent('')
-    setFileName(importedFileName)
-    setActiveLibraryId('')
-    setExternalSrc('')
-    setDocumentFormat('pdf')
-    setPdfSource(data)
-    setContentFingerprint(hashArrayBuffer(data))
-    setView('reader')
-    window.scrollTo({ top: 0, behavior: 'auto' })
-
-    const url = new URL(window.location.href)
-    url.searchParams.delete('doc')
-    url.searchParams.delete('src')
-    url.hash = ''
-    window.history.pushState(null, '', url)
-  }
-
-  const openImportedCsv = (content: string, importedFileName: string) => {
-    setMarkdown('')
-    setFileName(importedFileName)
-    setActiveLibraryId('')
-    setExternalSrc('')
-    setDocumentFormat('csv')
-    setPdfSource(null)
-    setCsvContent(content)
-    setContentFingerprint(content)
-    setView('reader')
-    window.scrollTo({ top: 0, behavior: 'auto' })
-
-    const url = new URL(window.location.href)
-    url.searchParams.delete('doc')
-    url.searchParams.delete('src')
-    url.hash = ''
-    window.history.pushState(null, '', url)
+  const openImported = (doc: OpenDocument) => {
+    navigate({ view: 'reader', doc })
   }
 
   const onImportFile = async (file: File) => {
-    const format = detectFormatFromFileName(file.name)
-    if (format === 'pdf') {
-      openImportedPdf(await file.arrayBuffer(), file.name)
-      return
-    }
-
-    if (format === 'csv') {
-      openImportedCsv(await file.text(), file.name)
-      return
-    }
-
-    openImportedMarkdown(await file.text(), file.name)
+    const adapter = adapterForFileName(file.name)
+    const { source, fingerprint } = await adapter.readFile(file)
+    openImported({ source, fileName: file.name, libraryId: '', fingerprint })
   }
 
   const onFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -378,17 +117,23 @@ function App() {
       throw new Error('Clipboard is empty.')
     }
 
-    openImportedMarkdown(content, 'clipboard.md')
+    openImported({
+      source: { format: 'markdown', content },
+      fileName: 'clipboard.md',
+      libraryId: '',
+      fingerprint: content,
+    })
   }
 
-  if (view === 'home') {
+  if (state.view === 'home') {
     return (
       <Home
         docs={libraryDocs}
-        activeDocId={activeLibraryId}
+        activeDocId={lastOpenedId()}
         theme={theme}
-        onSelectTheme={setTheme}
-        onOpen={openDoc}
+        themePreference={themePreference}
+        onSelectTheme={setThemePreference}
+        onOpen={openLibraryDoc}
         onImport={onFileUpload}
         onImportFile={onImportFile}
         onImportFromClipboard={onImportFromClipboard}
@@ -396,40 +141,30 @@ function App() {
     )
   }
 
-  if (documentFormat === 'pdf' && pdfSource) {
+  if (state.view === 'external') {
     return (
-      <PdfReader
-        fileName={fileName}
-        docKey={docKey}
-        pdfSource={pdfSource}
-        theme={theme}
-        onSelectTheme={setTheme}
-        onHome={goHome}
-      />
+      <div className="reader-root">
+        <div className="pdf-loading-shell">
+          <p>Loading {parseFileNameFromSrc(state.src)}…</p>
+        </div>
+      </div>
     )
   }
 
-  if (documentFormat === 'csv' && csvContent) {
-    return (
-      <CsvReader
-        fileName={fileName}
-        docKey={docKey}
-        csvContent={csvContent}
-        theme={theme}
-        onSelectTheme={setTheme}
-        onHome={goHome}
-      />
-    )
-  }
+  const doc = state.doc
+  const adapter = adapterForFormat(doc.source.format)
+  const ReaderComponent = adapter.Reader
 
   return (
-    <Reader
-      markdown={markdown}
-      fileName={fileName}
-      docKey={docKey}
+    <ReaderComponent
+      source={doc.source}
+      fileName={doc.fileName}
+      docKey={documentKeyFor(doc)}
       theme={theme}
-      onSelectTheme={setTheme}
+      themePreference={themePreference}
+      onSelectTheme={setThemePreference}
       onHome={goHome}
+      onOpenLibrary={openLibraryDoc}
     />
   )
 }
