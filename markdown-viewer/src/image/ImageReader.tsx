@@ -45,7 +45,7 @@ import type { LibraryDoc } from '../library'
 import type { ToneMappingType } from 'hdrify'
 import { decodeImageBuffer, type DecodedImage } from './decodeImage'
 import { useReaderPageTheme } from '../ui/useReaderPageTheme'
-import { imageMetaTextScale, imageSheetLayout, imageStrokeUnitScale } from './imageSheetLayout'
+import { imageSheetLayout, imageStrokeUnitScale } from './imageSheetLayout'
 
 type ImageReaderProps = {
   fileName: string
@@ -97,7 +97,6 @@ export default function ImageReader({
     [decoded],
   )
   const strokeUnitScale = imageStrokeUnitScale(sheetLayout)
-  const metaTextScale = imageMetaTextScale(sheetLayout)
 
   useReaderPageTheme(theme)
   const { drawMode, toggleDrawMode, drawModeRef } = useReaderDrawMode()
@@ -479,12 +478,6 @@ export default function ImageReader({
     >
       <CommandPalette groups={paletteGroups} />
       <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
-      <ReaderTopbar
-        fileName={fileName}
-        onHome={onHome}
-        actions={topbarActions}
-        settings={settingsContent}
-      />
 
       <div className="reader-canvas reader-canvas-image" data-theme={theme}>
         <div className="doc-stage csv-stage">
@@ -513,14 +506,7 @@ export default function ImageReader({
                 </div>
               ) : (
                 <div className="csv-sheet-layer" ref={sheetRef} style={sheetStyle}>
-                  <article
-                    className="image-paper"
-                    style={
-                      {
-                        '--image-meta-scale': metaTextScale,
-                      } as CSSProperties
-                    }
-                  >
+                  <article className="image-paper">
                     <p className="image-meta-bar">
                       <span>
                         {decoded.width} × {decoded.height}
@@ -536,6 +522,13 @@ export default function ImageReader({
           </div>
         </div>
       </div>
+
+      <ReaderTopbar
+        fileName={fileName}
+        onHome={onHome}
+        actions={topbarActions}
+        settings={settingsContent}
+      />
     </div>
   )
 }

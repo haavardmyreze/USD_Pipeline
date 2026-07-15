@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { isEditableKeyboardTarget } from '../readerConfig'
 import type { InkPoint } from './inkBrush'
-import { DEFAULT_INK_COLOR, type InkBrushKind } from './inkConfig'
+import { DEFAULT_INK_COLOR, INK_COLOR_OPTIONS, type InkBrushKind } from './inkConfig'
 import { clearInkDocumentState, getInkDocumentState } from './inkDocumentStore'
 import { pushInkHistory, undoInkHistory } from './inkHistory'
 import { hitTestStrokePoints } from './inkHitTest'
@@ -389,16 +390,50 @@ export function InkAnnotation({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') {
+      if (isEditableKeyboardTarget(event.target)) {
         return
       }
 
-      if (event.shiftKey) {
+      if (event.ctrlKey || event.metaKey) {
+        if (event.key.toLowerCase() === 'z' && !event.shiftKey) {
+          event.preventDefault()
+          undoLastStroke()
+        }
         return
       }
 
-      event.preventDefault()
-      undoLastStroke()
+      if (event.altKey) {
+        return
+      }
+
+      const key = event.key.toLowerCase()
+
+      if (key === 'x') {
+        event.preventDefault()
+        clearAllInk()
+        return
+      }
+
+      if (key === 'b') {
+        event.preventDefault()
+        setTool((current) => {
+          if (current === 'eraser') {
+            return 'pen'
+          }
+          return current === 'marker' ? 'pen' : 'marker'
+        })
+        return
+      }
+
+      if (key === 'c') {
+        event.preventDefault()
+        setTool((current) => (current === 'eraser' ? 'pen' : current))
+        setColor((current) => {
+          const index = INK_COLOR_OPTIONS.findIndex((option) => option.value === current)
+          const nextIndex = index >= 0 ? (index + 1) % INK_COLOR_OPTIONS.length : 0
+          return INK_COLOR_OPTIONS[nextIndex]?.value ?? DEFAULT_INK_COLOR
+        })
+      }
     }
 
     window.addEventListener('resize', onResize)
@@ -408,7 +443,7 @@ export function InkAnnotation({
       window.removeEventListener('resize', onResize)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [drawMode, resizeDisplayCanvas, undoLastStroke])
+  }, [clearAllInk, drawMode, resizeDisplayCanvas, undoLastStroke])
 
   useEffect(() => {
     const canvas = canvasRef.current

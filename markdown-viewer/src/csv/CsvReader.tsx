@@ -584,12 +584,6 @@ export default function CsvReader({
     >
       <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
       <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
-      <ReaderTopbar
-        fileName={fileName}
-        onHome={onHome}
-        actions={topbarActions}
-        settings={settingsContent}
-      />
 
       <DocAssistant
         open={assistantOpen}
@@ -773,6 +767,13 @@ export default function CsvReader({
           </div>
         </div>
       </div>
+
+      <ReaderTopbar
+        fileName={fileName}
+        onHome={onHome}
+        actions={topbarActions}
+        settings={settingsContent}
+      />
     </div>
   )
 }
