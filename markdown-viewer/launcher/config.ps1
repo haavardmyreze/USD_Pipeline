@@ -3,9 +3,9 @@
 
 $Script:ViewerOrigin = 'https://usd-pipeline-k7aa.vercel.app'
 
-# Files larger than this use a temporary local redirect page instead of a
-# direct browser launch (avoids Windows command-line length limits).
-$Script:MaxDirectLaunchBytes = 512kb
+# Files larger than this are served from a temporary localhost URL instead of
+# being embedded in the browser URL (.NET URI encoding tops out around 65 KB).
+$Script:MaxDataUrlFileBytes = 20kb
 
 # Files larger than this are rejected with a helpful error.
 $Script:MaxSupportedBytes = 24mb
@@ -45,3 +45,6 @@ $Script:MimeTypes = @{
 }
 
 $Script:AssociationLabel = 'Quiet Reader'
+
+# How long the temporary localhost server stays available for large files.
+$Script:LocalServerMinutes = 15

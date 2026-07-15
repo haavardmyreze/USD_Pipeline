@@ -21,6 +21,7 @@ import {
   type RecentDocument,
 } from './recentDocuments'
 import { loadCachedRecentDocument } from './recentDocumentCache'
+import { clearHashImportFromUrl, parseHashImport } from './hashImport'
 import { GlobalFileDropOverlay } from './ui/GlobalFileDropOverlay'
 import { useTheme } from './ui/useTheme'
 import { withViewTransition } from './ui/viewTransition'
@@ -44,13 +45,30 @@ function rememberLibraryDoc(id: string) {
 }
 
 function App() {
-  const [state, setState] = useState<AppState>(() => stateFromLocation())
+  const [state, setState] = useState<AppState>(() => {
+    const hashDoc = parseHashImport(window.location.hash)
+    if (hashDoc) {
+      return { view: 'reader', doc: hashDoc }
+    }
+
+    return stateFromLocation()
+  })
   const [recentDocs, setRecentDocs] = useState<RecentDocument[]>(() => loadRecentDocuments())
   const { theme, themePreference, setThemePreference } = useTheme()
 
   const refreshRecents = useCallback(() => {
     setRecentDocs(loadRecentDocuments())
   }, [])
+
+  useEffect(() => {
+    if (state.view !== 'reader' || !window.location.hash.startsWith('#import=')) {
+      return
+    }
+
+    clearHashImportFromUrl()
+    rememberRecentDocument(state.doc)
+    refreshRecents()
+  }, [state, refreshRecents])
 
   // Resolve external documents (?src=…) into an open document.
   useEffect(() => {

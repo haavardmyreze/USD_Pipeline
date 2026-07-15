@@ -66,6 +66,73 @@ function ConvertTo-JavaScriptString {
   )
 }
 
+function Get-FreeTcpPort {
+  $listener = New-Object System.Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
+  $listener.Start()
+  try {
+    return ($listener.LocalEndpoint).Port
+  } finally {
+    $listener.Stop()
+  }
+}
+
+function Start-LocalFileServer {
+  param(
+    [string]$FilePath,
+    [string]$MimeType,
+    [string]$FileName
+  )
+
+  $port = Get-FreeTcpPort
+  $serverMinutes = $Script:LocalServerMinutes
+
+  $null = Start-Job -Name "QuietReaderFileServer-$port" -ScriptBlock {
+    param($FilePath, $MimeType, $Port, $ServerMinutes)
+
+    $listener = New-Object System.Net.HttpListener
+    [void]$listener.Prefixes.Add("http://127.0.0.1:$Port/")
+    $listener.Start()
+
+    $deadline = (Get-Date).AddMinutes($ServerMinutes)
+    $fileBytes = [IO.File]::ReadAllBytes($FilePath)
+
+    while ($listener.IsListening -and (Get-Date) -lt $deadline) {
+      $context = $listener.GetContext()
+      try {
+        $response = $context.Response
+        $response.Headers.Add('Access-Control-Allow-Origin', '*')
+        $response.Headers.Add('Access-Control-Allow-Private-Network', 'true')
+        $response.Headers.Add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        $response.Headers.Add('Access-Control-Allow-Headers', '*')
+
+        if ($context.Request.HttpMethod -eq 'OPTIONS') {
+          $response.StatusCode = 204
+          $response.Close()
+          continue
+        }
+
+        $response.StatusCode = 200
+        $response.ContentType = $MimeType
+        $response.ContentLength64 = $fileBytes.Length
+        $response.OutputStream.Write($fileBytes, 0, $fileBytes.Length)
+        $response.Close()
+      } catch {
+        try {
+          $context.Response.Close()
+        } catch {
+          # ignore close errors
+        }
+      }
+    }
+
+    $listener.Stop()
+  } -ArgumentList $FilePath, $MimeType, $port, $serverMinutes
+
+  Start-Sleep -Milliseconds 300
+
+  return "http://127.0.0.1:$port/$([uri]::EscapeDataString($FileName))"
+}
+
 function New-DataUrl {
   param(
     [string]$Path,
@@ -82,7 +149,7 @@ function New-DataUrl {
   return "data:$MimeType;base64,$base64"
 }
 
-function New-ViewerUrl {
+function New-ViewerUrlFromData {
   param(
     [string]$DataUrl,
     [string]$FileName
@@ -93,14 +160,23 @@ function New-ViewerUrl {
   return "$($Script:ViewerOrigin)/?src=$encodedSrc&name=$encodedName"
 }
 
+function New-ViewerUrlFromRemoteSrc {
+  param(
+    [string]$Src,
+    [string]$FileName
+  )
+
+  $encodedSrc = [uri]::EscapeDataString($Src)
+  $encodedName = [uri]::EscapeDataString($FileName)
+  return "$($Script:ViewerOrigin)/?src=$encodedSrc&name=$encodedName"
+}
+
 function Open-ViewerUrl {
   param(
     [string]$ViewerUrl,
     [string]$FileName
   )
 
-  # Always route through a local redirect page. This avoids Windows command-line
-  # length limits and makes Start-Process behavior consistent across browsers.
   $redirectPath = [IO.Path]::Combine(
     [IO.Path]::GetTempPath(),
     ('quiet-reader-open-{0}.html' -f [guid]::NewGuid().ToString('N'))
@@ -150,8 +226,26 @@ function Open-DocumentInViewer {
   }
 
   $mimeType = Get-LauncherMimeType $resolved
-  $dataUrl = New-DataUrl -Path $resolved -MimeType $mimeType
-  $viewerUrl = New-ViewerUrl -DataUrl $dataUrl -FileName $fileInfo.Name
+  $viewerUrl = $null
+
+  if ($fileInfo.Length -gt $Script:MaxDataUrlFileBytes) {
+    $localSrc = Start-LocalFileServer -FilePath $resolved -MimeType $mimeType -FileName $fileInfo.Name
+    $viewerUrl = New-ViewerUrlFromRemoteSrc -Src $localSrc -FileName $fileInfo.Name
+    Write-LauncherLog "Using local file server for $($fileInfo.Name) ($($fileInfo.Length) bytes)"
+    Write-LauncherLog "Local source: $localSrc"
+  } else {
+    try {
+      $dataUrl = New-DataUrl -Path $resolved -MimeType $mimeType
+      $viewerUrl = New-ViewerUrlFromData -DataUrl $dataUrl -FileName $fileInfo.Name
+      Write-LauncherLog "Using inline data URL for $($fileInfo.Name) ($($dataUrl.Length) chars)"
+    } catch {
+      Write-LauncherLog "Inline data URL failed; falling back to local file server. $($_.Exception.Message)"
+      $localSrc = Start-LocalFileServer -FilePath $resolved -MimeType $mimeType -FileName $fileInfo.Name
+      $viewerUrl = New-ViewerUrlFromRemoteSrc -Src $localSrc -FileName $fileInfo.Name
+      Write-LauncherLog "Local source: $localSrc"
+    }
+  }
+
   Open-ViewerUrl -ViewerUrl $viewerUrl -FileName $fileInfo.Name
   Write-LauncherLog "Launch complete for $($fileInfo.Name)"
 }

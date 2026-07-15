@@ -32,7 +32,8 @@ This opens `library/welcome.md` and prints diagnostics. If something fails, chec
 
 - **Quiet Reader is not in the Open with list:** run `Register-ViewerAssociations.ps1` again, then use **Open with → Choose another app → Browse** and select `Open-InViewer.bat`.
 - **A blank tab flashes and nothing opens:** open the log file above and re-run `Test-Launcher.ps1`.
-- **The browser opens but the document is empty:** wait for Vercel to finish deploying the latest `main` branch, then try again.
+- **The browser opens but the document is empty:** wait for Vercel to finish deploying the latest `main` branch, then try again. Large files rely on a temporary localhost server — keep the launcher window/job alive for a few seconds after opening.
+- **"Uri string is too long":** update to the latest launcher scripts from `main` (large files now use localhost instead of embedding the whole file in the URL).
 - **Very large files:** drag the file into an already-open Quiet Reader tab instead.
 
 ## How it works
@@ -40,8 +41,9 @@ This opens `library/welcome.md` and prints diagnostics. If something fails, chec
 Browsers cannot read `C:\...` paths from a remote Vercel app. The launcher:
 
 1. Reads the local file
-2. Encodes it as a `data:` URL
-3. Opens a temporary local HTML page that redirects to `https://usd-pipeline-k7aa.vercel.app/?src=...&name=...`
+2. For small files (under ~20 KB), embeds the content as a `data:` URL in the viewer link
+3. For larger files, starts a temporary localhost server and opens `?src=http://127.0.0.1:...&name=...`
+4. Opens a temporary local HTML page that redirects your browser to Quiet Reader
 
 Very large files (> 24 MB) are rejected with a message to drag the file into an already-open viewer tab instead.
 
