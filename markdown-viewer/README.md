@@ -98,6 +98,17 @@ Extension behavior:
 
 Change the viewer URL in `extension/viewer-url.js` if you deploy to a different host.
 
+## Windows launcher (Open with)
+
+Use the scripts in `launcher/` to open local files in the hosted viewer from Explorer.
+
+```powershell
+cd markdown-viewer/launcher
+powershell -ExecutionPolicy Bypass -File .\Register-ViewerAssociations.ps1
+```
+
+Then set **Open with → Quiet Reader → Always** for the file types you want. See `launcher/README.md` for details.
+
 ## Ask about this document
 
 Open a document and click **Ask** in the reader toolbar to chat about the current file. Choose **Ollama** (local, free) or **Claude** (Anthropic API) in connection settings. The app sends only the most relevant sections (by heading), not the entire document — unless the file is small enough to fit in one request.

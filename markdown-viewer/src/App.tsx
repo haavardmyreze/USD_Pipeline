@@ -61,7 +61,7 @@ function App() {
     const src = state.src
     const controller = new AbortController()
 
-    loadExternalDocument(src, controller.signal)
+    loadExternalDocument(src, controller.signal, { fileName: state.fileName })
       .then((doc) => {
         rememberRecentDocument(doc, { externalSrc: src })
         refreshRecents()

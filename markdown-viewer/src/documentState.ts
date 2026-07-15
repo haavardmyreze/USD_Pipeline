@@ -59,7 +59,8 @@ export function stateFromLocation(): AppState {
 
   const src = params.get('src')
   if (src) {
-    return { view: 'external', src, fileName: parseFileNameFromSrc(src) }
+    const fileName = params.get('name') ?? parseFileNameFromSrc(src)
+    return { view: 'external', src, fileName }
   }
 
   const docId = params.get('doc')
@@ -75,10 +76,14 @@ export function urlForState(state: AppState): URL {
   const url = new URL(window.location.href)
   url.searchParams.delete('doc')
   url.searchParams.delete('src')
+  url.searchParams.delete('name')
   url.hash = ''
 
   if (state.view === 'external') {
     url.searchParams.set('src', state.src)
+    if (state.fileName && state.fileName !== parseFileNameFromSrc(state.src)) {
+      url.searchParams.set('name', state.fileName)
+    }
   } else if (state.view === 'reader' && state.doc.libraryId) {
     url.searchParams.set('doc', state.doc.libraryId)
   }
@@ -89,10 +94,11 @@ export function urlForState(state: AppState): URL {
 export async function loadExternalDocument(
   src: string,
   signal: AbortSignal,
+  options?: { fileName?: string },
 ): Promise<OpenDocument> {
-  const format = detectFormatFromSrc(src)
+  const fileName = options?.fileName ?? parseFileNameFromSrc(src)
+  const format = detectFormatFromSrc(src, fileName)
   const adapter = adapterForFormat(format)
-  const fileName = parseFileNameFromSrc(src)
 
   const response = await fetch(src, {
     signal,
