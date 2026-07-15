@@ -50,3 +50,4 @@ $Script:AssociationLabel = 'Quiet Reader'
 $Script:LocalServerMinutes = 15
 
 $Script:LauncherIconFile = 'quiet-reader.ico'
+$Script:LauncherScript = 'Open-InViewer.vbs'

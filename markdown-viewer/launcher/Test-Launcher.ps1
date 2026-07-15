@@ -4,26 +4,26 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\config.ps1"
 
 $samplePath = Join-Path (Split-Path $PSScriptRoot -Parent) 'library\welcome.md'
-$launcherBat = Join-Path $PSScriptRoot 'Open-InViewer.bat'
+$launcherVbs = Join-Path $PSScriptRoot 'Open-InViewer.vbs'
 $logPath = Join-Path $env:TEMP 'quiet-reader-launcher.log'
 
 Write-Host 'Quiet Reader launcher diagnostics'
 Write-Host '================================='
 Write-Host "Viewer URL: $($Script:ViewerOrigin)"
-Write-Host "Launcher:   $launcherBat"
+Write-Host "Launcher:   $launcherVbs"
 Write-Host "Sample doc: $samplePath"
 Write-Host "Log file:   $logPath"
 Write-Host ''
 
-if (-not (Test-Path -LiteralPath $launcherBat)) {
-  throw "Launcher batch file not found: $launcherBat"
+if (-not (Test-Path -LiteralPath $launcherVbs)) {
+  throw "Launcher script not found: $launcherVbs"
 }
 
 if (-not (Test-Path -LiteralPath $samplePath)) {
   throw "Sample markdown file not found: $samplePath"
 }
 
-$appKey = 'HKCU:\Software\Classes\Applications\Open-InViewer.bat'
+$appKey = 'HKCU:\Software\Classes\Applications\Open-InViewer.vbs'
 if (Test-Path $appKey) {
   Write-Host 'Application registration: OK'
 } else {
@@ -33,7 +33,7 @@ if (Test-Path $appKey) {
 
 Write-Host ''
 Write-Host 'Launching sample document...'
-& $launcherBat $samplePath
+& $launcherVbs $samplePath
 
 Start-Sleep -Seconds 2
 

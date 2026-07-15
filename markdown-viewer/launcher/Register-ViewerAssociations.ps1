@@ -12,10 +12,12 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\config.ps1"
 . "$PSScriptRoot\Ensure-LauncherIcon.ps1"
 
-$launcherBat = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'Open-InViewer.bat'))
-$launcherCommand = "`"$launcherBat`" `"%1`""
+$launcherVbs = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot $Script:LauncherScript))
+$wscriptExe = Join-Path $env:SystemRoot 'System32\wscript.exe'
+$launcherCommand = "`"$wscriptExe`" `"$launcherVbs`" `"%1`""
 $progId = 'QuietReader.Document'
-$appName = 'Open-InViewer.bat'
+$appName = $Script:LauncherScript
+$legacyAppNames = @('Open-InViewer.bat')
 $iconPath = Ensure-LauncherIcon -OutputPath (Join-Path $PSScriptRoot $Script:LauncherIconFile)
 $iconRef = "`"$iconPath`",0"
 
@@ -24,6 +26,19 @@ function Set-RegistryDefaultIcon {
 
   New-Item -Path $KeyPath -Force | Out-Null
   Set-ItemProperty -Path $KeyPath -Name '(default)' -Value $iconRef
+}
+
+function Remove-LegacyOpenWithEntries {
+  param([string]$Extension)
+
+  $openWithListKey = "HKCU:\Software\Classes\$Extension\OpenWithList"
+  if (-not (Test-Path $openWithListKey)) {
+    return
+  }
+
+  foreach ($legacyName in $legacyAppNames) {
+    Remove-ItemProperty -Path $openWithListKey -Name $legacyName -ErrorAction SilentlyContinue
+  }
 }
 
 function Register-Extension {
@@ -43,12 +58,11 @@ function Register-Extension {
 
   New-Item -Path $openWithListKey -Force | Out-Null
   New-ItemProperty -Path $openWithListKey -Name $appName -PropertyType String -Force | Out-Null
+  Remove-LegacyOpenWithEntries -Extension $Extension
 
   New-Item -Path $openWithProgidsKey -Force | Out-Null
   New-ItemProperty -Path $openWithProgidsKey -Name $progId -PropertyType String -Force | Out-Null
 
-  # Do not overwrite the user's current default ProgId here. Windows 10/11 stores
-  # defaults in UserChoice with a hash, so only OpenWith registration is reliable.
   if (Test-Path $extensionKey) {
     Remove-ItemProperty -Path $extensionKey -Name '(default)' -ErrorAction SilentlyContinue
   }
@@ -74,6 +88,9 @@ function Unregister-Extension {
 
   if (Test-Path $openWithListKey) {
     Remove-ItemProperty -Path $openWithListKey -Name $appName -ErrorAction SilentlyContinue
+    foreach ($legacyName in $legacyAppNames) {
+      Remove-ItemProperty -Path $openWithListKey -Name $legacyName -ErrorAction SilentlyContinue
+    }
   }
 
   if (Test-Path $openWithProgidsKey) {
@@ -81,8 +98,17 @@ function Unregister-Extension {
   }
 }
 
-if (-not (Test-Path -LiteralPath $launcherBat)) {
-  throw "Launcher not found: $launcherBat"
+function Remove-LegacyApplications {
+  foreach ($legacyName in $legacyAppNames) {
+    $legacyKey = "HKCU:\Software\Classes\Applications\$legacyName"
+    if (Test-Path $legacyKey) {
+      Remove-Item -Path $legacyKey -Recurse -Force
+    }
+  }
+}
+
+if (-not (Test-Path -LiteralPath $launcherVbs)) {
+  throw "Launcher not found: $launcherVbs"
 }
 
 if ($Unregister) {
@@ -98,18 +124,21 @@ if ($Unregister) {
     Remove-Item -Path "HKCU:\Software\Classes\Applications\$appName" -Recurse -Force
   }
 
+  Remove-LegacyApplications
+
   Write-Host 'Quiet Reader file associations removed from HKCU.'
   exit 0
 }
 
 Register-Application
+Remove-LegacyApplications
 
 foreach ($extension in $Script:SupportedExtensions) {
   Register-Extension -Extension $extension
 }
 
 Write-Host "Registered Quiet Reader for: $($Script:SupportedExtensions -join ', ')"
-Write-Host "Launcher: $launcherBat"
+Write-Host "Launcher: $launcherVbs"
 Write-Host "Icon:     $iconPath"
 Write-Host ''
 Write-Host 'Next steps:'
@@ -121,7 +150,7 @@ Write-Host 'If icons look stale, restart Explorer or sign out and back in.'
 Write-Host ''
 Write-Host 'If Quiet Reader is missing from the list, choose "Choose another app"'
 Write-Host 'and browse to:'
-Write-Host "  $launcherBat"
+Write-Host "  $launcherVbs"
 Write-Host ''
 Write-Host 'To verify manually:'
 Write-Host "  powershell -ExecutionPolicy Bypass -File `"$PSScriptRoot\Test-Launcher.ps1`""
