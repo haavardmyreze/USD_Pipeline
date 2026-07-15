@@ -16,7 +16,7 @@ This also installs `quiet-reader.ico` for the **Quiet Reader** app and associate
 
 3. In Explorer, right-click a supported file → **Open with** → **Quiet Reader** → **Always**.
 
-File associations use `Open-InViewer.vbs`, which launches PowerShell hidden so no command prompt appears.
+File associations register as **Quiet Reader** (`Open-InViewer.bat` in the Open with list) but launch the hidden `Open-InViewer.vbs` handler, so no command prompt appears.
 
 Supported extensions: `.md`, `.markdown`, `.pdf`, `.csv`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff`, `.exr`, `.hdr`.
 
@@ -34,8 +34,8 @@ This opens `library/welcome.md` and prints diagnostics. If something fails, chec
 
 ## Troubleshooting
 
-- **Quiet Reader is not in the Open with list:** run `Register-ViewerAssociations.ps1` again, then use **Open with → Choose another app → Browse** and select `Open-InViewer.vbs`.
-- **A command prompt flashes:** re-run `Register-ViewerAssociations.ps1` so Windows uses the hidden `.vbs` launcher instead of the old `.bat` handler.
+- **Quiet Reader is not in the Open with list:** run `Register-ViewerAssociations.ps1` again, then use **Open with → Choose another app → Browse** and select `Open-InViewer.bat`.
+- **A command prompt flashes:** re-run `Register-ViewerAssociations.ps1` and pick **Quiet Reader** again as the default. The registered handler should invoke the hidden `.vbs` launcher, not the batch file directly.
 - **A blank tab flashes and nothing opens:** open the log file above and re-run `Test-Launcher.ps1`.
 - **The browser opens but the document is empty:** wait for Vercel to finish deploying the latest `main` branch, then try again. Large files rely on a temporary localhost server — keep the launcher window/job alive for a few seconds after opening.
 - **Icons still look blank or generic:** re-run `Register-ViewerAssociations.ps1`, then restart Explorer (Task Manager → Windows Explorer → Restart) or sign out and back in.

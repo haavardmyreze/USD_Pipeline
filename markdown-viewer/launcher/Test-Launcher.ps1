@@ -23,7 +23,7 @@ if (-not (Test-Path -LiteralPath $samplePath)) {
   throw "Sample markdown file not found: $samplePath"
 }
 
-$appKey = 'HKCU:\Software\Classes\Applications\Open-InViewer.vbs'
+$appKey = 'HKCU:\Software\Classes\Applications\Open-InViewer.bat'
 if (Test-Path $appKey) {
   Write-Host 'Application registration: OK'
 } else {

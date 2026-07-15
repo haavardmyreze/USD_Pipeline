@@ -51,3 +51,5 @@ $Script:LocalServerMinutes = 15
 
 $Script:LauncherIconFile = 'quiet-reader.ico'
 $Script:LauncherScript = 'Open-InViewer.vbs'
+# Windows shows this name in Open with; the command still launches the hidden .vbs handler.
+$Script:LauncherAppName = 'Open-InViewer.bat'

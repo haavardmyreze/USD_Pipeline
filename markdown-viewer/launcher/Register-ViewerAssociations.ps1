@@ -14,12 +14,13 @@ $ErrorActionPreference = 'Stop'
 
 $launcherVbs = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot $Script:LauncherScript))
 $wscriptExe = Join-Path $env:SystemRoot 'System32\wscript.exe'
-$launcherCommand = "`"$wscriptExe`" `"$launcherVbs`" `"%1`""
+$launcherCommand = "`"$wscriptExe`" //Nologo `"$launcherVbs`" `"%1`""
 $progId = 'QuietReader.Document'
-$appName = $Script:LauncherScript
-$legacyAppNames = @('Open-InViewer.bat')
+$appName = $Script:LauncherAppName
+$legacyAppNames = @('Open-InViewer.vbs')
 $iconPath = Ensure-LauncherIcon -OutputPath (Join-Path $PSScriptRoot $Script:LauncherIconFile)
 $iconRef = "`"$iconPath`",0"
+$registeredAppsKey = 'HKCU:\Software\RegisteredApplications'
 
 function Set-RegistryDefaultIcon {
   param([string]$KeyPath)
@@ -74,10 +75,19 @@ function Register-Application {
 
   New-Item -Path $appKey -Force | Out-Null
   Set-ItemProperty -Path $appKey -Name 'FriendlyAppName' -Value $Script:AssociationLabel
+  Set-ItemProperty -Path $appKey -Name 'ApplicationCompany' -Value $Script:AssociationLabel
   Set-RegistryDefaultIcon -KeyPath "$appKey\DefaultIcon"
+
+  foreach ($extension in $Script:SupportedExtensions) {
+    $supportedTypeKey = "$appKey\SupportedTypes\$extension"
+    New-Item -Path $supportedTypeKey -Force | Out-Null
+  }
 
   New-Item -Path $commandKey -Force | Out-Null
   Set-ItemProperty -Path $commandKey -Name '(default)' -Value $launcherCommand
+
+  New-Item -Path $registeredAppsKey -Force | Out-Null
+  New-ItemProperty -Path $registeredAppsKey -Name 'QuietReader' -Value "Applications\$appName" -PropertyType String -Force | Out-Null
 }
 
 function Unregister-Extension {
@@ -124,6 +134,7 @@ if ($Unregister) {
     Remove-Item -Path "HKCU:\Software\Classes\Applications\$appName" -Recurse -Force
   }
 
+  Remove-ItemProperty -Path $registeredAppsKey -Name 'QuietReader' -ErrorAction SilentlyContinue
   Remove-LegacyApplications
 
   Write-Host 'Quiet Reader file associations removed from HKCU.'
@@ -138,19 +149,21 @@ foreach ($extension in $Script:SupportedExtensions) {
 }
 
 Write-Host "Registered Quiet Reader for: $($Script:SupportedExtensions -join ', ')"
-Write-Host "Launcher: $launcherVbs"
-Write-Host "Icon:     $iconPath"
+Write-Host "Open with app: $appName"
+Write-Host "Hidden launcher: $launcherVbs"
+Write-Host "Icon: $iconPath"
 Write-Host ''
 Write-Host 'Next steps:'
 Write-Host '  1. Right-click a supported file in Explorer'
 Write-Host '  2. Choose Open with -> Quiet Reader'
 Write-Host '  3. Click "Always" if you want it as the default app'
 Write-Host ''
-Write-Host 'If icons look stale, restart Explorer or sign out and back in.'
-Write-Host ''
 Write-Host 'If Quiet Reader is missing from the list, choose "Choose another app"'
-Write-Host 'and browse to:'
+Write-Host 'and browse to either:'
+Write-Host "  $(Join-Path $PSScriptRoot $appName)"
 Write-Host "  $launcherVbs"
+Write-Host ''
+Write-Host 'If icons look stale, restart Explorer or sign out and back in.'
 Write-Host ''
 Write-Host 'To verify manually:'
 Write-Host "  powershell -ExecutionPolicy Bypass -File `"$PSScriptRoot\Test-Launcher.ps1`""
