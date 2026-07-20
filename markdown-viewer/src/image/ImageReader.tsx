@@ -12,6 +12,7 @@ import { type Theme, type ThemePreference } from '../theme'
 import {
   applyZoomKeyboardShortcut,
   attachDocumentZoomWheel,
+  isEditableKeyboardTarget,
 } from '../readerConfig'
 import {
   formatCanvasZoomPercent,
@@ -49,6 +50,8 @@ import type { ToneMappingType } from 'hdrify'
 import { decodeImageBuffer, type DecodedImage } from './decodeImage'
 import { useReaderPageTheme } from '../ui/useReaderPageTheme'
 import { imageSheetLayout, imageStrokeUnitScale } from './imageSheetLayout'
+import { writeCanvasToClipboard } from '../ui/clipboardImage'
+import { compositeImageWithSheetInk } from '../ui/exportInkComposite'
 
 type ImageReaderProps = {
   fileName: string
@@ -186,6 +189,42 @@ export default function ImageReader({
       stepCanvasZoomAtViewportCenter(current, direction, viewportElement.getBoundingClientRect()),
     )
   }, [])
+
+  const copyImageWithInk = useCallback(async () => {
+    if (!decoded) {
+      return
+    }
+
+    const composite = compositeImageWithSheetInk(
+      decoded.canvas,
+      docKey,
+      sheetLayout,
+      strokeUnitScale,
+    )
+    await writeCanvasToClipboard(composite)
+  }, [decoded, docKey, sheetLayout, strokeUnitScale])
+
+  useEffect(() => {
+    if (!drawMode || !decoded) {
+      return
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((!event.ctrlKey && !event.metaKey) || event.key.toLowerCase() !== 'c') {
+        return
+      }
+
+      if (isEditableKeyboardTarget(event.target)) {
+        return
+      }
+
+      event.preventDefault()
+      void copyImageWithInk()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [copyImageWithInk, decoded, drawMode])
 
   useEffect(() => {
     let cancelled = false
@@ -454,6 +493,18 @@ export default function ImageReader({
     actionsPaletteGroup([
       createDrawPaletteAction(toggleDrawMode),
       createLaserPaletteAction(toggleLaserMode),
+      ...(drawMode
+        ? [
+            {
+              id: 'copy-image',
+              title: 'Copy image with drawings',
+              keywords: 'copy clipboard export annotate ink draw',
+              action: () => {
+                void copyImageWithInk()
+              },
+            },
+          ]
+        : []),
       {
         id: 'fit',
         title: 'Zoom: Fit image',

@@ -20,6 +20,7 @@ import { getLibraryDoc, type LibraryDoc } from './library'
 import { formatRecentFormatLabel, formatRecentOpenedAgo, type RecentDocument } from './recentDocuments'
 import { type Theme, type ThemePreference } from './theme'
 import { DocumentFormatPreview } from './ui/DocumentFormatPreview'
+import { readClipboardImageFile } from './ui/clipboardImage'
 import { ClipboardIcon, PlusIcon, SettingsIcon } from './ui/icons'
 import { CommandPalette } from './ui/CommandPalette'
 import { libraryPaletteGroup, themePaletteGroup } from './ui/paletteGroups'
@@ -105,6 +106,19 @@ function Home({
   const handleClipboardPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     event.preventDefault()
     setClipboardError(null)
+
+    const imageFile = readClipboardImageFile(event.clipboardData)
+    if (imageFile) {
+      void Promise.resolve(onImportFile(imageFile)).catch((error: unknown) => {
+        setClipboardError(
+          error instanceof Error ? error.message : 'Could not open pasted image.',
+        )
+      })
+      if (pasteInputRef.current) {
+        pasteInputRef.current.value = ''
+      }
+      return
+    }
 
     const content = event.clipboardData.getData('text/plain')
     if (!content.trim()) {
@@ -282,8 +296,8 @@ function Home({
                 ref={pasteInputRef}
                 className="doc-card-paste-input"
                 rows={2}
-                placeholder="Click here, then press Ctrl+V (or ⌘V)"
-                aria-label="Paste markdown from clipboard"
+                placeholder="Click here, then press Ctrl+V (or ⌘V) to paste text or an image"
+                aria-label="Paste markdown or an image from clipboard"
                 onPaste={handleClipboardPaste}
                 onChange={() => setClipboardError(null)}
               />
@@ -300,7 +314,7 @@ function Home({
           <p className="home-empty">
             No library documents yet. Add <code>.md</code> files to{' '}
             <code>markdown-viewer/library/</code>, import one from disk, or paste
-            from clipboard.
+            text or an image from clipboard.
           </p>
         ) : null}
       </section>

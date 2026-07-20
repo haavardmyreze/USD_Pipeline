@@ -23,6 +23,12 @@ export type RecentDocument = {
 const RECENTS_KEY = 'mdv-recent-docs'
 const MAX_RECENTS = 12
 
+const CLIPBOARD_MARKDOWN = 'clipboard.md'
+
+function isClipboardFileName(fileName: string) {
+  return fileName === CLIPBOARD_MARKDOWN || fileName.startsWith('clipboard.')
+}
+
 function recentKindFor(doc: OpenDocument, externalSrc?: string): RecentDocumentKind {
   if (doc.libraryId) {
     return 'library'
@@ -32,7 +38,7 @@ function recentKindFor(doc: OpenDocument, externalSrc?: string): RecentDocumentK
     return 'external'
   }
 
-  if (doc.fileName === 'clipboard.md') {
+  if (isClipboardFileName(doc.fileName)) {
     return 'clipboard'
   }
 
@@ -52,7 +58,7 @@ function inferRecentKind(entry: RecentDocument): RecentDocumentKind {
     return 'external'
   }
 
-  if (entry.fileName === 'clipboard.md') {
+  if (isClipboardFileName(entry.fileName)) {
     return 'clipboard'
   }
 
@@ -67,11 +73,13 @@ function normalizeRecentDocument(entry: RecentDocument): RecentDocument {
       ? 'pdf'
       : entry.fileName.toLowerCase().endsWith('.csv')
         ? 'csv'
-        : entry.fileName === 'clipboard.md'
-          ? 'markdown'
-          : /\.(png|jpe?g|webp|gif|bmp|tiff?|exr|hdr)$/i.test(entry.fileName)
-            ? 'image'
-            : 'markdown')
+        : isClipboardFileName(entry.fileName) && entry.fileName !== CLIPBOARD_MARKDOWN
+          ? 'image'
+          : entry.fileName === CLIPBOARD_MARKDOWN
+            ? 'markdown'
+            : /\.(png|jpe?g|webp|gif|bmp|tiff?|exr|hdr)$/i.test(entry.fileName)
+              ? 'image'
+              : 'markdown')
 
   return {
     ...entry,
