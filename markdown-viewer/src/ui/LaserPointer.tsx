@@ -78,12 +78,20 @@ export function LaserPointer({ active }: LaserPointerProps) {
     document.body.classList.add('laser-pointer-active')
 
     const onPointerMove = (event: PointerEvent) => {
-      headRef.current = { x: event.clientX, y: event.clientY }
-      trailRef.current = appendLaserTrailPoint(trailRef.current, {
-        x: event.clientX,
-        y: event.clientY,
-        time: performance.now(),
-      })
+      const events =
+        typeof event.getCoalescedEvents === 'function'
+          ? event.getCoalescedEvents()
+          : [event]
+      const now = performance.now()
+
+      for (const sample of events) {
+        headRef.current = { x: sample.clientX, y: sample.clientY }
+        trailRef.current = appendLaserTrailPoint(trailRef.current, {
+          x: sample.clientX,
+          y: sample.clientY,
+          time: now,
+        })
+      }
     }
 
     const onPointerLeave = () => {

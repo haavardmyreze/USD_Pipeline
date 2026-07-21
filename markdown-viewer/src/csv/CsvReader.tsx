@@ -590,7 +590,7 @@ export default function CsvReader({
       data-laser-mode={laserMode ? 'true' : undefined}
     >
       <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
-      <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
+      <InkAnnotation docKey={docKey} drawMode={drawMode} laserMode={laserMode} {...inkBinding} />
       <LaserPointer active={laserMode} />
 
       <DocAssistant

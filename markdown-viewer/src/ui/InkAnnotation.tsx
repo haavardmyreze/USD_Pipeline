@@ -26,6 +26,7 @@ import { DrawToolbar, type DrawTool } from './DrawToolbar'
 type InkAnnotationProps = {
   docKey: string
   drawMode: boolean
+  laserMode?: boolean
 } & InkBinding
 
 function pointFromEvent(event: PointerEvent, canvas: HTMLCanvasElement): InkPoint {
@@ -58,6 +59,7 @@ function toolToBrush(tool: DrawTool): InkBrushKind {
 export function InkAnnotation({
   docKey,
   drawMode,
+  laserMode = false,
   contentZoom,
   useSheetCoordinates = false,
   strokeUnitScale = 1,
@@ -88,6 +90,8 @@ export function InkAnnotation({
   const useSheetCoordinatesRef = useRef(useSheetCoordinates)
   const navigationRef = useRef(navigation)
   const drawModeRef = useRef(drawMode)
+  const laserModeRef = useRef(laserMode)
+  const visibleRef = useRef(drawMode || laserMode)
   const toolRef = useRef<DrawTool>('pen')
   const brushRef = useRef<InkBrushKind>('pen')
   const colorRef = useRef(DEFAULT_INK_COLOR)
@@ -103,6 +107,8 @@ export function InkAnnotation({
   useSheetCoordinatesRef.current = useSheetCoordinates
   navigationRef.current = navigation
   drawModeRef.current = drawMode
+  laserModeRef.current = laserMode
+  visibleRef.current = drawMode || laserMode
   toolRef.current = tool
   brushRef.current = toolToBrush(tool)
   colorRef.current = color
@@ -123,7 +129,7 @@ export function InkAnnotation({
   const paintDisplay = useCallback(() => {
     const canvas = canvasRef.current
     const context = displayContextRef.current
-    if (!canvas || !context || !drawModeRef.current) {
+    if (!canvas || !context || !visibleRef.current) {
       return
     }
 
@@ -344,7 +350,8 @@ export function InkAnnotation({
   }, [tool, syncCanvasCursor])
 
   useEffect(() => {
-    if (!drawMode) {
+    const visible = drawMode || laserMode
+    if (!visible) {
       isDrawingRef.current = false
       resetErasing()
       currentStrokeRef.current = []
@@ -355,10 +362,10 @@ export function InkAnnotation({
     }
 
     resizeDisplayCanvas()
-  }, [drawMode, docKey, resizeDisplayCanvas, resetErasing])
+  }, [drawMode, laserMode, docKey, resizeDisplayCanvas, resetErasing])
 
   useEffect(() => {
-    if (!drawMode) {
+    if (!drawMode && !laserMode) {
       return
     }
 
@@ -368,18 +375,18 @@ export function InkAnnotation({
 
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
-  }, [drawMode, scheduleRepaint])
+  }, [drawMode, laserMode, scheduleRepaint])
 
   useEffect(() => {
-    if (!drawMode || viewportVersion === undefined) {
+    if ((!drawMode && !laserMode) || viewportVersion === undefined) {
       return
     }
 
     scheduleRepaint()
-  }, [drawMode, viewportVersion, scheduleRepaint])
+  }, [drawMode, laserMode, viewportVersion, scheduleRepaint])
 
   useEffect(() => {
-    if (!drawMode) {
+    if (!drawMode && !laserMode) {
       return
     }
 
@@ -387,6 +394,15 @@ export function InkAnnotation({
       if (!isDrawingRef.current && !isErasingRef.current) {
         resizeDisplayCanvas()
       }
+    }
+
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [drawMode, laserMode, resizeDisplayCanvas])
+
+  useEffect(() => {
+    if (!drawMode) {
+      return
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -436,14 +452,9 @@ export function InkAnnotation({
       }
     }
 
-    window.addEventListener('resize', onResize)
     window.addEventListener('keydown', onKeyDown)
-
-    return () => {
-      window.removeEventListener('resize', onResize)
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [clearAllInk, drawMode, resizeDisplayCanvas, undoLastStroke])
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [clearAllInk, drawMode, undoLastStroke])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -719,23 +730,29 @@ export function InkAnnotation({
     }
   }, [drawMode, findOrCreateLayer, paintDisplay, resetErasing, scheduleRepaint, syncCanvasCursor])
 
-  if (!drawMode) {
+  if (!drawMode && !laserMode) {
     return null
   }
 
   return (
     <>
-      <DrawToolbar
-        color={color}
-        tool={tool}
-        onColorChange={setColor}
-        onToolChange={setTool}
-        onClearAll={clearAllInk}
-      />
+      {drawMode ? (
+        <DrawToolbar
+          color={color}
+          tool={tool}
+          onColorChange={setColor}
+          onToolChange={setTool}
+          onClearAll={clearAllInk}
+        />
+      ) : null}
       <canvas
         ref={canvasRef}
-        className="ink-overlay-canvas ink-overlay-interactive"
-        aria-hidden={false}
+        className={
+          drawMode
+            ? 'ink-overlay-canvas ink-overlay-interactive'
+            : 'ink-overlay-canvas ink-overlay-passive'
+        }
+        aria-hidden={drawMode ? false : true}
       />
     </>
   )

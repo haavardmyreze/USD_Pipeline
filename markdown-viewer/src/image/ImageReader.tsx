@@ -537,7 +537,7 @@ export default function ImageReader({
       data-laser-mode={laserMode ? 'true' : undefined}
     >
       <CommandPalette groups={paletteGroups} />
-      <InkAnnotation docKey={docKey} drawMode={drawMode} {...inkBinding} />
+      <InkAnnotation docKey={docKey} drawMode={drawMode} laserMode={laserMode} {...inkBinding} />
       <LaserPointer active={laserMode} />
 
       <div className="reader-canvas reader-canvas-image" data-theme={theme}>

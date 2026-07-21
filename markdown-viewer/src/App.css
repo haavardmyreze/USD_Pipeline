@@ -3701,6 +3701,10 @@ body.laser-pointer-active * {
   pointer-events: auto;
 }
 
+.ink-overlay-passive {
+  pointer-events: none;
+}
+
 .ink-overlay-eraser {
   cursor: cell;
 }
