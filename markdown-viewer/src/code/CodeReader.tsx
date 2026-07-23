@@ -12,6 +12,7 @@ import {
   attachDocumentZoomWheel,
   clampPageZoom,
   clampTypeScale,
+  isEditableKeyboardTarget,
   loadReaderPreferences,
   PAGE_ZOOM_MAX,
   PAGE_ZOOM_MIN,
@@ -20,8 +21,15 @@ import {
   TYPE_SCALE_MAX,
   TYPE_SCALE_MIN,
 } from '../readerConfig'
+import DocAssistant from '../DocAssistant'
+import DocComments from '../DocComments'
+import type { CommentAnchor } from '../documentComments'
+import { useDocumentComments } from '../documentComments'
+import { AskIcon, CommentsIcon, SearchIcon } from '../ui/icons'
 import { ReaderTopbar, type TopbarAction } from '../ui/ReaderTopbar'
+import { SearchPanel } from '../ui/SearchPanel'
 import { ThemePicker } from '../ui/ThemePicker'
+import { usePanels } from '../ui/usePanels'
 import { CommandPalette } from '../ui/CommandPalette'
 import { InkAnnotation } from '../ui/InkAnnotation'
 import { LaserPointer } from '../ui/LaserPointer'
@@ -39,7 +47,9 @@ import { useReaderPageTheme } from '../ui/useReaderPageTheme'
 import type { LibraryDoc } from '../library'
 import { normalizePastedText } from '../text/normalizeLineBreaks'
 import { detectCodeLanguage, formatLanguageLabel } from './detectLanguage'
-import { formatCodeGutter, prepareCodeView } from './codeView'
+import { prepareCodeView } from './codeView'
+import { resolveCodeSelectionAnchor, getCodeLineHighlights } from './codeCommentAnchors'
+import { searchCode } from './codeSearch'
 
 type CodeReaderProps = {
   fileName: string
@@ -67,13 +77,26 @@ export default function CodeReader({
   const [pageZoom, setPageZoom] = useState(() => loadReaderPreferences().pageZoom)
   const [typeScale, setTypeScale] = useState(() => loadReaderPreferences().typeScale)
   const [copied, setCopied] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeSearchLine, setActiveSearchLine] = useState<number | null>(null)
+  const [assistantPrefill, setAssistantPrefill] = useState<{
+    text: string
+    tick: number
+  } | null>(null)
 
   const docColRef = useRef<HTMLDivElement | null>(null)
   const readerRootRef = useRef<HTMLDivElement | null>(null)
   const codeRef = useRef<HTMLPreElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+
+  const panels = usePanels()
+  const { closeAll: closeAllPanels, open: openPanel } = panels
+  const searchOpen = panels.isOpen('search')
+  const commentsOpen = panels.isOpen('comments')
+  const assistantOpen = panels.isOpen('assistant')
 
   const { drawMode, laserMode, toggleDrawMode, toggleLaserMode, drawModeRef } =
-    useReaderDrawMode(() => {})
+    useReaderDrawMode(closeAllPanels)
   const inkBinding = useCodeInkBinding(docColRef, pageZoom)
 
   useReaderPageTheme(theme)
@@ -95,10 +118,141 @@ export default function CodeReader({
     [displayContent, language],
   )
 
-  const gutterText = useMemo(
-    () => formatCodeGutter(codeView.lineCount),
-    [codeView.lineCount],
+  const gutterDigits = Math.max(2, String(Math.max(codeView.lineCount, 1)).length)
+
+  const lines = useMemo(() => displayContent.split('\n'), [displayContent])
+
+  const commentSource = useMemo(
+    () => ({ format: 'code' as const, lines }),
+    [lines],
   )
+
+  const {
+    comments,
+    activeCommentId,
+    setActiveCommentId,
+    addComment,
+    updateComment,
+    deleteComment,
+  } = useDocumentComments(docKey, commentSource)
+
+  const trimmedSearchQuery = searchQuery.trim()
+  const searchResults = useMemo(
+    () => searchCode(displayContent, searchQuery),
+    [displayContent, searchQuery],
+  )
+
+  const focusSearchInput = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    })
+  }, [])
+
+  const askQuery = useCallback(
+    (text: string) => {
+      setAssistantPrefill({ text, tick: Date.now() })
+      openPanel('assistant')
+    },
+    [openPanel],
+  )
+
+  const scrollToLine = useCallback((line: number) => {
+    const root = codeRef.current
+    const element = root?.querySelector<HTMLElement>(`.code-line[data-line="${line}"]`)
+    if (!element) {
+      return
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    element.classList.remove('code-line-flash')
+    // Force reflow so the animation restarts on repeat jumps.
+    void element.offsetWidth
+    element.classList.add('code-line-flash')
+    window.setTimeout(() => element.classList.remove('code-line-flash'), 1200)
+  }, [])
+
+  const resolveSelectionAnchor = useCallback(
+    (selection: Selection, scope: HTMLElement) =>
+      resolveCodeSelectionAnchor(selection, scope, lines),
+    [lines],
+  )
+
+  const scrollToAnchor = useCallback(
+    (commentId: string, anchor: CommentAnchor) => {
+      if (anchor.kind === 'code') {
+        scrollToLine(anchor.line)
+      }
+      setActiveCommentId(commentId)
+    },
+    [scrollToLine, setActiveCommentId],
+  )
+
+  const handleAddComment = useCallback(
+    (anchor: CommentAnchor, body: string) => addComment(anchor, body),
+    [addComment],
+  )
+
+  // Apply comment highlight classes to line elements after render — cheap DOM
+  // toggles, so comments never trigger re-highlighting of the code.
+  useEffect(() => {
+    const root = codeRef.current
+    if (!root) {
+      return
+    }
+
+    root.querySelectorAll<HTMLElement>('.code-comment-hit').forEach((element) => {
+      element.classList.remove('code-comment-hit', 'code-comment-active')
+      element.removeAttribute('data-comment-id')
+    })
+
+    for (const [line, highlight] of getCodeLineHighlights(comments, activeCommentId)) {
+      const element = root.querySelector<HTMLElement>(`.code-line[data-line="${line}"]`)
+      if (!element) {
+        continue
+      }
+      element.classList.add('code-comment-hit')
+      if (highlight.className.includes('code-comment-active')) {
+        element.classList.add('code-comment-active')
+      }
+      element.setAttribute('data-comment-id', highlight.commentId)
+    }
+  }, [codeView.html, comments, activeCommentId])
+
+  // Tag search-hit lines (and the active result) via DOM classes.
+  useEffect(() => {
+    const root = codeRef.current
+    if (!root) {
+      return
+    }
+
+    root.querySelectorAll<HTMLElement>('.code-line-hit, .code-line-active').forEach((element) => {
+      element.classList.remove('code-line-hit', 'code-line-active')
+    })
+
+    if (!searchOpen || !trimmedSearchQuery) {
+      return
+    }
+
+    for (const result of searchResults) {
+      const element = root.querySelector<HTMLElement>(`.code-line[data-line="${result.line}"]`)
+      element?.classList.add('code-line-hit')
+    }
+
+    if (activeSearchLine !== null) {
+      const element = root.querySelector<HTMLElement>(
+        `.code-line[data-line="${activeSearchLine}"]`,
+      )
+      element?.classList.add('code-line-active')
+    }
+  }, [codeView.html, searchOpen, trimmedSearchQuery, searchResults, activeSearchLine])
+
+  // Reset transient state when the document changes.
+  useEffect(() => {
+    closeAllPanels()
+    setSearchQuery('')
+    setActiveSearchLine(null)
+  }, [displayContent, docKey, closeAllPanels])
 
   const pageZoomPercent = Math.round(pageZoom * 100)
   const canvasStyle = {
@@ -106,6 +260,7 @@ export default function CodeReader({
     '--type-scale': typeScale,
     '--code-pad-x': 'clamp(1rem, 2vw, 1.5rem)',
     '--code-pad-y': 'clamp(0.85rem, 2vw, 1.25rem)',
+    '--code-gutter-digits': gutterDigits,
   } as CSSProperties
 
   const stepZoom = useCallback((direction: 'in' | 'out') => {
@@ -144,12 +299,20 @@ export default function CodeReader({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      applyZoomKeyboardShortcut(event, stepZoom)
+      if (applyZoomKeyboardShortcut(event, stepZoom)) {
+        return
+      }
+
+      if (event.key === '/' && !isEditableKeyboardTarget(event.target)) {
+        event.preventDefault()
+        openPanel('search')
+        focusSearchInput()
+      }
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [stepZoom])
+  }, [focusSearchInput, openPanel, stepZoom])
 
   const copySource = useCallback(() => {
     void navigator.clipboard?.writeText(displayContent)
@@ -158,6 +321,33 @@ export default function CodeReader({
   }, [displayContent])
 
   const topbarActions: TopbarAction[] = [
+    {
+      id: 'search',
+      label: 'Search',
+      icon: <SearchIcon />,
+      active: searchOpen || Boolean(trimmedSearchQuery),
+      onToggle: () => {
+        panels.toggle('search')
+        if (!searchOpen) {
+          focusSearchInput()
+        }
+      },
+    },
+    {
+      id: 'comments',
+      label: 'Comments',
+      icon: <CommentsIcon />,
+      active: commentsOpen,
+      badge: comments.length || undefined,
+      onToggle: () => panels.toggle('comments'),
+    },
+    {
+      id: 'assistant',
+      label: 'Ask',
+      icon: <AskIcon />,
+      active: assistantOpen,
+      onToggle: () => panels.toggle('assistant'),
+    },
     createDrawTopbarAction(drawMode, toggleDrawMode),
     createLaserTopbarAction(laserMode, toggleLaserMode),
   ]
@@ -248,6 +438,27 @@ export default function CodeReader({
 
   const paletteGroups = [
     actionsPaletteGroup([
+      {
+        id: 'search',
+        title: 'Search code',
+        keywords: 'find text line',
+        action: () => {
+          openPanel('search')
+          focusSearchInput()
+        },
+      },
+      {
+        id: 'comments',
+        title: 'Toggle comments',
+        keywords: 'notes annotate',
+        action: () => panels.toggle('comments'),
+      },
+      {
+        id: 'ask',
+        title: 'Ask about this code',
+        keywords: 'ai assistant chat',
+        action: () => panels.toggle('assistant'),
+      },
       createDrawPaletteAction(toggleDrawMode),
       createLaserPaletteAction(toggleLaserMode),
     ]),
@@ -262,12 +473,12 @@ export default function CodeReader({
       data-draw-mode={drawMode ? 'true' : undefined}
       data-laser-mode={laserMode ? 'true' : undefined}
     >
-      <CommandPalette groups={paletteGroups} />
+      <CommandPalette groups={paletteGroups} onAskQuery={askQuery} />
       <InkAnnotation docKey={docKey} drawMode={drawMode} laserMode={laserMode} {...inkBinding} />
       <LaserPointer active={laserMode} />
       <SelectionMenu
         scopeRef={docColRef}
-        disabled={drawMode || laserMode}
+        disabled={drawMode || laserMode || commentsOpen}
         actions={[
           {
             id: 'copy',
@@ -276,8 +487,63 @@ export default function CodeReader({
               void navigator.clipboard?.writeText(text)
             },
           },
+          {
+            id: 'ask',
+            label: 'Ask',
+            onRun: (text) => askQuery(text),
+          },
         ]}
       />
+
+      <DocAssistant
+        open={assistantOpen}
+        onClose={() => panels.close('assistant')}
+        markdown={displayContent}
+        fileName={fileName}
+        sections={[]}
+        onNavigateToSection={() => {}}
+        prefill={assistantPrefill}
+      />
+
+      <DocComments
+        open={commentsOpen}
+        onClose={() => panels.close('comments')}
+        docColRef={docColRef}
+        markdown=""
+        toc={[]}
+        comments={comments}
+        activeCommentId={activeCommentId}
+        setActiveCommentId={setActiveCommentId}
+        onAddComment={handleAddComment}
+        onUpdateComment={updateComment}
+        onDeleteComment={deleteComment}
+        resolveSelectionAnchor={resolveSelectionAnchor}
+        scrollToAnchor={scrollToAnchor}
+      />
+
+      <SearchPanel
+        open={searchOpen}
+        onClose={() => panels.close('search')}
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        inputRef={searchInputRef}
+        placeholder="Search code"
+        resultNoun="line"
+        results={searchResults.map((result) => ({
+          id: result.id,
+          text: `Line ${result.lineNumber}`,
+          snippet: result.snippet,
+        }))}
+        activeResultId={activeSearchLine !== null ? `code-line-${activeSearchLine}` : undefined}
+        onSelect={(item) => {
+          const result = searchResults.find((candidate) => candidate.id === item.id)
+          if (result) {
+            setActiveSearchLine(result.line)
+            scrollToLine(result.line)
+          }
+        }}
+      />
+
       <ReaderTopbar
         fileName={fileName}
         onHome={onHome}
@@ -285,9 +551,21 @@ export default function CodeReader({
         settings={settingsContent}
       />
 
-      <div className="reader-canvas reader-canvas-code" data-theme={theme} style={canvasStyle}>
+      <div
+        className="reader-canvas reader-canvas-code"
+        data-theme={theme}
+        data-comment-mode={commentsOpen && !drawMode ? 'true' : undefined}
+        style={canvasStyle}
+      >
         <div className="doc-stage">
-          <div className="doc-col code-doc-col" ref={docColRef}>
+          <div
+            className={
+              commentsOpen && !drawMode
+                ? 'doc-col code-doc-col comment-mode'
+                : 'doc-col code-doc-col'
+            }
+            ref={docColRef}
+          >
             <article className="paper-scroll code-scroll">
               <div className="code-view">
                 <div className="code-view-header">
@@ -302,11 +580,6 @@ export default function CodeReader({
                   </button>
                 </div>
                 <div className="code-panel-wrap">
-                  {gutterText ? (
-                    <pre className="code-gutter" aria-hidden="true">
-                      {gutterText}
-                    </pre>
-                  ) : null}
                   <pre className="code-panel" ref={codeRef}>
                     <code
                       className={`language-${codeView.language}`}

@@ -3325,57 +3325,203 @@
   color: var(--content-ink);
 }
 
-/* Token colors derive from the theme so every palette stays coherent. */
+/* ------------------------------------------------------------------ *
+ * Syntax token palette
+ *
+ * Each theme defines a small set of distinct-but-harmonized token roles.
+ * Colours are hand-tuned per palette so highlighting reads clearly while
+ * staying within the theme's own hue family (calm, not editor-loud).
+ * Defaults below target the light Slate paper; every other theme overrides.
+ * ------------------------------------------------------------------ */
+.reader-canvas {
+  --syntax-comment: #8a94a6;
+  --syntax-keyword: #8a3fa0;
+  --syntax-type: #b5761f;
+  --syntax-func: #2f5f8f;
+  --syntax-string: #47824f;
+  --syntax-number: #9a5b2e;
+  --syntax-variable: #3a4656;
+  --syntax-property: #4b6b88;
+  --syntax-meta: #6b6fb5;
+  --syntax-add: #47824f;
+  --syntax-del: #b3402f;
+}
+
+.reader-canvas[data-theme='sepia'] {
+  --syntax-comment: #a08a62;
+  --syntax-keyword: #9c4f7c;
+  --syntax-type: #8a5a1e;
+  --syntax-func: #3f6f7a;
+  --syntax-string: #5a7d3f;
+  --syntax-number: #a85e17;
+  --syntax-variable: #5a4428;
+  --syntax-property: #7a4f1e;
+  --syntax-meta: #7a5aa0;
+  --syntax-add: #5a7d3f;
+  --syntax-del: #a8402a;
+}
+
+.reader-canvas[data-theme='nord'] {
+  --syntax-comment: #7b8294;
+  --syntax-keyword: #8a5d86;
+  --syntax-type: #4a6f9c;
+  --syntax-func: #3f6690;
+  --syntax-string: #4f7a3f;
+  --syntax-number: #a85d3f;
+  --syntax-variable: #3b4252;
+  --syntax-property: #5e81ac;
+  --syntax-meta: #5e81ac;
+  --syntax-add: #4f7a3f;
+  --syntax-del: #a85d5d;
+}
+
+.reader-canvas[data-theme='notion'] {
+  --syntax-comment: #8c8c8c;
+  --syntax-keyword: #b02d18;
+  --syntax-type: #b5761f;
+  --syntax-func: #2f6f9f;
+  --syntax-string: #3f7d4f;
+  --syntax-number: #9a5b2e;
+  --syntax-variable: #333333;
+  --syntax-property: #a34434;
+  --syntax-meta: #b02d18;
+  --syntax-add: #3f7d4f;
+  --syntax-del: #b02d18;
+}
+
+/* Ink / Ink-night are typewriter themes — stay monochrome; only weight and
+   italics separate the roles, matching the screenplay aesthetic. */
+.reader-canvas[data-theme='ink'] {
+  --syntax-comment: #4a4a4a;
+  --syntax-keyword: #000000;
+  --syntax-type: #000000;
+  --syntax-func: #000000;
+  --syntax-string: #3a3a3a;
+  --syntax-number: #000000;
+  --syntax-variable: #000000;
+  --syntax-property: #000000;
+  --syntax-meta: #4a4a4a;
+  --syntax-add: #2a2a2a;
+  --syntax-del: #6a6a6a;
+}
+
+.reader-canvas[data-theme='ink-night'] {
+  --syntax-comment: #8a8a8a;
+  --syntax-keyword: #fafafa;
+  --syntax-type: #e8e8e8;
+  --syntax-func: #e8e8e8;
+  --syntax-string: #c8c8c8;
+  --syntax-number: #e8e8e8;
+  --syntax-variable: #e8e8e8;
+  --syntax-property: #e8e8e8;
+  --syntax-meta: #8a8a8a;
+  --syntax-add: #c8c8c8;
+  --syntax-del: #9a9a9a;
+}
+
+/* Neutral dark palettes (Graphite / Stone / Ash) share one calm dark scheme. */
+.reader-canvas[data-theme='graphite'],
+.reader-canvas[data-theme='stone'],
+.reader-canvas[data-theme='ash'] {
+  --syntax-comment: #7f7f7f;
+  --syntax-keyword: #c191d6;
+  --syntax-type: #d9a566;
+  --syntax-func: #7aa6d6;
+  --syntax-string: #94c088;
+  --syntax-number: #d99a6a;
+  --syntax-variable: #c2c2b8;
+  --syntax-property: #b9c4d6;
+  --syntax-meta: #a0a6d6;
+  --syntax-add: #94c088;
+  --syntax-del: #d98a7a;
+}
+
+.reader-canvas[data-theme='sepia-night'] {
+  --syntax-comment: #9c8a66;
+  --syntax-keyword: #d9a0c0;
+  --syntax-type: #e0b46a;
+  --syntax-func: #8ab8c0;
+  --syntax-string: #b0c088;
+  --syntax-number: #e0a060;
+  --syntax-variable: #cdbb96;
+  --syntax-property: #d8c7a2;
+  --syntax-meta: #c0a6d6;
+  --syntax-add: #b0c088;
+  --syntax-del: #d98a7a;
+}
+
+/* Class → role mapping (shared by every theme). */
 .reader-canvas .hljs-comment,
 .reader-canvas .hljs-quote {
-  color: var(--content-muted);
+  color: var(--syntax-comment);
   font-style: italic;
 }
 
 .reader-canvas .hljs-keyword,
 .reader-canvas .hljs-selector-tag,
+.reader-canvas .hljs-tag,
+.reader-canvas .hljs-operator {
+  color: var(--syntax-keyword);
+}
+
 .reader-canvas .hljs-built_in,
-.reader-canvas .hljs-tag {
-  color: var(--content-accent-strong);
-}
-
-.reader-canvas .hljs-string,
-.reader-canvas .hljs-attr,
-.reader-canvas .hljs-attribute,
-.reader-canvas .hljs-symbol,
-.reader-canvas .hljs-regexp {
-  color: var(--content-heading-soft);
-}
-
-.reader-canvas .hljs-number,
-.reader-canvas .hljs-literal,
-.reader-canvas .hljs-addition {
-  color: var(--content-accent);
+.reader-canvas .hljs-type,
+.reader-canvas .hljs-class .hljs-title,
+.reader-canvas .hljs-title.class_,
+.reader-canvas .hljs-selector-class,
+.reader-canvas .hljs-selector-id {
+  color: var(--syntax-type);
 }
 
 .reader-canvas .hljs-title,
+.reader-canvas .hljs-title.function_,
 .reader-canvas .hljs-name,
 .reader-canvas .hljs-section {
-  color: var(--content-heading);
+  color: var(--syntax-func);
   font-weight: 600;
 }
 
-.reader-canvas .hljs-type,
-.reader-canvas .hljs-selector-class,
-.reader-canvas .hljs-selector-id {
-  color: var(--content-accent-strong);
+.reader-canvas .hljs-string,
+.reader-canvas .hljs-regexp,
+.reader-canvas .hljs-symbol,
+.reader-canvas .hljs-char {
+  color: var(--syntax-string);
 }
 
-.reader-canvas .hljs-meta,
-.reader-canvas .hljs-doctag,
-.reader-canvas .hljs-deletion {
-  color: var(--content-muted);
+.reader-canvas .hljs-number,
+.reader-canvas .hljs-literal {
+  color: var(--syntax-number);
 }
 
+.reader-canvas .hljs-attr,
+.reader-canvas .hljs-attribute,
+.reader-canvas .hljs-property,
 .reader-canvas .hljs-variable,
 .reader-canvas .hljs-template-variable,
 .reader-canvas .hljs-params {
-  color: var(--content-ink);
+  color: var(--syntax-property);
+}
+
+.reader-canvas .hljs-meta,
+.reader-canvas .hljs-doctag {
+  color: var(--syntax-meta);
+}
+
+.reader-canvas .hljs-meta .hljs-string {
+  color: var(--syntax-string);
+}
+
+.reader-canvas .hljs-addition {
+  color: var(--syntax-add);
+}
+
+.reader-canvas .hljs-deletion {
+  color: var(--syntax-del);
+}
+
+.reader-canvas .hljs-bullet,
+.reader-canvas .hljs-link {
+  color: var(--syntax-property);
 }
 
 .reader-canvas .hljs-emphasis {
@@ -3444,11 +3590,8 @@
 }
 
 .code-panel-wrap {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: start;
   overflow-x: auto;
-  padding: 0.85rem 0 var(--code-pad-y, 1rem);
+  padding: 0.85rem var(--code-pad-x, 1.25rem) var(--code-pad-y, 1rem);
   contain: layout paint style;
 }
 
@@ -3457,22 +3600,8 @@
   user-select: none;
 }
 
-.code-gutter {
-  margin: 0;
-  padding: 0 0.65rem 0 var(--code-pad-x, 1.25rem);
-  text-align: right;
-  user-select: none;
-  color: var(--content-muted);
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: calc(0.82rem * var(--type-scale, 1));
-  line-height: 1.55;
-  white-space: pre;
-  border: 0;
-  background: transparent;
-  overflow: visible;
-}
-
 .code-panel {
+  --code-gutter-w: calc(var(--code-gutter-digits, 3) * 1ch + 1.6rem);
   margin: 0;
   padding: 0 var(--code-pad-x, 1.25rem) 0 0;
   overflow: visible;
@@ -3492,6 +3621,87 @@
   font-size: inherit;
   line-height: inherit;
   white-space: pre;
+}
+
+/* Lines are grouped into chunks so the browser can skip rendering the ones
+   that are off-screen. This keeps large, token-dense files (JSON in
+   particular) from bogging the whole app down: layout and paint cost stays
+   proportional to what's visible, not the file size. Chunking (rather than
+   one container per line) keeps the number of content-visibility elements
+   low, so a forced layout — e.g. when the laser/draw overlay mounts — stays
+   cheap. The intrinsic size is exactly N lines tall, so scroll position and
+   gutter alignment stay stable while chunks are skipped. */
+.code-panel-wrap .code-chunk {
+  display: block;
+  white-space: pre;
+  content-visibility: auto;
+  /* Only reserve the vertical size for skipped chunks. Constraining width too
+     (as the shorthand would) makes off-screen chunks reserve a huge phantom
+     width and balloons the column until something forces a re-layout. Width is
+     remembered from the last render, falling back to 0. */
+  contain-intrinsic-width: auto 0;
+  contain-intrinsic-height: auto calc(var(--chunk-lines, 50) * 1.55em);
+}
+
+/* Each line is an addressable block. The line number is rendered as a ::before
+   inside the line's own box, so it shares the exact line metrics of the code
+   and can never drift (no separate gutter column to keep in sync). min-height
+   keeps blank lines the right height. Highlight classes are toggled on these by
+   the reader for search hits and comments — no re-highlighting required. */
+.code-panel .code-line {
+  display: block;
+  position: relative;
+  min-height: 1.55em;
+  white-space: pre;
+  padding-left: var(--code-gutter-w);
+}
+
+.code-panel .code-line::before {
+  content: attr(data-ln);
+  position: absolute;
+  left: 0;
+  width: calc(var(--code-gutter-w) - 1rem);
+  text-align: right;
+  color: var(--content-muted);
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+
+.code-panel .code-line.code-line-hit {
+  background: color-mix(in srgb, #f5d76e 34%, transparent);
+}
+
+.code-panel .code-line.code-line-active {
+  background: color-mix(in srgb, #f5d76e 60%, transparent);
+}
+
+.code-panel .code-line.code-comment-hit {
+  background: color-mix(in srgb, #7eb6ff 30%, transparent);
+  cursor: pointer;
+}
+
+.code-panel .code-line.code-comment-active {
+  background: color-mix(in srgb, #f5d76e 55%, transparent);
+}
+
+/* Brief pulse when jumping to a search result or comment. */
+@keyframes code-line-flash {
+  from {
+    background: color-mix(in srgb, #f5d76e 78%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+.code-panel .code-line.code-line-flash {
+  animation: code-line-flash 1.1s ease-out;
+}
+
+/* Comment mode: make lines feel selectable/clickable. */
+.reader-canvas-code[data-comment-mode='true'] .code-line {
+  cursor: text;
 }
 
 /* ================================================================== *

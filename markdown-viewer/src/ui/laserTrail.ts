@@ -4,9 +4,12 @@ export type LaserTrailPoint = {
   time: number
 }
 
-export const LASER_TRAIL_MS = 420
+// Crisp presentation laser: a tight, high-contrast dot with a short, subtly
+// fading trail — closer to a real hand-held pointer than a glowing comet.
+export const LASER_TRAIL_MS = 240
 export const LASER_HEAD_RADIUS = 5
 export const LASER_GLOW_RADIUS = 14
+export const LASER_TRAIL_WIDTH = 3
 export const LASER_TRAIL_SUBDIVISIONS = 6
 export const LASER_TRAIL_MIN_DISTANCE = 0.75
 
@@ -139,8 +142,9 @@ function paintLaserTrail(
     return
   }
 
+  // Source-over (not additive) keeps the trail a thin, faint streak instead of
+  // blooming into a soft comet — the dot stays the focal point.
   context.save()
-  context.globalCompositeOperation = 'lighter'
 
   for (let index = 1; index < denseTrail.length; index += 1) {
     const start = denseTrail[index - 1]
@@ -156,8 +160,9 @@ function paintLaserTrail(
       continue
     }
 
-    const radius = (1.5 + strength * 4) / 2
-    context.fillStyle = laserColorWithAlpha(color, strength * 0.42)
+    // Taper the streak toward its tail; keep it thin so the head reads crisp.
+    const radius = (0.5 + strength * (LASER_TRAIL_WIDTH - 0.5)) / 2
+    context.fillStyle = laserColorWithAlpha(color, strength * strength * 0.5)
     fillLaserCapsule(context, start.x, start.y, end.x, end.y, radius)
   }
 
@@ -182,29 +187,39 @@ export function paintLaserPointer(
     return activeTrail
   }
 
+  // Soft halo — tight and low-intensity so it frames the dot without blooming.
   const glow = context.createRadialGradient(
     head.x,
     head.y,
-    0,
+    LASER_HEAD_RADIUS * 0.6,
     head.x,
     head.y,
     LASER_GLOW_RADIUS,
   )
-  glow.addColorStop(0, laserColorWithAlpha(color, 0.55))
+  glow.addColorStop(0, laserColorWithAlpha(color, 0.32))
   glow.addColorStop(1, laserColorWithAlpha(color, 0))
   context.fillStyle = glow
   context.beginPath()
   context.arc(head.x, head.y, LASER_GLOW_RADIUS, 0, Math.PI * 2)
   context.fill()
 
+  // Saturated core with a crisp edge.
   context.fillStyle = color
   context.beginPath()
   context.arc(head.x, head.y, LASER_HEAD_RADIUS, 0, Math.PI * 2)
   context.fill()
 
-  context.fillStyle = laserColorWithAlpha('#ffffff', 0.85)
+  // Thin bright rim sharpens the dot against any background.
+  context.lineWidth = 1
+  context.strokeStyle = laserColorWithAlpha('#ffffff', 0.55)
   context.beginPath()
-  context.arc(head.x - 1.2, head.y - 1.2, 1.6, 0, Math.PI * 2)
+  context.arc(head.x, head.y, LASER_HEAD_RADIUS + 0.5, 0, Math.PI * 2)
+  context.stroke()
+
+  // Hot white centre — the tell-tale glint of a real laser.
+  context.fillStyle = laserColorWithAlpha('#ffffff', 0.92)
+  context.beginPath()
+  context.arc(head.x, head.y, LASER_HEAD_RADIUS * 0.4, 0, Math.PI * 2)
   context.fill()
 
   return activeTrail

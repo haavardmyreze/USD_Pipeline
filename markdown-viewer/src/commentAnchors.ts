@@ -1,5 +1,9 @@
 import type { CommentAnchor, DocumentComment } from './documentComments'
-import { isCsvCommentAnchor, isPdfCommentAnchor } from './documents/commentAnchorUtils'
+import {
+  isCodeCommentAnchor,
+  isCsvCommentAnchor,
+  isPdfCommentAnchor,
+} from './documents/commentAnchorUtils'
 
 export type TocEntryLike = {
   id: string
@@ -401,7 +405,11 @@ export function injectCommentHighlights(
 
   const validComments = comments
     .filter((comment) => {
-      if (isPdfCommentAnchor(comment.anchor) || isCsvCommentAnchor(comment.anchor)) {
+      if (
+        isPdfCommentAnchor(comment.anchor) ||
+        isCsvCommentAnchor(comment.anchor) ||
+        isCodeCommentAnchor(comment.anchor)
+      ) {
         return false
       }
 
@@ -413,7 +421,9 @@ export function injectCommentHighlights(
         isPdfCommentAnchor(left.anchor) ||
         isPdfCommentAnchor(right.anchor) ||
         isCsvCommentAnchor(left.anchor) ||
-        isCsvCommentAnchor(right.anchor)
+        isCsvCommentAnchor(right.anchor) ||
+        isCodeCommentAnchor(left.anchor) ||
+        isCodeCommentAnchor(right.anchor)
       ) {
         return 0
       }
@@ -423,7 +433,11 @@ export function injectCommentHighlights(
 
   let result = markdown
   for (const comment of validComments) {
-    if (isPdfCommentAnchor(comment.anchor) || isCsvCommentAnchor(comment.anchor)) {
+    if (
+      isPdfCommentAnchor(comment.anchor) ||
+      isCsvCommentAnchor(comment.anchor) ||
+      isCodeCommentAnchor(comment.anchor)
+    ) {
       continue
     }
 

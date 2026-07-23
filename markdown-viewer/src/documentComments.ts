@@ -26,7 +26,18 @@ export type CsvCommentAnchor = {
   globalOffset: number
 }
 
-export type CommentAnchor = MarkdownCommentAnchor | PdfCommentAnchor | CsvCommentAnchor
+export type CodeCommentAnchor = {
+  kind: 'code'
+  line: number
+  quote: string
+  globalOffset: number
+}
+
+export type CommentAnchor =
+  | MarkdownCommentAnchor
+  | PdfCommentAnchor
+  | CsvCommentAnchor
+  | CodeCommentAnchor
 
 export type DocumentComment = {
   id: string
@@ -40,6 +51,7 @@ export type CommentPruneSource =
   | { format: 'markdown'; markdown: string }
   | { format: 'pdf'; pageTexts: string[] }
   | { format: 'csv'; rows: string[][] }
+  | { format: 'code'; lines: string[] }
 
 const STORAGE_PREFIX = 'mdv-comments:'
 
@@ -141,6 +153,24 @@ export function pruneDocumentComments(
 
       const quote = anchor.quote.trim()
       return cellValue === quote || cellValue.includes(quote) || quote.includes(cellValue.trim())
+    }
+
+    if (anchor.kind === 'code') {
+      if (source.format !== 'code') {
+        return false
+      }
+
+      if (anchor.line < 0 || anchor.line >= source.lines.length) {
+        return false
+      }
+
+      const quote = anchor.quote.trim()
+      if (!quote) {
+        return true
+      }
+
+      const lineText = source.lines[anchor.line] ?? ''
+      return lineText.includes(quote) || quote.includes(lineText.trim())
     }
 
     if (source.format !== 'markdown') {

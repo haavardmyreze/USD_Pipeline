@@ -2,8 +2,9 @@
 // highlighting plus a hover copy button. The measure host renders these same
 // components so paged-mode measurements stay exact.
 
-import { type ReactNode, useRef, useState } from 'react'
+import { type ReactNode, memo, useMemo, useRef, useState } from 'react'
 import type { Components } from 'react-markdown'
+import { shouldHighlightCode } from '../code/codeView'
 import { highlightCode } from './codeHighlight'
 
 function CodePre({ children }: { children?: ReactNode }) {
@@ -30,31 +31,41 @@ function CodePre({ children }: { children?: ReactNode }) {
   )
 }
 
-function Code({
+const Code = memo(function Code({
   className,
   children,
 }: {
   className?: string
   children?: ReactNode
 }) {
-  const match = /language-([\w+-]+)/.exec(className ?? '')
-  if (match) {
-    const text = (Array.isArray(children) ? children.join('') : String(children ?? ''))
-      .replace(/\n$/, '')
-    const html = highlightCode(text, match[1])
-    if (html !== null) {
-      return (
-        <code
-          className={className}
-          // highlight.js output over text we already have — not user HTML.
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      )
+  const language = /language-([\w+-]+)/.exec(className ?? '')?.[1]
+  const text = useMemo(
+    () =>
+      (Array.isArray(children) ? children.join('') : String(children ?? '')).replace(/\n$/, ''),
+    [children],
+  )
+
+  // Highlight once per (text, language). Oversized blocks skip highlight.js
+  // entirely so a giant fenced block can never block the render thread.
+  const html = useMemo(() => {
+    if (!language || !shouldHighlightCode(text, language)) {
+      return null
     }
+    return highlightCode(text, language)
+  }, [language, text])
+
+  if (html !== null) {
+    return (
+      <code
+        className={className}
+        // highlight.js output over text we already have — not user HTML.
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    )
   }
 
   return <code className={className}>{children}</code>
-}
+})
 
 export const markdownCodeComponents: Components = {
   pre: CodePre,

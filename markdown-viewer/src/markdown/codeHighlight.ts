@@ -83,6 +83,15 @@ export function resolveHighlightLanguage(language: string) {
 }
 
 /**
+ * Punctuation carries no colour in our palette, but highlight.js still wraps
+ * every brace/colon/comma in a span — which dominates the DOM for JSON. Strip
+ * those wrappers (text is preserved) so JSON stays light enough to highlight.
+ */
+function stripPunctuationSpans(html: string): string {
+  return html.replace(/<span class="hljs-punctuation">([^<]*)<\/span>/g, '$1')
+}
+
+/**
  * Highlight `code` for `language`; returns HTML or null when the language is
  * unknown (caller falls back to plain text — e.g. usda stays unhighlighted).
  */
@@ -93,7 +102,7 @@ export function highlightCode(code: string, language: string): string | null {
   }
 
   try {
-    return hljs.highlight(code, { language: resolved }).value
+    return stripPunctuationSpans(hljs.highlight(code, { language: resolved }).value)
   } catch {
     return null
   }
@@ -129,7 +138,7 @@ export function highlightCodeAuto(content: string, languageHint?: string) {
     try {
       return {
         language: hinted,
-        html: hljs.highlight(content, { language: hinted }).value,
+        html: stripPunctuationSpans(hljs.highlight(content, { language: hinted }).value),
       }
     } catch {
       // fall through to auto-detect
@@ -141,7 +150,7 @@ export function highlightCodeAuto(content: string, languageHint?: string) {
     const language = resolveHighlightLanguage(result.language ?? '') ?? 'plaintext'
     return {
       language: language === 'plaintext' ? result.language || 'text' : language,
-      html: result.value,
+      html: stripPunctuationSpans(result.value),
     }
   } catch {
     return {

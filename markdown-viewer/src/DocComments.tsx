@@ -49,7 +49,7 @@ type DocCommentsProps = {
 
 function getCommentHighlightElement(scope: HTMLElement, commentId: string) {
   return scope.querySelector<HTMLElement>(
-    `mark.comment-highlight[data-comment-id="${CSS.escape(commentId)}"], [data-comment-id="${CSS.escape(commentId)}"].csv-comment-hit`,
+    `mark.comment-highlight[data-comment-id="${CSS.escape(commentId)}"], [data-comment-id="${CSS.escape(commentId)}"].csv-comment-hit, [data-comment-id="${CSS.escape(commentId)}"].code-comment-hit`,
   )
 }
 
@@ -141,7 +141,12 @@ function DocComments({
         return
       }
 
-      if (comment?.anchor.kind !== 'pdf' && comment?.anchor.kind !== 'csv' && comment?.anchor.headingId) {
+      if (
+        comment?.anchor.kind !== 'pdf' &&
+        comment?.anchor.kind !== 'csv' &&
+        comment?.anchor.kind !== 'code' &&
+        comment?.anchor.headingId
+      ) {
         const heading = scope.querySelector<HTMLElement>(
           `#${CSS.escape(comment.anchor.headingId)}`,
         )
@@ -357,7 +362,7 @@ function DocComments({
 
     const onClick = (event: MouseEvent) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>(
-        'mark.comment-highlight[data-comment-id], [data-comment-id].csv-comment-hit',
+        'mark.comment-highlight[data-comment-id], [data-comment-id].csv-comment-hit, [data-comment-id].code-comment-hit',
       )
       if (!target || !scope.contains(target)) {
         return
