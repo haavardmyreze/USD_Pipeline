@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from 'react'
-import { highlightCodeAuto } from '../markdown/codeHighlight'
 import { type Theme, type ThemePreference } from '../theme'
 import {
   applyZoomKeyboardShortcut,
@@ -40,6 +39,7 @@ import { useReaderPageTheme } from '../ui/useReaderPageTheme'
 import type { LibraryDoc } from '../library'
 import { normalizePastedText } from '../text/normalizeLineBreaks'
 import { detectCodeLanguage, formatLanguageLabel } from './detectLanguage'
+import { formatCodeGutter, prepareCodeView } from './codeView'
 
 type CodeReaderProps = {
   fileName: string
@@ -90,15 +90,14 @@ export default function CodeReader({
     [displayContent, fileName, languageHint],
   )
 
-  const highlighted = useMemo(
-    () => highlightCodeAuto(displayContent, language),
+  const codeView = useMemo(
+    () => prepareCodeView(displayContent, language),
     [displayContent, language],
   )
 
-  const lineCount = useMemo(() => displayContent.split(/\r?\n/).length, [displayContent])
-  const lineNumbers = useMemo(
-    () => Array.from({ length: lineCount }, (_, index) => index + 1),
-    [lineCount],
+  const gutterText = useMemo(
+    () => formatCodeGutter(codeView.lineCount),
+    [codeView.lineCount],
   )
 
   const pageZoomPercent = Math.round(pageZoom * 100)
@@ -268,7 +267,7 @@ export default function CodeReader({
       <LaserPointer active={laserMode} />
       <SelectionMenu
         scopeRef={docColRef}
-        disabled={drawMode}
+        disabled={drawMode || laserMode}
         actions={[
           {
             id: 'copy',
@@ -303,18 +302,17 @@ export default function CodeReader({
                   </button>
                 </div>
                 <div className="code-panel-wrap">
-                  <div className="code-gutter" aria-hidden="true">
-                    {lineNumbers.map((lineNumber) => (
-                      <span key={lineNumber} className="code-gutter-line">
-                        {lineNumber}
-                      </span>
-                    ))}
-                  </div>
+                  {gutterText ? (
+                    <pre className="code-gutter" aria-hidden="true">
+                      {gutterText}
+                    </pre>
+                  ) : null}
                   <pre className="code-panel" ref={codeRef}>
                     <code
-                      className={`language-${highlighted.language}`}
+                      className={`language-${codeView.language}`}
+                      data-plain={codeView.highlighted ? undefined : 'true'}
                       // highlight.js output over text we already have — not user HTML.
-                      dangerouslySetInnerHTML={{ __html: highlighted.html }}
+                      dangerouslySetInnerHTML={{ __html: codeView.html }}
                     />
                   </pre>
                 </div>

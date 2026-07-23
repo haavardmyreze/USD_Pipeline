@@ -3449,9 +3449,16 @@
   align-items: start;
   overflow-x: auto;
   padding: 0.85rem 0 var(--code-pad-y, 1rem);
+  contain: layout paint style;
+}
+
+.reader-root[data-laser-mode='true'] .code-panel-wrap,
+.reader-root[data-draw-mode='true'] .code-panel-wrap {
+  user-select: none;
 }
 
 .code-gutter {
+  margin: 0;
   padding: 0 0.65rem 0 var(--code-pad-x, 1.25rem);
   text-align: right;
   user-select: none;
@@ -3459,11 +3466,10 @@
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: calc(0.82rem * var(--type-scale, 1));
   line-height: 1.55;
-}
-
-.code-gutter-line {
-  display: block;
-  min-width: 2ch;
+  white-space: pre;
+  border: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .code-panel {
@@ -3752,9 +3758,13 @@ body.canvas-zoom-scrub-dragging .reader-root .ink-overlay-canvas {
   pointer-events: auto;
 }
 
-body.laser-pointer-active,
-body.laser-pointer-active * {
+body.laser-pointer-active {
   cursor: none !important;
+}
+
+.reader-root[data-laser-mode='true'] .topbar-shell,
+.reader-root[data-laser-mode='true'] .laser-toolbar-shell {
+  cursor: auto !important;
 }
 
 .laser-overlay-canvas {
