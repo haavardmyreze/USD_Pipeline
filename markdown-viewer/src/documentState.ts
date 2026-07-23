@@ -105,7 +105,10 @@ export async function loadExternalDocument(
     headers:
       format === 'pdf' || format === 'image'
         ? undefined
-        : { Accept: 'text/csv,text/plain,text/markdown;q=0.9,*/*;q=0.8' },
+        : {
+            Accept:
+              'text/csv,application/json,text/javascript,application/javascript,text/plain,text/markdown;q=0.9,*/*;q=0.8',
+          },
   })
   if (!response.ok) {
     throw new Error(`Could not load document (${response.status})`)

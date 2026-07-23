@@ -154,3 +154,11 @@ export const ImageFormatIcon = (props: IconProps = {}) => (
     <path d="m21 17-5.5-5.5a1.5 1.5 0 0 0-2.12 0L7 18" />
   </svg>
 )
+
+export const CodeFormatIcon = (props: IconProps = {}) => (
+  <svg {...iconAttrs({ size: 18, strokeWidth: 1.8, ...props })}>
+    <path d="M16 18 22 12 16 6" />
+    <path d="m8 6-6 6 6 6" />
+    <path d="M14 4 10 20" opacity="0.45" />
+  </svg>
+)

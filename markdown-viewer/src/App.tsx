@@ -1,6 +1,7 @@
 import { type ChangeEvent, useCallback, useEffect, useState } from 'react'
 import './App.css'
 import { adapterForFileName, adapterForFormat } from './documents/adapter'
+import { detectClipboardPaste } from './code/detectClipboardPaste'
 import {
   documentKeyFor,
   externalErrorDocument,
@@ -166,11 +167,27 @@ function App() {
       throw new Error('Clipboard is empty.')
     }
 
+    const detected = detectClipboardPaste(content)
+
+    if (detected.format === 'code') {
+      openImported({
+        source: {
+          format: 'code',
+          content: detected.content,
+          language: detected.language,
+        },
+        fileName: detected.fileName,
+        libraryId: '',
+        fingerprint: detected.content,
+      })
+      return
+    }
+
     openImported({
-      source: { format: 'markdown', content },
-      fileName: 'clipboard.md',
+      source: { format: 'markdown', content: detected.content },
+      fileName: detected.fileName,
       libraryId: '',
-      fingerprint: content,
+      fingerprint: detected.content,
     })
   }
 

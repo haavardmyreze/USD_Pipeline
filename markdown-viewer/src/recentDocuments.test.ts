@@ -84,6 +84,29 @@ describe('recentDocuments', () => {
       },
     ])
 
+    storage.set(
+      'mdv-recent-docs',
+      JSON.stringify([
+        {
+          id: 'import:clipboard.py:abc',
+          fileName: 'clipboard.py',
+          docKey: 'import:clipboard.py:abc',
+          openedAt: 2,
+        },
+      ]),
+    )
+
+    expect(loadRecentDocuments()).toEqual([
+      {
+        id: 'import:clipboard.py:abc',
+        fileName: 'clipboard.py',
+        docKey: 'import:clipboard.py:abc',
+        openedAt: 2,
+        kind: 'clipboard',
+        format: 'code',
+      },
+    ])
+
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: original,

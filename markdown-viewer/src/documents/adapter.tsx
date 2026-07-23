@@ -11,6 +11,9 @@ import MarkdownReader from '../Reader'
 import PdfReader from '../pdf/PdfReader'
 import CsvReader from '../csv/CsvReader'
 import ImageReader from '../image/ImageReader'
+import CodeReader from '../code/CodeReader'
+import { CODE_EXTENSIONS } from '../code/codeExtensions'
+import { detectCodeLanguage } from '../code/detectLanguage'
 import { IMAGE_EXTENSIONS_LIST } from '../image/imageFormat'
 
 export type ReaderProps = {
@@ -212,11 +215,77 @@ function parseFileNameFromResponse(response: Response) {
   return 'image.png'
 }
 
+function CodeAdapterReader(props: ReaderProps) {
+  if (props.source.format !== 'code') {
+    return null
+  }
+  return (
+    <CodeReader
+      content={props.source.content}
+      language={props.source.language}
+      fileName={props.fileName}
+      docKey={props.docKey}
+      theme={props.theme}
+      themePreference={props.themePreference}
+      onSelectTheme={props.onSelectTheme}
+      onHome={props.onHome}
+      onOpenLibrary={props.onOpenLibrary}
+    />
+  )
+}
+
+const codeAdapter: DocumentAdapter = {
+  format: 'code',
+  label: 'Code',
+  extensions: [...CODE_EXTENSIONS],
+  mimeTypes: [
+    'application/json',
+    'application/javascript',
+    'text/javascript',
+    'application/typescript',
+    'text/x-python',
+    'application/x-python',
+    'text/x-java-source',
+    'text/x-c',
+    'text/x-c++',
+    'text/x-go',
+    'text/x-rust',
+    'text/x-kotlin',
+    'text/x-sql',
+    'text/x-csharp',
+    'text/x-shellscript',
+    'text/css',
+    'application/xml',
+    'text/xml',
+    'application/x-yaml',
+    'text/yaml',
+  ],
+  readFile: async (file) => {
+    const content = await file.text()
+    const language = detectCodeLanguage(file.name, content)
+    return {
+      source: { format: 'code', content, language },
+      fingerprint: content,
+    }
+  },
+  readResponse: async (response) => {
+    const content = await response.text()
+    const fileName = parseFileNameFromResponse(response)
+    const language = detectCodeLanguage(fileName, content)
+    return {
+      source: { format: 'code', content, language },
+      fingerprint: content,
+    }
+  },
+  Reader: CodeAdapterReader,
+}
+
 export const DOCUMENT_ADAPTERS: DocumentAdapter[] = [
   markdownAdapter,
   pdfAdapter,
   csvAdapter,
   imageAdapter,
+  codeAdapter,
 ]
 
 const FALLBACK_ADAPTER = markdownAdapter

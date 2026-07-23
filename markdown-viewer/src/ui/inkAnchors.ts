@@ -82,6 +82,12 @@ export function scrollDocumentInkViewport(
   return scrollDocumentInkViewportFromRect(contentRoot?.getBoundingClientRect(), inkOverlayOriginY)
 }
 
+/** One layer per viewport-height scroll segment in code documents. */
+export function codeInkLayerKey() {
+  const bucket = Math.floor(window.scrollY / viewportBucketHeight())
+  return `code-${bucket}`
+}
+
 /** One layer per viewport-height scroll segment in markdown. */
 export function markdownInkLayerKey() {
   const bucket = Math.floor(window.scrollY / viewportBucketHeight())

@@ -12,6 +12,7 @@ import {
 import { DrawIcon, LaserIcon } from './icons'
 import type { TopbarAction } from './ReaderTopbar'
 import {
+  codeInkLayerKey,
   csvInkLayerKey,
   markdownInkLayerKey,
   panZoomInkContentOffset,
@@ -167,6 +168,14 @@ export function useMarkdownInkBinding(
   contentZoom: number,
 ): InkBinding {
   const getLayerKey = useCallback(() => markdownInkLayerKey(), [])
+  return useScrollDocumentInkBinding(docColRef, getLayerKey, contentZoom)
+}
+
+export function useCodeInkBinding(
+  docColRef: RefObject<HTMLElement | null>,
+  contentZoom: number,
+): InkBinding {
+  const getLayerKey = useCallback(() => codeInkLayerKey(), [])
   return useScrollDocumentInkBinding(docColRef, getLayerKey, contentZoom)
 }
 

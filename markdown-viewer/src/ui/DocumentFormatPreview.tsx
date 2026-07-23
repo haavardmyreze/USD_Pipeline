@@ -1,6 +1,7 @@
 import type { DocumentFormat } from '../documents/types'
 import { formatRecentFormatLabel } from '../recentDocuments'
 import {
+  CodeFormatIcon,
   CsvFormatIcon,
   ImageFormatIcon,
   MarkdownFormatIcon,
@@ -17,6 +18,7 @@ const FORMAT_ICONS = {
   pdf: PdfFormatIcon,
   csv: CsvFormatIcon,
   image: ImageFormatIcon,
+  code: CodeFormatIcon,
 } as const
 
 function MarkdownPreviewBody({ title }: { title: string }) {
@@ -63,6 +65,18 @@ function ImagePreviewBody() {
   )
 }
 
+function CodePreviewBody() {
+  return (
+    <div className="doc-card-format-code" aria-hidden="true">
+      <span className="doc-card-format-code-line indent" />
+      <span className="doc-card-format-code-line" />
+      <span className="doc-card-format-code-line short" />
+      <span className="doc-card-format-code-line indent" />
+      <span className="doc-card-format-code-line medium" />
+    </div>
+  )
+}
+
 export function DocumentFormatPreview({ format, title }: DocumentFormatPreviewProps) {
   const Icon = FORMAT_ICONS[format]
 
@@ -77,6 +91,7 @@ export function DocumentFormatPreview({ format, title }: DocumentFormatPreviewPr
       {format === 'pdf' ? <PdfPreviewBody title={title} /> : null}
       {format === 'csv' ? <CsvPreviewBody /> : null}
       {format === 'image' ? <ImagePreviewBody /> : null}
+      {format === 'code' ? <CodePreviewBody /> : null}
     </div>
   )
 }

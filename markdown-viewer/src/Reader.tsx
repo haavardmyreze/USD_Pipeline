@@ -88,6 +88,7 @@ import {
   saveReadingPosition,
 } from './readingPosition'
 import type { LibraryDoc } from './library'
+import { normalizePastedText } from './text/normalizeLineBreaks'
 
 type ReaderProps = {
   markdown: string
@@ -333,9 +334,19 @@ function Reader({
     [addComment],
   )
 
+  const normalizedMarkdown = useMemo(() => {
+    if (!fileName.startsWith('clipboard.')) {
+      return markdown
+    }
+    return normalizePastedText(markdown, 'markdown')
+  }, [fileName, markdown])
+
   const displayMarkdown = useMemo(
-    () => (commentsOpen ? injectCommentHighlights(markdown, comments) : markdown),
-    [comments, commentsOpen, markdown],
+    () =>
+      commentsOpen
+        ? injectCommentHighlights(normalizedMarkdown, comments)
+        : normalizedMarkdown,
+    [comments, commentsOpen, normalizedMarkdown],
   )
 
   const blocks = useMemo(() => splitMarkdownBlocks(displayMarkdown), [displayMarkdown])
@@ -344,7 +355,7 @@ function Reader({
     () => splitMarkdownIntoCards(displayMarkdown),
     [displayMarkdown],
   )
-  const toc = useMemo(() => extractToc(markdown), [markdown])
+  const toc = useMemo(() => extractToc(normalizedMarkdown), [normalizedMarkdown])
   const hasTopLevelChapters = useMemo(
     () => toc.some((entry) => entry.level === 1),
     [toc],

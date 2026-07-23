@@ -1,4 +1,5 @@
 import type { DocumentFormat } from './types'
+import { isCodeFileName } from '../code/codeExtensions'
 import { isImageFileName } from '../image/imageFormat'
 
 const IMAGE_EXTENSION_PATTERN =
@@ -17,6 +18,10 @@ export function detectFormatFromFileName(fileName: string): DocumentFormat {
     return 'image'
   }
 
+  if (isCodeFileName(fileName)) {
+    return 'code'
+  }
+
   return 'markdown'
 }
 
@@ -33,6 +38,31 @@ function detectFormatFromDataMime(mime: string): DocumentFormat | null {
 
   if (normalized.startsWith('image/')) {
     return 'image'
+  }
+
+  if (
+    normalized === 'application/json' ||
+    normalized === 'application/javascript' ||
+    normalized === 'text/javascript' ||
+    normalized === 'application/typescript' ||
+    normalized === 'text/x-python' ||
+    normalized === 'application/x-python' ||
+    normalized === 'text/x-java-source' ||
+    normalized === 'text/x-c' ||
+    normalized === 'text/x-c++' ||
+    normalized === 'text/x-go' ||
+    normalized === 'text/x-rust' ||
+    normalized === 'text/x-kotlin' ||
+    normalized === 'text/x-sql' ||
+    normalized === 'text/x-csharp' ||
+    normalized === 'text/x-shellscript' ||
+    normalized === 'text/css' ||
+    normalized === 'application/xml' ||
+    normalized === 'text/xml' ||
+    normalized === 'application/x-yaml' ||
+    normalized === 'text/yaml'
+  ) {
+    return 'code'
   }
 
   if (
@@ -79,6 +109,9 @@ export function detectFormatFromSrc(src: string, fileName?: string): DocumentFor
     if (IMAGE_EXTENSION_PATTERN.test(url.pathname)) {
       return 'image'
     }
+    if (isCodeFileName(url.pathname)) {
+      return 'code'
+    }
   } catch {
     if (/\.pdf$/i.test(src)) {
       return 'pdf'
@@ -88,6 +121,9 @@ export function detectFormatFromSrc(src: string, fileName?: string): DocumentFor
     }
     if (IMAGE_EXTENSION_PATTERN.test(src)) {
       return 'image'
+    }
+    if (isCodeFileName(src)) {
+      return 'code'
     }
   }
 

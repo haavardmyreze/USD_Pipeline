@@ -1,4 +1,5 @@
 import { detectFormatFromFileName } from './documents/detectFormat'
+import { detectCodeLanguage } from './code/detectLanguage'
 import type { DocumentFormat } from './documents/types'
 import type { OpenDocument } from './documentState'
 import { hashArrayBuffer } from './documentKey'
@@ -38,11 +39,27 @@ export function parseHashImport(hash: string): OpenDocument | null {
     const format = formatFromPayload(payload)
 
     if (payload.text != null) {
+      if (format === 'csv') {
+        return {
+          source: { format: 'csv', content: payload.text },
+          fileName: payload.name,
+          libraryId: '',
+          fingerprint: payload.text,
+        }
+      }
+
+      if (format === 'code') {
+        const language = detectCodeLanguage(payload.name, payload.text)
+        return {
+          source: { format: 'code', content: payload.text, language },
+          fileName: payload.name,
+          libraryId: '',
+          fingerprint: payload.text,
+        }
+      }
+
       return {
-        source: {
-          format: format === 'csv' ? 'csv' : 'markdown',
-          content: payload.text,
-        },
+        source: { format: 'markdown', content: payload.text },
         fileName: payload.name,
         libraryId: '',
         fingerprint: payload.text,
@@ -74,6 +91,17 @@ export function parseHashImport(hash: string): OpenDocument | null {
         const content = new TextDecoder().decode(data)
         return {
           source: { format: 'csv', content },
+          fileName: payload.name,
+          libraryId: '',
+          fingerprint: content,
+        }
+      }
+
+      if (format === 'code') {
+        const content = new TextDecoder().decode(data)
+        const language = detectCodeLanguage(payload.name, content)
+        return {
+          source: { format: 'code', content, language },
           fileName: payload.name,
           libraryId: '',
           fingerprint: content,

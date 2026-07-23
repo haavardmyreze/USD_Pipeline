@@ -15,4 +15,13 @@ describe('detectFormatFromSrc', () => {
   it('detects markdown data URLs from mime type', () => {
     expect(detectFormatFromSrc('data:text/markdown;charset=utf-8,hello')).toBe('markdown')
   })
+
+  it('detects code files from extension', () => {
+    expect(detectFormatFromSrc('file:///tmp/app.py', 'app.py')).toBe('code')
+    expect(detectFormatFromSrc('file:///tmp/Main.java', 'Main.java')).toBe('code')
+  })
+
+  it('detects json data URLs as code', () => {
+    expect(detectFormatFromSrc('data:application/json;charset=utf-8,{}')).toBe('code')
+  })
 })

@@ -1,6 +1,7 @@
 import { makeDocumentKey } from './documentKey'
 import type { OpenDocument } from './documentState'
 import type { DocumentFormat } from './documents/types'
+import { isCodeFileName } from './code/codeExtensions'
 import {
   cacheRecentDocument,
   pruneRecentDocumentCache,
@@ -24,9 +25,26 @@ const RECENTS_KEY = 'mdv-recent-docs'
 const MAX_RECENTS = 12
 
 const CLIPBOARD_MARKDOWN = 'clipboard.md'
+const CLIPBOARD_IMAGE_PATTERN = /\.(png|jpe?g|webp|gif|bmp|tiff?|exr|hdr)$/i
 
 function isClipboardFileName(fileName: string) {
   return fileName === CLIPBOARD_MARKDOWN || fileName.startsWith('clipboard.')
+}
+
+function inferClipboardFormat(fileName: string) {
+  if (fileName === CLIPBOARD_MARKDOWN) {
+    return 'markdown' as const
+  }
+
+  if (CLIPBOARD_IMAGE_PATTERN.test(fileName)) {
+    return 'image' as const
+  }
+
+  if (isCodeFileName(fileName) || fileName.endsWith('.txt')) {
+    return 'code' as const
+  }
+
+  return 'markdown' as const
 }
 
 function recentKindFor(doc: OpenDocument, externalSrc?: string): RecentDocumentKind {
@@ -73,13 +91,13 @@ function normalizeRecentDocument(entry: RecentDocument): RecentDocument {
       ? 'pdf'
       : entry.fileName.toLowerCase().endsWith('.csv')
         ? 'csv'
-        : isClipboardFileName(entry.fileName) && entry.fileName !== CLIPBOARD_MARKDOWN
-          ? 'image'
-          : entry.fileName === CLIPBOARD_MARKDOWN
-            ? 'markdown'
-            : /\.(png|jpe?g|webp|gif|bmp|tiff?|exr|hdr)$/i.test(entry.fileName)
+        : isClipboardFileName(entry.fileName)
+          ? inferClipboardFormat(entry.fileName)
+          : /\.(png|jpe?g|webp|gif|bmp|tiff?|exr|hdr)$/i.test(entry.fileName)
               ? 'image'
-              : 'markdown')
+              : isCodeFileName(entry.fileName)
+                ? 'code'
+                : 'markdown')
 
   return {
     ...entry,
@@ -180,6 +198,8 @@ export function formatRecentFormatLabel(format: DocumentFormat) {
       return 'CSV'
     case 'image':
       return 'Image'
+    case 'code':
+      return 'Code'
   }
 }
 

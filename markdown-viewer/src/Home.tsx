@@ -179,8 +179,8 @@ function Home({
                 ref={pasteInputRef}
                 className="doc-card-paste-input"
                 rows={2}
-                placeholder="Click here, then press Ctrl+V (or ⌘V) to paste text or an image"
-                aria-label="Paste markdown or an image from clipboard"
+                placeholder="Click here, then press Ctrl+V (or ⌘V) to paste text, code, or an image"
+                aria-label="Paste markdown, code, or an image from clipboard"
                 onPaste={handleClipboardPaste}
                 onChange={() => setClipboardError(null)}
               />
