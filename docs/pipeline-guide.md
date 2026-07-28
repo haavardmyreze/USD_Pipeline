@@ -126,7 +126,7 @@ What changes is the **handoff**: where your work goes when you are finished with
 
 It is not a USD reference and not a Houdini tutorial. Where you want the underlying standard or the Houdini implementation in full, Section 26 points at the authoritative sources.
 
-Which means a fair amount of what follows is **ours, not USD’s** — decided here rather than inherited from the standard. The tier names (asset, set, shot), the **block** and **assembly** vocabulary, the whole naming grammar, the fixed `/World` scene graph, and the ownership rules are all conventions we chose; another studio would choose differently and be equally correct. USD itself only supplies the machinery underneath: stages, layers, prims, opinions, and the composition rules that resolve them. The distinction matters when you go looking for help — searching the OpenUSD docs for “block” or asking about our “assembly file” on a forum will not get you far, because those are house words. It matters more for how you treat the rules: USD’s semantics cannot be negotiated, ours can, at a team discussion. Where a convention is ours rather than USD’s, this guide flags it — Section 2 covers the two terms most likely to trip you up, and Sections 9, 10, and 16 mark the areas that are entirely our own.
+Which means a fair amount of what follows is **ours, not USD’s** — decided here rather than inherited from the standard. The tier names (asset, set, shot), the **block** and **assembly** vocabulary, the whole naming grammar, the fixed `/World` scene graph, and the ownership rules are all conventions we chose; another studio would choose differently and be equally correct. USD itself only supplies the machinery underneath: stages, layers, prims, opinions, and the composition rules that resolve them. The distinction matters when you go looking for help — searching the OpenUSD docs for “block” or asking about our “assembly file” on a forum will not get you far, because those are house words. Where a convention is ours rather than USD’s, this guide flags it — Section 2 covers the two terms most likely to trip you up, and Sections 9, 10, and 16 mark the areas that are entirely our own.
 
 ### 1.7 Where to start
 
@@ -212,6 +212,9 @@ over "World" {
 }
 ```
 
+> 👉 **You will almost never write this by hand.** This guide shows USD as text throughout, because it is the clearest way to explain what composition actually does — and because reading a published file is how you check it (Section 20.1). But authoring happens in Solaris. That `over` above is simply what Houdini writes out when the lighter nudges the robot in the viewport with an Edit LOP. Day to day you build LOP networks and press Save to Disk; the `.usda` listings in this guide are there so you can recognise the result, not so you can type it. Being able to read USD is a debugging skill, not a daily one.
+> 
+
 Two rules make this work, and they are worth separating because they are different mechanisms:
 
 - **A local opinion beats one that arrived through a reference.** The robot's own position is authored inside the asset and arrives in the shot through a reference; the lighter's `over` is authored locally, on top, so it wins. This is why an override works at all — the edit you layer on top always beats the thing you are editing underneath.
@@ -235,7 +238,10 @@ There is one conceptual change that makes USD make sense. Until it clicks, every
 
 That is the shift the previous section's example demonstrates. In a traditional pipeline you open the scene and work in it. Here the scene does not exist as a single thing you open — it is assembled at runtime from layers, and your job is to author your layer and only your layer.
 
-The practical consequence: **you do not touch another artist’s layer.** If you need something changed in a layer you do not own, you talk to the person who owns it. And because USD lets you override anything from your own layer, you almost never need to — which is the point. The mechanism that makes the parallel work possible is the same one that makes editing someone else's file unnecessary.
+The practical consequence: **you do not touch a layer you do not currently own.** If you need something changed in a layer someone else owns, you talk to them. And because USD lets you override anything from your own layer, you almost never need to — which is the point. The mechanism that makes the parallel work possible is the same one that makes editing someone else's file unnecessary.
+
+> 👉 **“Own” means assigned to, not belongs to.** Ownership is a production assignment and it moves. If someone is off sick, rolls off the project, or simply hands a task over, their layer and their working files are reassigned and the new owner picks up where they left off — same HIP, same published path, same everything. Nothing here is anyone’s personal property, and no work is stranded because one person is unavailable. The rule is that a layer has **one owner at a time**, so that two people never author it in parallel. It is not that a layer is welded to a person for the life of the project.
+> 
 
 Sections 4 and 9.5 cover what this means in practice; Section 25 shows it running end to end.
 
@@ -341,12 +347,31 @@ Using the wrong one produces a scene that looks approximately right but has the 
 
 ### 5.4 File formats
 
-| Format | Extension | Use for |
-| --- | --- | --- |
-| ASCII text | `.usda` | Composition layers, materials, assignments — anything you need to read or diff |
-| Binary crate | `.usdc` | Geometry, animation caches — fast and compact but not human-readable |
+The first thing to understand is what the extension does **not** mean. A USD layer's extension chooses its *encoding*, not its capabilities. The data model is identical either way: anything you can express in one format you can express in the other, and composition treats them the same. A `.usda` can hold heavy geometry; a `.usdc` can hold nothing but subLayers. Nothing in this guide's structure — blocks, assemblies, tiers — depends on the format.
 
-When you cannot tell what is in a `.usdc` file by opening it, use `usdview` or the Houdini scene graph tree. Never guess at binary contents.
+| Format | Extension | What it is |
+| --- | --- | --- |
+| ASCII text | `.usda` | Human-readable text. Open it in any editor, read it, diff it. Slower to write, and much larger on disk once there is real data in it. |
+| Binary crate | `.usdc` | Pixar's binary format. Compact, fast to open, and read lazily — USD pulls values off disk only when something asks for them. Not readable in an editor. |
+| Either | `.usd` | Format is determined by the file's header, not its name. Both encodings are legal under this extension. |
+| Package | `.usdz` | A zipped archive holding a stage and its textures together. An interchange and delivery format — you do not author into it. |
+
+So the choice is a tradeoff between readability and speed, and it is made per file.
+
+**How we choose: the extension follows the content, not the tier.**
+
+- **`.usda` for composition and sparse opinions.** Every assembly and shot root, plus layout, lighting, and material layers. These files are small, they are the ones you want to read when something is wrong, and they are the ones where an SVN diff tells you something useful (Section 21.4). The cost of text is negligible when the file is fifty lines of subLayers.
+- **`.usdc` for bulk data.** Published geometry, baked animation, FX caches. A deforming character bake written as text is tens or hundreds of megabytes, slow to write and slow to load; as crate it is a fraction of that and opens lazily. The cost of binary — you cannot read it — barely matters, because a table of a million point positions was never going to be readable anyway.
+
+The rule of thumb: **if you would ever want to read it, `.usda`; if it is mostly numbers, `.usdc`.**
+
+We spell the extension out rather than using bare `.usd`, so that a filename says what you can do with the file without opening it (Section 16).
+
+**Setting it in Solaris.** There is no format parameter. The extension you type into the USD ROP's **Output File** decides it — end the path in `.usda` and Houdini writes text, end it in `.usdc` and it writes crate.
+
+**Changing a published file's format is a breaking change.** The extension is part of the filename, and downstream layers reference that filename by path. Switching a block from `.usda` to `.usdc` breaks every layer pointing at it, silently, exactly as a rename would — coordinate it like any other path change (Section 9.6).
+
+**Reading a `.usdc`.** You cannot open one in an editor, so use `usdview`, the Houdini scene graph tree, or convert it — `usdcat char-robot_model.usdc` prints the same layer as text, which is often the quickest way to check what actually got published. Never guess at binary contents.
 
 ---
 
@@ -374,7 +399,7 @@ This guide uses role names to describe responsibilities, not job titles. On a sm
 
 **On a flat team, who creates the shot root?**
 
-The shot root file assembles all of the shot's blocks into the final shot (explained in Section 9). On a larger production this is often a dedicated TD’s job. On a small flat team, it falls to whoever is acting as project lead for that shot — typically the lighting artist, since they are last in the chain. It is a simple file to create (see Section 9.3) and does not require a specialist.
+The shot root file assembles all of the shot's blocks into the final shot (explained in Section 9). On a larger production this is often a dedicated TD’s job. On a small flat team, it falls to whoever is acting as project lead for that shot — typically the lighting artist, since they are last in the chain. It is a simple file to create (see Section 9.4) and does not require a specialist.
 
 ---
 
@@ -442,43 +467,46 @@ The extension follows the content, not the tier: `.usda` for composition and ove
 
 ## 9. The Pipeline
 
-Everything this pipeline produces falls into one of three tiers, and they are the reason the guide describes some things three times over.
+Everything this pipeline produces falls into one of three tiers:
 
-**Assets** are the building blocks of a production — characters, props, individual pieces of furniture. An asset like `char-robot.usda` is built once and reused wherever it is needed. It is not specific to any location or moment in the film.
+| Tier | What it is | Scope |
+| --- | --- | --- |
+| **Asset** | A reusable component — a character, a prop, a vehicle | Built once, used anywhere |
+| **Set** | A dressed, populated space that assembles assets | Shared by every shot in that location |
+| **Shot** | One moment — camera, animation, effects, lighting | This shot only |
 
-**Sets** are dressed, populated spaces — a living room, a warehouse floor, a forest clearing. A set assembles assets into a persistent shared environment that multiple shots can inhabit. The sofa’s position in the living room is a set-level truth, not a shot-level truth. If the sofa moves, it moves for every shot that takes place in that room.
+**All three are built identically.** There is no structural difference between an asset, a set, and a shot — only a difference in what they contain and who works on them. 9.1 defines the structure once. 9.2, 9.3, and 9.4 then cover only what is genuinely specific to each tier, which is why they are short.
 
-**Shots** are specific moments — a particular sequence of frames with a specific camera, specific character positions, specific lighting. A shot subLayers a set and adds everything unique to that moment: the camera, character blocking, animation, effects, lighting, and any shot-specific overrides to the environment.
+This three-tier structure also shapes the folder layout (Section 17), the naming conventions (Section 16), and the ownership rules (9.5).
 
-The three tiers are built the same way — **blocks plus one assembly file** — and the rest of this section covers each in turn. The shared shape is deliberate: learn it once and it applies everywhere. This three-tier structure also shapes the folder layout (Section 17), the naming conventions (Section 16), and the ownership rules (9.5). When you see something described separately for assets, sets, or shots, this is why.
+### 9.1 Blocks and assemblies
 
-### 9.1 Asset pipeline
+Every tier is built from **blocks** plus one **assembly** file.
 
-An asset is built from **blocks** plus one **assembly** file — the same structure used for sets and shots.
+A **block** is a sparse layer owning a single concern — a model, a lighting pass, a set's dressing. One block, one author, one job. Blocks are the unit of parallel work: because each artist authors only their own block, several people can work on the same asset, set, or shot at once.
+
+An **assembly** is a single file that subLayers every block belonging to one asset, set, or shot. It holds **no scene opinions of its own** — only subLayers, the stage metrics, a `defaultPrim` where relevant, and any production-default variant selections. It is the file downstream work points at.
+
+```
+<name>_<block-a>            ← block: one concern, one author
+<name>_<block-b>            ← block: one concern, one author
+<name>_<block-c>            ← block: one concern, one author
+        ↓
+<name>.usda                 ← assembly: subLayers the blocks
+```
 
 Both words are ours. USD gives us layers and the arcs that compose them, but it has no opinion about how a production divides work between files, so "block" and "assembly" are the names we use for a structure the standard does not name. Expect blank looks if you use them outside the team (Section 2).
 
-**Blocks** are sparse layers, each owning a single concern. The common asset blocks are `model`, `rig`, and `lookdev`, but the list is not fixed — an asset can have whatever blocks it needs.
+**These rules apply to all three tiers without exception:**
 
-**Assembly** is a single file that subLayers all of the asset's blocks. It holds **no scene opinions of its own** — only subLayers, a `defaultPrim`, and any production-default variant selections. It is the file sets and shots reference.
+- **Block names are free-form** — lowercase, hyphens for word separation, never underscores. There is no closed list; create whatever blocks the asset, set, or shot needs. Use the conventional names in Section 16.4 for the common disciplines rather than inventing synonyms.
+- **A block owns one concern.** Two blocks should not author opinions on the same prims unless that overlap is intentional and coordinated.
+- **The assembly is always `.usda`** — pure composition, kept readable and diffable. Blocks choose their extension by content (Section 5.4).
+- **Assembly sublayer order is opinion strength** — earlier listed is stronger (Section 5.1). Whoever owns the assembly owns that ordering.
+- **Downstream work points at the assembly, never at individual blocks.** That indirection is what lets blocks be added, split, or renamed without breaking anything downstream.
+- **Paths inside the assembly are relative to the assembly file** (Section 18.1).
 
-The blocks have a natural workflow dependency:
-
-```
-model → (rig ∥ lookdev) → assembly → published asset
-```
-
-Modeling publishes first. Rig and lookdev can then run in parallel. Assembly waits for both.
-
-```
-char-robot_model.usdc       ← block: geometry and prim hierarchy
-char-robot_rig.usda         ← block: bind-pose skeleton — only for UsdSkel assets (Section 12)
-char-robot_lookdev.usda     ← block: materials and bindings
-        ↓
-char-robot.usda             ← assembly: subLayers the blocks (what shots reference)
-```
-
-The assembly file (always `.usda`, pure composition). **Paths inside a published USD file are relative to the file itself** — see Section 18 for why:
+An asset assembly, for example:
 
 ```
 #usda 1.0
@@ -492,15 +520,15 @@ The assembly file (always `.usda`, pure composition). **Paths inside a published
 )
 ```
 
-Assembly ordering determines opinion strength — earlier listed = stronger. The artist owning the assembly is responsible for that ordering.
+A set assembly and a shot root look the same, with different filenames in the list.
 
-**Shots always reference the assembly file, not the individual blocks.**
+**Assembly files are not hand-edited for daily work.** An assembly is created when its asset, set, or shot is set up, and touched again only when a block is added or removed. Daily work belongs in the blocks.
 
-### 9.1.1 When to use a single block
+#### When one block is enough
 
-The split into separate blocks makes the most sense when different people own different concerns, or when the asset is complex enough that separating geometry from materials has clear organisational value.
+The split into separate blocks earns its keep when different people own different concerns, or when the asset or set is complex enough that separating concerns has clear organisational value.
 
-When one artist builds an asset end to end — a smaller prop, a tightly integrated hero asset where shading decisions are made alongside geometry decisions — there is no requirement to split it. The asset can be a single block, or a single self-contained layer published directly as the assembly. In that case the assembly file is the asset file.
+When one artist builds an asset end to end — a smaller prop, a tightly integrated hero asset where shading decisions are made alongside geometry decisions — there is no requirement to split it. The asset can be a single block, or a single self-contained layer published directly as the assembly. In that case the assembly file *is* the asset file.
 
 ```
 char-robot.usda     ← geometry, materials, rig, everything — authored in one HIP
@@ -508,92 +536,68 @@ char-robot.usda     ← geometry, materials, rig, everything — authored in one
 
 The rule is not *always split*. The rule is that whatever gets published as the assembly must be a stable, correctly structured USD file with a default prim set, at a stable path, that downstream stages can reference reliably. How many blocks or intermediate HIPs produced it is an internal decision for whoever owns that asset.
 
-A useful way to think about it: blocks exist to serve parallel work and clear ownership boundaries. If neither is a concern for a given asset, splitting into blocks adds overhead without adding value.
+Blocks exist to serve parallel work and clear ownership boundaries. If neither is a concern, splitting adds overhead without adding value.
 
-**Complex assets are also assemblies.** A VFX asset with smoke, fire, particles, and a full shader rig is itself an assembly of sub-assets. The same principle applies — a root `fx-explosion.usda` subLayers its blocks. What looks like an edge case is the same model at a different scale.
+### 9.2 Assets — what is specific
 
-### 9.2 Set pipeline
+An asset is a reusable component of the production — a character, a prop, a vehicle, a single piece of furniture. It is built once and reused wherever it is needed, and it is not specific to any location or moment in the film.
 
-A set is built from **blocks** plus one **assembly** file, the same as an asset.
+**Common blocks:** `model`, `rig`, `lookdev`.
 
-**Blocks** are any number of named layers, each owning a single concern (dressing, lighting, FX, lookdev, etc). A block can cover any discipline, but a single block should not mix concerns.
-
-- Block names are free-form, lowercase, with hyphens for word separation (no underscores), e.g. `dressing`, `fg-dressing`, `room-a-lighting`.
-- If a set has both a dressing block and a lighting block, they must not overlap opinions on the same prims unless that overlap is intentional and coordinated.
-
-**Assembly** is a single file that subLayers all blocks for the set. It contains no scene opinions of its own — only subLayers. It is the canonical file downstream shots reference, and its filename is the clean set name with no block token (e.g. `set-landscape.usda`).
-
-Example block + assembly composition:
+They have a natural workflow dependency:
 
 ```
-set-landscape_fg-dressing.usda     ← block: foreground dressing
-set-landscape_room-a-lighting.usda ← block: room A lighting
+model → (rig ∥ lookdev) → assembly → published asset
+```
+
+Modeling publishes first. Rig and lookdev can then run in parallel. Assembly waits for both.
+
+```
+char-robot_model.usdc       ← block: geometry and prim hierarchy
+char-robot_rig.usda         ← block: bind-pose skeleton — only for UsdSkel assets (Section 12)
+char-robot_lookdev.usda     ← block: materials and bindings
         ↓
-set-landscape.usda                 ← assembly: subLayers all blocks
+char-robot.usda             ← assembly: what sets and shots reference
 ```
 
-Assembly ordering determines opinion strength. The artist owning the assembly is responsible for sublayer ordering (earlier listed = stronger). The assembly is always `.usda` — pure composition, kept readable and diffable.
+**Only assets require a default prim.** The asset assembly is pulled in at a prim path by sets and shots, so it has to declare which prim to pull. A missing default prim is a silent failure — nothing appears, nothing errors (Section 13.4).
+
+**How it is consumed:** sets and shots **reference** the asset assembly at a prim path — `/World/Characters/Hero`, `/World/Props/CrateA` — because they are placing one scene inside another (Section 5.3).
+
+### 9.3 Sets — what is specific
+
+A set is a dressed, populated space — a living room, a warehouse floor, a forest clearing. It assembles assets into a persistent shared environment that multiple shots inhabit.
+
+Where the sofa sits in the living room is a set-level truth: re-dress it against the far wall and it is against the far wall in every shot filmed in that room. Whether the sofa gets shoved aside during one particular shot is a shot-level truth — and this is where USD's override model earns its place. Nobody opens the set to make that happen. The shot's layout block simply authors a stronger opinion about the sofa's position (9.4), and because the set sits at the bottom of the shot root's subLayer stack, layout's opinion wins in that shot and nowhere else. The set file is untouched, every other shot still finds the sofa where set dressing left it, and if set dressing later re-dresses the room, this shot keeps its shoved sofa.
+
+**Common blocks:** `dressing`, `lighting`, `lookdev`, and sometimes `fx`. More specific block names are more common here than anywhere else — `fg-dressing`, `room-a-lighting`.
 
 ```
-#usda 1.0
-(
-    subLayers = [
-        @../../blocks/room-a-lighting/usd/set-landscape_room-a-lighting.usda@,
-        @../../blocks/fg-dressing/usd/set-landscape_fg-dressing.usda@
-    ]
-)
+set-landscape_fg-dressing.usda      ← block: foreground dressing
+set-landscape_room-a-lighting.usda  ← block: room A lighting
+        ↓
+set-landscape.usda                  ← assembly: what shots subLayer
 ```
 
-The set owns everything about the space that is persistent across shots. It is not specific to any shot. All shots that take place in that space reference the assembly file.
+**The set owns everything about the space that persists across shots, and nothing that does not.**
 
-### 9.3 Shot pipeline
+**How it is consumed:** the shot root **subLayers** the set assembly rather than referencing it, because the set already defines the full scene graph structure — `/World/Props/Sofa`, `/World/Environment/Walls`. The shot adds new prims on top of that structure rather than placing the set somewhere inside it (Section 5.3).
 
-A shot is built from **blocks** plus one **assembly** file — the assembly here is called the **shot root**. The common shot blocks are `layout`, `anim`, `fx`, and `lighting`, but as with assets and sets the list is not fixed.
+**Set dressing usually needs no Layer Break.** A set dressing HIP starts from an empty stage, and the references it authors *are* its contribution — there is no upstream context to discard (Section 13.1).
+
+### 9.4 Shots — what is specific
+
+A shot is a specific moment — a particular range of frames with a specific camera, specific character positions, specific lighting. It takes a set and adds everything unique to that moment.
+
+**Common blocks:** `layout`, `anim`, `fx`, `lighting`. The assembly is called the **shot root**.
+
+**Build order — who works when:**
 
 ```
 Set → Layout → Animation → FX → Lighting → Shot Root
 ```
 
-That is the **build order** — who works when. It is not the composition order; see 9.4.
-
-The layout block starts from the published set rather than placing assets from scratch. Its job is to add what is unique to this specific shot — cameras, character placement, and any shot-specific overrides to the set:
-
-```
-set-living-room.usda        ← the shared space (subLayered by the shot root, as the weakest layer)
-        ↓
-kilo-0010_layout.usda       ← block: camera, character blocking, shot-specific overrides
-        ↓
-kilo-0010_anim.usdc         ← block: character motion
-        ↓
-kilo-0010_fx.usdc           ← block: effects
-        ↓
-kilo-0010_lighting.usda     ← block: lights and render settings
-        ↓
-kilo-0010.usda              ← shot root (assembly: subLayers the set and the blocks)
-```
-
-**The set is subLayered by the shot root, not by the layout block.** Layout *loads* the set for context while working, but what layout *publishes* is only its own sparse contribution — camera, character placement, and overrides. The set enters the composed shot once, explicitly, at the bottom of the shot root's subLayer list.
-
-This matters more than it might appear. If the set arrived through the layout block instead, the shot root would not name it, and whether the set appeared in the shot at all would depend on how one artist happened to configure one Layer Break (Section 13.1). Naming the set in the shot root makes the shot self-describing: open `kilo-0010.usda` in a text editor and you can see every ingredient of the shot in five lines.
-
-SubLayering the set — rather than referencing it at a prim path — is correct because the set already defines the full scene graph structure: it establishes `/World/Props/Sofa`, `/World/Environment/Walls`, and so on. Layout adds `/World/Characters/Hero` and `/World/Cameras/Main` on top as new opinions in a stronger layer.
-
-If a shot requires a change to the space — a prop moved for a stunt, a door left open — that override lives in the shot’s layout block. The set file is unchanged. USD’s opinion strength means the layout override wins automatically.
-
-```
-# kilo-0010_layout.usda — shot-specific override example
-over "World" {
-    over "Props" {
-        over "CoffeeTable" {
-            double3 xformOp:translate = (2.0, 0, 0.5)   # moved for stunt
-        }
-    }
-}
-```
-
-### 9.4 The shot root
-
-The shot root (`kilo-0010.usda`) is the shot's assembly file: a simple file that subLayers all of the shot's blocks. It is created at shot setup by whoever is acting as project lead, and updated when new blocks are added. Like every assembly, it holds no scene opinions of its own and is always `.usda`.
+**Composition order is the reverse of the build order.** Earlier-listed sublayers are stronger (Section 5.1), so the shot root lists lighting — the last department to touch the shot — at the top, and the set at the bottom:
 
 ```
 #usda 1.0
@@ -608,17 +612,30 @@ The shot root (`kilo-0010.usda`) is the shot's assembly file: a simple file that
 )
 ```
 
-The last entry is the set, subLayered directly as the **weakest** layer — everything the shot authors sits above it and can override it.
+Five lines, and every ingredient of the shot is named — strongest first, with the set as the weakest layer, so everything the shot authors sits above it and can override it.
 
-Note that this order is the **reverse** of the build order in 9.3. Earlier-listed layers are stronger (Section 5.1), so lighting — the last department to touch the shot — sits at the top and its overrides win over everything beneath, while layout sits above the set and the set sits at the bottom.
+**The set is subLayered by the shot root, not by the layout block.** Layout *loads* the set for context while working, but what layout *publishes* is only its own sparse contribution — camera, character placement, and overrides. If the set arrived through the layout block instead, the shot root would not name it, and whether the set appeared in the shot at all would depend on how one artist happened to configure one Layer Break (Section 13.1). Naming the set in the shot root makes the shot self-describing.
 
-The cross-tier relative path to the set is long, because it climbs out of `shots/` and back down into `sets/`. That is the honest cost of relative paths, and it is worth paying: the path is correct on every machine and survives the project being moved or copied, with no environment configuration at all (Section 18). Within a tier — an assembly pointing at its own blocks — the paths stay short.
+**Shot-specific changes to the space live in the layout block.** A prop moved for a stunt, a door left open — the set file is unchanged, and layout's opinion wins automatically because it is the stronger layer:
 
-This file is not hand-edited for daily work. Daily work belongs in the blocks.
+```
+# kilo-0010_layout.usda — shot-specific override example
+over "World" {
+    over "Props" {
+        over "CoffeeTable" {
+            double3 xformOp:translate = (2.0, 0, 0.5)   # moved for stunt
+        }
+    }
+}
+```
+
+**Layout owns the shot's frame range** — `startTimeCode` and `endTimeCode`, because layout is where a shot's timing is first established (Section 10.6).
+
+**Who creates the shot root:** whoever is acting as project lead for the shot — on a small flat team, typically the lighting artist, since they are last in the chain.
 
 ### 9.5 Ownership
 
-Every USD layer has one responsible role at a time.
+Every USD layer has one responsible role at a time, and one person filling that role at a time. "At a time" is the load-bearing phrase: ownership is an assignment, reassigned freely when people change tasks, hand over, or leave a project (Section 3). What must never happen is two people authoring the same layer at once.
 
 | Role | Owns | Does NOT own |
 | --- | --- | --- |
@@ -1139,7 +1156,7 @@ Use this when:
 
 This section is the single reference for how all files, folders, and prims are named. It applies to every project. When in doubt about a name, come here first.
 
-**All of it is ours.** USD places almost no constraints on filenames, and none at all on the tokens and prefixes below. Everything in this section is a house convention, chosen so that a filename can be read — and parsed by tooling (16.10) — without opening it. That makes it negotiable in a way USD's composition rules are not: if a pattern does not fit a project, raise it and change it for everyone, rather than deviating on one job.
+**All of it is ours.** USD places almost no constraints on filenames, and none at all on the tokens and prefixes below. Everything in this section is a house convention, chosen so that a filename can be read — and parsed by tooling (16.10) — without opening it.
 
 ### 16.1 General rules
 
@@ -1377,7 +1394,7 @@ Every token has the same shape: `[a-z0-9]+(?:-[a-z0-9]+)*` — lowercase, words 
 **Published asset/set block** (`<name>_<block>`; `.usda` or `.usdc`)
 
 ```
-^[a-z0-9]+(?:-[a-z0-9]+)*_[a-z0-9]+(?:-[a-z0-9]+)*\.(usd|usda|usdc)$
+^[a-z0-9]+(?:-[a-z0-9]+)*_[a-z0-9]+(?:-[a-z0-9]+)*\.(usda|usdc)$
 ```
 
 **Published asset/set assembly** (clean name, no underscore; `.usda` only)
@@ -1386,10 +1403,10 @@ Every token has the same shape: `[a-z0-9]+(?:-[a-z0-9]+)*` — lowercase, words 
 ^[a-z0-9]+(?:-[a-z0-9]+)*\.usda$
 ```
 
-**Published shot block** (`<sequence>-<shot>_<block>`)
+**Published shot block** (`<sequence>-<shot>_<block>`; `.usda` or `.usdc`)
 
 ```
-^[a-z]{3,5}-[0-9]{4}_[a-z0-9]+(?:-[a-z0-9]+)*\.(usd|usda|usdc)$
+^[a-z]{3,5}-[0-9]{4}_[a-z0-9]+(?:-[a-z0-9]+)*\.(usda|usdc)$
 ```
 
 **Shot root** (`<sequence>-<shot>`; `.usda` only)
@@ -1544,7 +1561,7 @@ There are two different path problems here, and they have two different answers.
 ### 18.1 The two kinds of path
 
 **Paths in HIP files → environment variables.**
-Your USD ROP's output path, your Reference LOP's file path, your texture paths — these are Houdini parameters, and Houdini expands `$ASSETS` and friends when it evaluates them. Environment variables are exactly right here.
+Your USD ROP's output path, your Reference LOP's file path, your texture paths — these are Houdini parameters, and Houdini expands `$ASSETS`, `$SHOTS`, and the rest when it evaluates them. Environment variables are exactly right here.
 
 **Paths inside published USD files → relative to the layer.**
 The asset paths written *inside* a `.usda` — sublayers, references, payloads — are resolved by USD, not by Houdini. USD's default asset resolver **does not expand shell environment variables**. A published file containing `@$ASSETS/char-robot/...@` will resolve inside a Houdini session that happens to have the variable set, and fail everywhere else: in `usdview`, in another DCC, on a farm node with a different environment, for a vendor you send the file to.
@@ -1564,7 +1581,7 @@ So published USD uses **relative paths**, anchored to the file that contains the
 
 Relative paths need no configuration at all. The project can be moved, copied, checked out to a different drive letter, or handed to someone outside the team, and every reference still resolves — because the folder structure travels with the files.
 
-Cross-tier paths get long, as the set example shows. That is the cost, and it is worth paying. Within a tier the paths stay short, and if the project ever outgrows this, the upgrade path is a search-path or custom asset resolver — not environment variables in USD files.
+**Solaris already does this for you.** The USD ROP converts the paths you author into relative paths when it writes the file, by default. You author `$ASSETS/char-robot/...` in your parameters and get a relative path in the published USD without setting anything up — so this is a property of the pipeline to be aware of, not a step you have to perform.
 
 **After every publish, check the paths that were actually written.** Open the file as text (or use `usdview`'s layer stack) and confirm the asset paths are relative and no absolute path was baked in. This belongs in the publish check (Section 20), and it is the single most common cause of "works for me, broken for everyone else."
 
@@ -1803,7 +1820,7 @@ Work through this in order. Most problems are a file path issue, a prim path iss
 ## 24. Mental Models
 
 **USD is like Photoshop layers.**
-Each role adds a layer. No one paints on someone else’s layer. The final image is the composite. If you want something changed in a layer you do not own, you talk to the person who does.
+Each role adds a layer. No one paints on a layer someone else currently has. The final image is the composite. If you want something changed in a layer you do not own, you talk to the person who does — or, if they have moved on, you take the layer over and carry on.
 
 **HIP is your working environment. USD is the result you hand to others.**
 Your HIP is where you work — iterate, refine, experiment. Your published USD is what others build on. Keep both in good order. A well-organised HIP makes handoffs faster and debugging easier.
