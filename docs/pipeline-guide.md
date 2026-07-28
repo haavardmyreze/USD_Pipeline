@@ -1437,116 +1437,136 @@ Every token has the same shape: `[a-z0-9]+(?:-[a-z0-9]+)*` — lowercase, words 
 
 ## 17. Folder Structure
 
-Assets, sets, and shots all share the same shape: a `blocks/` folder holding one folder per block, and an `assembly/` folder holding both the working HIP and the published assembly's `usd/` (the shot's assembly is its shot root).
+Every asset, set, and shot has the same internal shape — a `blocks/` folder holding one folder per block, and an `assembly/` folder holding the working HIP and the published assembly (for a shot, that assembly is its shot root):
 
-- 📁 project_root/
-    - 📁 assets/ ← individual reusable assets
-        - 📁 char-robot/
-            - 📁 blocks/
-                - 📁 model/
-                    - 📁 hip/
-                        - 📄 `char-robot_model_alex_v001.hip`
-                    - 📁 usd/
-                        - 📄 `char-robot_model.usdc`
-                - 📁 rig/
-                    - 📁 hip/
-                        - 📄 `char-robot_rig_alex_v001.hip` ← the rigger's working file
-                    - 📁 usd/
-                        - 📄 `char-robot_rig.usda` ← bind-pose skeleton, UsdSkel assets only (Section 12.2)
-                - 📁 lookdev/
-                    - 📁 hip/
-                        - 📄 `char-robot_lookdev_maria_v001.hip`
-                    - 📁 tex/
-                        - 🖼️ `char-robot_bc_4k.exr`
-                        - 🖼️ `char-robot_n_2k.exr`
-                        - 🖼️ `char-robot_aormt_4k.exr`
-                    - 📁 materials/ ← only if using separate material files
-                        - 📄 `char-robot_paint.usda`
-                        - 📄 `char-robot_metal.usda`
-                    - 📁 usd/
-                        - 📄 `char-robot_lookdev.usda`
-            - 📁 assembly/
-                - 📁 hip/
-                    - 📄 `char-robot_assembly_alex_v001.hip`
-                - 📁 usd/
-                    - 📄 `char-robot.usda` ← published assembly, what sets and shots reference
-    - 📁 sets/ ← dressed, populated spaces shared across shots
-        - 📁 living-room/
-            - 📁 blocks/
-                - 📁 dressing/
-                    - 📁 hip/
-                        - 📄 `set-living-room_dressing_ina_v001.hip`
-                    - 📁 usd/
-                        - 📄 `set-living-room_dressing.usda` ← prop placement, furniture
-                - 📁 lighting/
-                    - 📁 hip/
-                        - 📄 `set-living-room_lighting_maria_v001.hip`
-                    - 📁 usd/
-                        - 📄 `set-living-room_lighting.usda` ← practicals, env lights
-                - 📁 lookdev/
-                    - 📁 hip/
-                        - 📄 `set-living-room_lookdev_maria_v001.hip`
-                    - 📁 tex/
-                        - 🖼️ `set-living-room_walls_bc_4k.exr`
-                        - 🖼️ `set-living-room_walls_aormt_4k.exr`
-                    - 📁 usd/
-                        - 📄 `set-living-room_lookdev.usda` ← location-specific surface overrides
-                - 📁 fx/ ← optional: persistent effects
-                    - 📁 hip/
-                        - 📄 `set-living-room_fx_nora_v001.hip`
-                    - 📁 usd/
-                        - 📄 `set-living-room_fx.usda`
-            - 📁 assembly/
-                - 📁 hip/
-                    - 📄 `set-living-room_assembly_ina_v001.hip`
-                - 📁 usd/
-                    - 📄 `set-living-room.usda` ← published assembly, what layout references
-    - 📁 shots/ ← cameras, animation, lighting — shot-specific only
-        - 📁 kilo/
-            - 📁 0010/
-                - 📁 blocks/
-                    - 📁 layout/
-                        - 📁 hip/
-                            - 📄 `kilo-0010_layout_ina_v001.hip`
-                        - 📁 usd/
-                            - 📄 `kilo-0010_layout.usda`
-                    - 📁 anim/
-                        - 📁 hip/
-                            - 📄 `kilo-0010_anim_erik_v001.hip`
-                        - 📁 usd/
-                            - 📄 `kilo-0010_anim.usdc` ← baked animation (Section 12.2)
-                    - 📁 fx/
-                        - 📁 hip/
-                            - 📄 `kilo-0010_fx_nora_v001.hip`
-                        - 📁 cache/
-                            - 📄 `sim.####.vdb`
-                        - 📁 usd/
-                            - 📄 `kilo-0010_fx.usdc`
-                    - 📁 lighting/
-                        - 📁 hip/
-                            - 📄 `kilo-0010_lighting_maria_v001.hip`
-                        - 📁 usd/
-                            - 📄 `kilo-0010_lighting.usda`
-                - 📁 assembly/
-                    - 📁 hip/
-                        - 📄 `kilo-0010_assembly_maria_v001.hip`
-                    - 📁 usd/
-                        - 📄 `kilo-0010.usda` ← shot root (the shot's assembly)
-    - 📁 library/ ← reusable shared assets
-        - 📁 materials/
-            - 📄 `metal-bare.usda`
-            - 📄 `plastic.usda`
-        - 📁 lights/
-            - 📄 `studio-rig.usda`
-    - 📁 houdini/
-        - 📁 otls/
-            - 📄 `char-robot_rig.hda` ← published rig HDAs (Section 12.1)
-        - 📁 ocio/
-            - 📄 `config.ocio` ← pinned colour config (Section 19)
-        - 📁 packages/
-            - 📄 `project.json` ← project environment (Section 18.3)
-    - 📁 docs/
-        - 📄 `pipeline-guide.md`
+```
+<name>/
+├── blocks/
+│   └── <block>/
+│       ├── hip/          ← working files, versioned per artist
+│       └── usd/          ← the published block
+└── assembly/
+    ├── hip/              ← the HIP that composes the blocks
+    └── usd/              ← the published assembly
+```
+
+Some blocks carry extra folders alongside `hip/` and `usd/` — `tex/` for textures, `materials/` for separate material files, `cache/` for simulation data. The full tree is that shape repeated:
+
+```
+project_root/
+├── assets/                                       ← individual reusable assets
+│   └── char-robot/
+│       ├── blocks/
+│       │   ├── model/
+│       │   │   ├── hip/
+│       │   │   │   └── char-robot_model_alex_v001.hip
+│       │   │   └── usd/
+│       │   │       └── char-robot_model.usdc
+│       │   ├── rig/
+│       │   │   ├── hip/
+│       │   │   │   └── char-robot_rig_alex_v001.hip
+│       │   │   └── usd/
+│       │   │       └── char-robot_rig.usda       ← bind-pose skeleton, UsdSkel only (12.2)
+│       │   └── lookdev/
+│       │       ├── hip/
+│       │       │   └── char-robot_lookdev_maria_v001.hip
+│       │       ├── tex/
+│       │       │   ├── char-robot_bc_4k.exr
+│       │       │   ├── char-robot_n_2k.exr
+│       │       │   └── char-robot_aormt_4k.exr
+│       │       ├── materials/                    ← only if using separate material files
+│       │       │   ├── char-robot_paint.usda
+│       │       │   └── char-robot_metal.usda
+│       │       └── usd/
+│       │           └── char-robot_lookdev.usda
+│       └── assembly/
+│           ├── hip/
+│           │   └── char-robot_assembly_alex_v001.hip
+│           └── usd/
+│               └── char-robot.usda               ← sets and shots reference this
+│
+├── sets/                                         ← dressed spaces shared across shots
+│   └── living-room/
+│       ├── blocks/
+│       │   ├── dressing/
+│       │   │   ├── hip/
+│       │   │   │   └── set-living-room_dressing_ina_v001.hip
+│       │   │   └── usd/
+│       │   │       └── set-living-room_dressing.usda    ← prop placement, furniture
+│       │   ├── lighting/
+│       │   │   ├── hip/
+│       │   │   │   └── set-living-room_lighting_maria_v001.hip
+│       │   │   └── usd/
+│       │   │       └── set-living-room_lighting.usda    ← practicals, env lights
+│       │   ├── lookdev/
+│       │   │   ├── hip/
+│       │   │   │   └── set-living-room_lookdev_maria_v001.hip
+│       │   │   ├── tex/
+│       │   │   │   ├── set-living-room_walls_bc_4k.exr
+│       │   │   │   └── set-living-room_walls_aormt_4k.exr
+│       │   │   └── usd/
+│       │   │       └── set-living-room_lookdev.usda     ← surface overrides
+│       │   └── fx/                               ← optional: persistent effects
+│       │       ├── hip/
+│       │       │   └── set-living-room_fx_nora_v001.hip
+│       │       └── usd/
+│       │           └── set-living-room_fx.usda
+│       └── assembly/
+│           ├── hip/
+│           │   └── set-living-room_assembly_ina_v001.hip
+│           └── usd/
+│               └── set-living-room.usda          ← shot roots subLayer this
+│
+├── shots/                                        ← shot-specific work only
+│   └── kilo/
+│       └── 0010/
+│           ├── blocks/
+│           │   ├── layout/
+│           │   │   ├── hip/
+│           │   │   │   └── kilo-0010_layout_ina_v001.hip
+│           │   │   └── usd/
+│           │   │       └── kilo-0010_layout.usda
+│           │   ├── anim/
+│           │   │   ├── hip/
+│           │   │   │   └── kilo-0010_anim_erik_v001.hip
+│           │   │   └── usd/
+│           │   │       └── kilo-0010_anim.usdc   ← baked animation (12.2)
+│           │   ├── fx/
+│           │   │   ├── hip/
+│           │   │   │   └── kilo-0010_fx_nora_v001.hip
+│           │   │   ├── cache/
+│           │   │   │   └── sim.####.vdb
+│           │   │   └── usd/
+│           │   │       └── kilo-0010_fx.usdc
+│           │   └── lighting/
+│           │       ├── hip/
+│           │       │   └── kilo-0010_lighting_maria_v001.hip
+│           │       └── usd/
+│           │           └── kilo-0010_lighting.usda
+│           └── assembly/
+│               ├── hip/
+│               │   └── kilo-0010_assembly_maria_v001.hip
+│               └── usd/
+│                   └── kilo-0010.usda            ← shot root (the shot's assembly)
+│
+├── library/                                      ← reusable shared assets
+│   ├── materials/
+│   │   ├── metal-bare.usda
+│   │   └── plastic.usda
+│   └── lights/
+│       └── studio-rig.usda
+│
+├── houdini/
+│   ├── otls/
+│   │   └── char-robot_rig.hda                    ← published rig HDAs (12.1)
+│   ├── ocio/
+│   │   └── config.ocio                           ← pinned colour config (Section 19)
+│   └── packages/
+│       └── project.json                          ← project environment (18.3)
+│
+└── docs/
+    └── pipeline-guide.md
+```
 
 *For texture naming conventions and validation patterns, see Section 16.9.*
 
