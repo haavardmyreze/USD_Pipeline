@@ -1,0 +1,25 @@
+# Local agent / editor settings
+.claude/
+.vscode/
+.idea/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+.astro/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Houdini
+*.hip.bak
+*.hiplc.bak
+*.hipnc.bak
