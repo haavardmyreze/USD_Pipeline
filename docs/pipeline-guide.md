@@ -76,7 +76,7 @@ Nobody waits. Nobody merges. Nobody loses work.
 
 Before any of the detail, here is the shape of the whole thing. Strip everything else away and it is four ideas.
 
-**Work in HIP, publish USD.** Your Houdini file is your workspace — personal, versioned freely, never handed to anyone as a deliverable. It lives on the work drive, and how you divide your work between files is up to you. When your part is ready you *publish* a USD layer into the project tree: a small file containing only your contribution, written to a fixed path that never changes. That published file is what other people build on. (Sections 4, 17, 20)
+**Work on the work drive, publish to the project tree.** Everything you produce lives in one of two places. Your Houdini files sit on the shared work drive: personal, versioned freely, never handed to anyone as a deliverable, and divided into as many or as few files as the job wants. What you *publish* goes to the project tree in SVN: a small USD layer holding only your contribution, at a fixed path that never changes. That published layer is what other people build on, and it is the only thing they ever see of your work. (Sections 4, 17, 20)
 
 **Layers stack, and the strongest opinion wins.** Nobody edits anybody else’s file, ever. You author your opinions in your own layer, and USD composes every layer into a single scene at runtime, resolving conflicts by a fixed strength order. This is what lets a lighter nudge a prop the layout artist placed — and keep the nudge when layout republishes. (Sections 5, 9)
 
@@ -87,10 +87,10 @@ Before any of the detail, here is the shape of the whole thing. Strip everything
 Put together, every working day looks the same:
 
 ```
-SVN update  →  open your HIP  →  work  →  save  →  publish USD  →  verify  →  SVN commit
+SVN update  →  open your HIP  →  work  →  publish USD  →  verify  →  SVN commit
 ```
 
-That loop is the pipeline. Everything else in this guide is detail in service of one of those seven steps.
+That loop is the pipeline. Everything else in this guide is detail in service of one of those six steps.
 
 ### 1.3 What we get out of it
 
@@ -164,9 +164,14 @@ A few words you will see throughout. These four are USD's own, and mean the same
 
 This is what makes the pipeline work: a downstream artist can override a value an upstream artist authored **without modifying the upstream file**. The lighter can move a prop the layout artist placed, and if layout later republishes, the lighter's override still applies on top. Because of that, "the scene" is not a file anyone owns — it is assembled at runtime from everyone's layers.
 
-Two words we use constantly are **not** USD's. Both name a category of layer — in this pipeline every published USD file is either a block or an assembly, and nothing else. A **block** is one artist's sparse contribution: a single concern (a model, an animation, a lighting pass) authored by one person. An **assembly** is a small file that owns no scene data of its own and exists only to compose a set of blocks into one addressable thing. Assets, sets, and shots are all built from blocks gathered under an assembly (Section 9).
+Two words we use constantly are **not** USD's. In this pipeline every published USD file is one or the other, and nothing else:
 
-Both words are worth flagging now because each collides with something USD already means. USD uses "blocking" for suppressing a value, and Houdini's Layer Break is about blocking layers — so "block" has three unrelated senses in play across this pipeline. And USD has its own `assembly`, a model kind, which is a different idea from our assembly file entirely. Section 9 defines our two properly.
+- A **block** is one artist's sparse contribution — a single concern, authored by one person. A model block holds an asset's geometry. Its lookdev block holds the materials and the bindings that attach them, but not the geometry they attach to. A shot's animation block holds a character's motion but not the character. A lighting block holds lights and render settings but nothing they illuminate. Each block states only what its author authored, and leaves composition to supply everything else.
+- An **assembly** is a small file holding no scene data of its own. It subLayers *every* block belonging to one asset, set, or shot — in a deliberate order, because that order decides which block wins where two disagree — and so turns a scattered set of contributions into a single file that downstream work can point at.
+
+The reason for the split is that it gives downstream work a **single stable address**. A shot does not point at the robot's model, rig, and lookdev layers individually — it points at `char-robot.usda`, the assembly, and gets whatever that composes today. Blocks can be added, split, or reordered without anything downstream noticing, which is what lets an asset keep evolving while the shots using it stay untouched. Assets, sets, and shots are all built this way (Section 9).
+
+Both words collide with something USD already means, so they are worth flagging early. USD uses "blocking" for suppressing a value, and Houdini's Layer Break is about blocking layers — "block" has three unrelated senses across this pipeline. USD also has its own `assembly`, a model kind, which is a different idea from our assembly file entirely.
 
 > 👉 If you remember one thing: USD is a composition engine. Files contribute opinions; USD composes them into a stage. Section 5 covers the mechanics — layers, prims, composition arcs, and the strength order that decides which opinion wins.
 > 
@@ -255,25 +260,41 @@ Sections 4 and 9.5 cover what this means in practice; Section 25 shows it runnin
 
 ## 4. The Two Files: HIP and USD
 
-Every artist in this pipeline works with two types of files. Understanding the difference is fundamental.
+Every artist works with two kinds of file, kept in two separate places. This is the most important boundary in the pipeline, and nearly every rule later in this guide is a consequence of it — so it is worth more than a passing glance.
+
+### Two files, two locations
+
+```
+$WORK                                 $PROJECT
+the work drive                        the SVN project tree
+─────────────                         ────────────────────
+your HIP files          publish  →    published USD layers
+source geometry                       textures
+reference                             rig HDAs
+scratch caches                        published caches
+```
+
+Everything on the left is **how you work**. Everything on the right is **what the production is made of**. Nobody but you ever opens anything on the left; everything on the right is read by other artists, by other layers, and by the farm.
+
+The reason the two are kept apart is not tidiness. It is that they have opposite properties, and the pipeline needs to treat them in opposite ways.
 
 ### HIP files — your working environment
 
 A HIP file is your Houdini workspace. It contains your node graph, your experiments, your rig networks, your render setups. It is where you do the work.
 
-HIP files are **yours**. They are versioned and iterative. You save new versions freely. You never pass a HIP file to another artist as a deliverable.
+HIP files are **yours**. They are versioned and iterative — the version lives in the filename, and you increment it as you go. You never pass a HIP file to another artist as a deliverable.
 
 HIP files are **not** the production data. They are the tool you use to produce the production data.
 
-They live in the **work tree**, on the shared work drive, reached through `$WORK` (Section 17.2). Nothing in the pipeline resolves a HIP by path — no USD layer points at one, and the farm never opens one — so a HIP can be moved, renamed, or reorganised at any time without breaking anyone's work.
+They live on the shared work drive, reached through `$WORK` (Section 17.2). **Nothing in the pipeline resolves a HIP by path.** No USD layer points at one. The farm never opens one. No downstream artist has a parameter with your HIP's name in it. That single fact is why they can live outside SVN, why they can be reorganised at any time without warning anyone, and why the rules about them are so much looser than the rules about published files.
 
 ### USD files — the production data
 
 A USD file is what you publish when your work is ready for the next person. It is the output of your HIP. It is what other departments reference. It is the source of truth.
 
-USD files have **stable filenames**. They do not version in their filename. SVN tracks their history. Other departments reference them by path — if the filename changes, their references break.
+USD files have **stable filenames**. They do not version in their filename — SVN tracks their history instead. Other departments reference them by path, so a published filename is a promise: change it and their work breaks, usually with no error at all (Section 5.2).
 
-They live in the **project tree**, in SVN, reached through `$ASSETS`, `$SETS`, and `$SHOTS` (Section 17.1). Everything there has a stable path that other people's work depends on by name.
+They live in the project tree in SVN, reached through `$ASSETS`, `$SETS`, and `$SHOTS` (Section 17.1). Everything there has a fixed path that other people's work depends on by name.
 
 ### The relationship
 
@@ -282,6 +303,8 @@ HIP (your workspace)  →  publish  →  USD (the production data)
 ```
 
 This direction never reverses. You do not edit a USD file directly. You update your HIP and republish.
+
+Publishing is a deliberate act, not a side effect of saving. Saving your HIP changes nothing for anyone else — your work reaches the production only when you publish a layer and commit it. That gap is what lets you experiment freely: nothing you do in your own file can disturb someone else's, no matter how broken it gets, until you choose to publish.
 
 |  | HIP | USD |
 | --- | --- | --- |
@@ -292,7 +315,17 @@ This direction never reverses. You do not edit a USD file directly. You update y
 | What others do with it | Nothing — they do not reference your HIP | They reference it from their own HIP |
 | If you move it | Nothing breaks | Every reference to it breaks, silently |
 
-**One HIP does not mean one published USD.** How you divide your work between files is yours to decide: one session can publish several layers, and a single self-contained one can publish just the assembly. What the pipeline fixes is where the *published* files go and what they are called — not how many Houdini sessions it took to make them.
+### One HIP does not mean one published USD
+
+There is no rule that a Houdini session produces exactly one published layer, and expecting one would get in the way of the work.
+
+- **A lighter finishing a shot** publishes two layers from one session: their lighting block, and the shot root that composes it. Opening a second Houdini file to write five lines of composition would be ceremony for its own sake.
+- **An artist dressing a background** publishes eight props from one session, because building them together is how the work naturally goes.
+- **An artist building one simple prop** publishes a single self-contained layer straight to the assembly, with no separate blocks at all (Section 9.1).
+
+**What the pipeline fixes is where published files go and what they are called. How many Houdini sessions it took to make them is yours.** That is the practical meaning of the split above: the right-hand column is governed, the left-hand column is yours to arrange.
+
+The one thing this costs you is that "which HIP made this file?" is no longer answered by the folder a file sits in. Section 17.2 covers how the work tree is organised so that question stays easy to answer.
 
 ---
 
@@ -423,20 +456,18 @@ Section 1.2 introduced the loop. This is it in full — what every artist does e
 1. SVN update                              ← published data
 2. Open your HIP from $WORK
 3. Do your work
-4. Save your HIP
-5. Publish USD
-6. Verify the published USD loads correctly
-7. SVN commit                              ← published data
+4. Publish USD
+5. Verify the published USD loads correctly
+6. SVN commit                              ← published data
 ```
 
-Step 6 is the one people skip, and it is the one that catches silent failures before they reach anyone else.
+Step 5 is the one people skip, and it is the one that catches silent failures before they reach anyone else.
 
 Note what SVN carries and what it does not. Updating and committing move **published data** — USD layers, textures, rig HDAs. Your HIP is not in SVN; it sits on the work drive and is simply there, current, for you and for whoever takes the task over next.
 
 **A few things that never change:**
 
 - Always SVN update before you start. You need the latest version of everything upstream.
-- Always save your HIP before you publish. The publisher records which HIP a layer came from, and publishing from an unsaved session records something that does not match what is on disk.
 - Always publish USD before you hand off. A HIP file is not a handoff.
 - Always verify your publish in a clean Houdini session — not the one you authored it in.
 - Always commit with a message that describes what changed and why.
@@ -1586,7 +1617,7 @@ $WORK/
 
 **Nothing sits loose at tier level or above.** Every HIP is inside a context folder — that is what keeps one batch of background props and the next from silting up into the same directory.
 
-**The context is the narrowest subject covering everything the HIP produces.** Where that is a single asset, set, or shot, the context folder mirrors that entity's folder path in the project tree — `assets/char-robot/`, `sets/living-room/`, `shots/kilo/0010/`. Where it is not — one HIP building eight background props — the context is a descriptive group name following the same token rules, and it has no counterpart in the project tree. It does not need one: each prop gets its own project folder, and the publisher records which HIP produced it.
+**The context is the narrowest subject covering everything the HIP produces.** Where that is a single asset, set, or shot, the context folder mirrors that entity's folder path in the project tree — `assets/char-robot/`, `sets/living-room/`, `shots/kilo/0010/`. Where it is not — one HIP building eight background props — the context is a descriptive group name following the same token rules, and it has no counterpart in the project tree. It does not need one: each prop gets its own project folder, and nothing downstream cares how they were made.
 
 **Inside the owning folder, use Houdini's standard project folders** — `geo/`, `sim/`, `render/`, `tex/`, `abc/`, `comp/` and the rest. This is not tidiness for its own sake. Because every version of a HIP lives in its owning folder, `$HIP` resolves to that folder, so Houdini's out-of-the-box defaults land exactly where they should with no parameter editing: a File Cache SOP writes to `$HIP/geo`, a DOP cache to `$HIP/sim`, a ROP to `$HIP/render`. Add whatever else a job needs — a `ref/` folder, a folder of client plates — but add to the standard layout rather than inventing a different one.
 
@@ -1721,7 +1752,6 @@ Houdini ships with a bundled ACES config, and for a small all-Karma team that is
 
 A USD file is not published until all of these are true:
 
-- The HIP that produced it was **saved first** — the publisher records where a layer came from
 - Exports without errors
 - Loads correctly in a **fresh** Houdini session — not the one you authored it in
 - Contains **only your layer** — no restated upstream data (check the Layer Break, Section 13.1)
@@ -1736,7 +1766,7 @@ A file on disk that is not committed to SVN is not published — it exists only 
 
 ### 20.1 How to verify a publish
 
-1. Save your HIP, then write USD via the USD ROP
+1. Write USD via the USD ROP
 2. Open the published file as text (or in `usdview`) and read the top of it — are the sublayer/reference paths relative? Is the metadata right?
 3. Open a blank Houdini session
 4. Use a Sublayer or Reference LOP to load your file
@@ -1869,7 +1899,7 @@ Work through this in order. Most problems are a file path issue, a prim path iss
 1. One role owns one USD layer at a time.
 2. Every HIP has an owning folder holding all its versions and everything it depends on.
 3. Never edit a layer you do not currently own.
-4. Always save your HIP, then publish USD, before handing off.
+4. Always publish USD before handing off.
 5. Never pass a HIP file as a deliverable.
 6. Published USD filenames stay stable — they do not version.
 7. Always use environment variables for paths.
@@ -1929,7 +1959,7 @@ This traces a complete production cycle for one shot on a four-person flat team.
 
 Works in `$WORK/assets/char-robot/model/`, saving versions as he goes. Builds geometry in SOPs. Establishes the prim hierarchy in Solaris. On a **Configure Layer LOP**, sets the default prim to `CharRobot` and the stage metrics — Y up, `metersPerUnit = 1`, project frame rate (Section 10.6).
 
-Saves, then publishes:
+Publishes:
 
 ```
 $ASSETS/char-robot/char-robot_model.usdc
