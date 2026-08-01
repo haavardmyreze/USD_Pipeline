@@ -76,21 +76,21 @@ Nobody waits. Nobody merges. Nobody loses work.
 
 Before any of the detail, here is the shape of the whole thing. Strip everything else away and it is four ideas.
 
-**Work in HIP, publish USD.** Your Houdini file is your workspace — personal, versioned freely, never handed to anyone as a deliverable. When your part is ready you *publish* a USD layer: a small file containing only your contribution, written to a fixed path that never changes. That published file is what other people build on. (Sections 4, 20)
+**Work in HIP, publish USD.** Your Houdini file is your workspace — personal, versioned freely, never handed to anyone as a deliverable. It lives on the work drive, and how you divide your work between files is up to you. When your part is ready you *publish* a USD layer into the project tree: a small file containing only your contribution, written to a fixed path that never changes. That published file is what other people build on. (Sections 4, 17, 20)
 
 **Layers stack, and the strongest opinion wins.** Nobody edits anybody else’s file, ever. You author your opinions in your own layer, and USD composes every layer into a single scene at runtime, resolving conflicts by a fixed strength order. This is what lets a lighter nudge a prop the layout artist placed — and keep the nudge when layout republishes. (Sections 5, 9)
 
 **Three tiers, one shape.** **Assets** are built once and reused: characters, props, vehicles. **Sets** assemble assets into spaces that persist across shots. **Shots** add what is unique to one moment — camera, animation, effects, lighting. All three are built identically: a handful of sparse **blocks**, one per concern, plus a small **assembly** file that composes them. Learn the shape once and it applies everywhere. (Section 9)
 
-**SVN carries the work between us.** A file only reaches other people when it is committed. You update at the start of a task, publish and verify at the end, and commit. Upstream changes arrive when *you* choose to update, not the moment someone else republishes — which is deliberate, and means nothing shifts under you mid-task. (Sections 7, 21)
+**SVN carries the published work between us.** A layer only reaches other people when it is committed. You update at the start of a task, publish and verify at the end, and commit. Upstream changes arrive when *you* choose to update, not the moment someone else republishes — which is deliberate, and means nothing shifts under you mid-task. (Sections 7, 21)
 
 Put together, every working day looks the same:
 
 ```
-SVN update  →  open your HIP  →  work  →  publish USD  →  verify  →  SVN commit
+SVN update  →  open your HIP  →  work  →  save  →  publish USD  →  verify  →  SVN commit
 ```
 
-That loop is the pipeline. Everything else in this guide is detail in service of one of those six steps.
+That loop is the pipeline. Everything else in this guide is detail in service of one of those seven steps.
 
 ### 1.3 What we get out of it
 
@@ -134,6 +134,7 @@ Which means a fair amount of what follows is **ours, not USD’s** — decided h
 | --- | --- |
 | New to USD | Part I (Sections 1–5) in order, then Part II |
 | Starting a task | Section 7 (the daily loop) + Section 8 (naming at a glance) |
+| Wondering where a file goes | Section 17 (folder structure) |
 | Looking up a filename pattern | Section 16 (naming conventions) |
 | Setting up a new project | Section 17 (folder structure) + Section 18 (paths) + Section 19 (colour) |
 | Going deeper on USD | Section 5 (USD in Depth) |
@@ -224,6 +225,8 @@ So layout's file stays exactly as it was, and if layout later re-blocks the shot
 
 That is what USD buys you. The rest of this guide is how to make it work in practice.
 
+---
+
 ## 3. The Mental Shift
 
 There is one conceptual change that makes USD make sense. Until it clicks, everything feels backwards.
@@ -262,11 +265,15 @@ HIP files are **yours**. They are versioned and iterative. You save new versions
 
 HIP files are **not** the production data. They are the tool you use to produce the production data.
 
+They live in the **work tree**, on the shared work drive, reached through `$WORK` (Section 17.2). Nothing in the pipeline resolves a HIP by path — no USD layer points at one, and the farm never opens one — so a HIP can be moved, renamed, or reorganised at any time without breaking anyone's work.
+
 ### USD files — the production data
 
 A USD file is what you publish when your work is ready for the next person. It is the output of your HIP. It is what other departments reference. It is the source of truth.
 
 USD files have **stable filenames**. They do not version in their filename. SVN tracks their history. Other departments reference them by path — if the filename changes, their references break.
+
+They live in the **project tree**, in SVN, reached through `$ASSETS`, `$SETS`, and `$SHOTS` (Section 17.1). Everything there has a stable path that other people's work depends on by name.
 
 ### The relationship
 
@@ -279,9 +286,13 @@ This direction never reverses. You do not edit a USD file directly. You update y
 |  | HIP | USD |
 | --- | --- | --- |
 | Who owns it | You, individually | Your role, shared with the team |
+| Where it lives | The work tree, on the work drive (`$WORK`) | The project tree, in SVN (`$ASSETS`, `$SETS`, `$SHOTS`) |
 | How it versions | Filename increments freely: `v001`, `v002`… | Filename stays stable, SVN tracks history |
 | What it contains | Everything you needed to produce the output | Only your contribution to the scene |
 | What others do with it | Nothing — they do not reference your HIP | They reference it from their own HIP |
+| If you move it | Nothing breaks | Every reference to it breaks, silently |
+
+**One HIP does not mean one published USD.** How you divide your work between files is yours to decide: one session can publish several layers, and a single self-contained one can publish just the assembly. What the pipeline fixes is where the *published* files go and what they are called — not how many Houdini sessions it took to make them.
 
 ---
 
@@ -298,12 +309,13 @@ When multiple layers are composed together, opinions can conflict. USD resolves 
 **Sublayer order — the one you use every day.** When several layers are stacked as sublayers, the one listed earlier is stronger. This is the whole basis of the block stack: in the shot root, lighting is listed above layout, so lighting wins. Nothing more to it.
 
 ```
+# in shots/kilo/0010/kilo-0010.usda
 subLayers = [
-    @kilo-0010_lighting.usda@,   ← strongest
+    @kilo-0010_lighting.usda@,                        ← strongest
     @kilo-0010_fx.usdc@,
     @kilo-0010_anim.usdc@,
     @kilo-0010_layout.usda@,
-    @set-warehouse.usda@         ← weakest
+    @../../../sets/warehouse/set-warehouse.usda@      ← weakest
 ]
 ```
 
@@ -408,19 +420,23 @@ The shot root file assembles all of the shot's blocks into the final shot (expla
 Section 1.2 introduced the loop. This is it in full — what every artist does every working day, in order:
 
 ```
-1. SVN Update
-2. Open your HIP
+1. SVN update                              ← published data
+2. Open your HIP from $WORK
 3. Do your work
-4. Publish USD
-5. Verify the published USD loads correctly
-6. SVN Commit
+4. Save your HIP
+5. Publish USD
+6. Verify the published USD loads correctly
+7. SVN commit                              ← published data
 ```
 
-Step 5 is the one people skip, and it is the one that catches silent failures before they reach anyone else.
+Step 6 is the one people skip, and it is the one that catches silent failures before they reach anyone else.
+
+Note what SVN carries and what it does not. Updating and committing move **published data** — USD layers, textures, rig HDAs. Your HIP is not in SVN; it sits on the work drive and is simply there, current, for you and for whoever takes the task over next.
 
 **A few things that never change:**
 
 - Always SVN update before you start. You need the latest version of everything upstream.
+- Always save your HIP before you publish. The publisher records which HIP a layer came from, and publishing from an unsaved session records something that does not match what is on disk.
 - Always publish USD before you hand off. A HIP file is not a handoff.
 - Always verify your publish in a clean Houdini session — not the one you authored it in.
 - Always commit with a message that describes what changed and why.
@@ -457,7 +473,7 @@ One rule governs every filename: **underscores separate tokens; hyphens join wor
 - A **name** is one token, hyphenated: `char-robot`, `set-living-room`, `kilo-0010`.
 - A **published block** is `<name>_<block>`: `char-robot_model.usdc`, `kilo-0010_lighting.usda`.
 - An **assembly** is just the clean name: `char-robot.usda`, `set-living-room.usda`, and `kilo-0010.usda` (the shot root).
-- A **HIP** adds artist and version: `kilo-0010_anim_erik_v003.hip`.
+- A **HIP** names the work, and adds artist and version: `kilo-0010_anim_erik_v003.hip`.
 
 Published USD filenames are stable — they never carry a version or an artist. HIP files always do.
 
@@ -504,7 +520,8 @@ Both words are ours. USD gives us layers and the arcs that compose them, but it 
 - **The assembly is always `.usda`** — pure composition, kept readable and diffable. Blocks choose their extension by content (Section 5.4).
 - **Assembly sublayer order is opinion strength** — earlier listed is stronger (Section 5.1). Whoever owns the assembly owns that ordering.
 - **Downstream work points at the assembly, never at individual blocks.** That indirection is what lets blocks be added, split, or renamed without breaking anything downstream.
-- **Paths inside the assembly are relative to the assembly file** (Section 18.1).
+- **Blocks and their assembly share one folder** — the entity's folder in the project tree (Section 17.1), so an assembly names its blocks by filename alone.
+- **How many HIPs produced them is not part of the structure.** One session may publish several blocks, or a block and the assembly together (Section 4).
 
 An asset assembly, for example:
 
@@ -513,9 +530,9 @@ An asset assembly, for example:
 (
     defaultPrim = "CharRobot"
     subLayers = [
-        @../../blocks/lookdev/usd/char-robot_lookdev.usda@,
-        @../../blocks/rig/usd/char-robot_rig.usda@,
-        @../../blocks/model/usd/char-robot_model.usdc@
+        @char-robot_lookdev.usda@,
+        @char-robot_rig.usda@,
+        @char-robot_model.usdc@
     ]
 )
 ```
@@ -603,11 +620,11 @@ Set → Layout → Animation → FX → Lighting → Shot Root
 #usda 1.0
 (
     subLayers = [
-        @../../blocks/lighting/usd/kilo-0010_lighting.usda@,
-        @../../blocks/fx/usd/kilo-0010_fx.usdc@,
-        @../../blocks/anim/usd/kilo-0010_anim.usdc@,
-        @../../blocks/layout/usd/kilo-0010_layout.usda@,
-        @../../../../../sets/living-room/assembly/usd/set-living-room.usda@
+        @kilo-0010_lighting.usda@,
+        @kilo-0010_fx.usdc@,
+        @kilo-0010_anim.usdc@,
+        @kilo-0010_layout.usda@,
+        @../../../sets/living-room/set-living-room.usda@
     ]
 )
 ```
@@ -804,12 +821,11 @@ This is the right choice for small productions where:
 Material definitions live in their own files. The lookdev assignment layer references them.
 
 ```
-lookdev/
+assets/char-robot/
+    char-robot_lookdev.usda        ← references the below, adds bindings
     materials/
         char-robot_paint.usda
         char-robot_metal.usda
-    usd/
-        char-robot_lookdev.usda    ← references the above, adds bindings
 ```
 
 This is the right choice when:
@@ -844,6 +860,8 @@ Materials live under the asset's `/Mtl` scope (Section 10.3) and are attached wi
 
 **Texture colour space is set by the channel token.** `bc` is colour-managed; `n`, `aormt`, and `m` are raw data and must not be. Naming a texture correctly (Section 16.9) is what gets its colour space right — see Section 19.
 
+---
+
 ## 12. Rigging
 
 Rigging is the one place where the pipeline's normal shape does not quite fit, because **USD has no concept of a live rig**. Constraints, IK handles, control objects, and muscle systems do not exist in USD and cannot be published as a USD layer. They live in Houdini.
@@ -866,9 +884,12 @@ The structure mirrors the HIP/USD split exactly:
 | | Rig HIP | Rig HDA |
 | --- | --- | --- |
 | Example | `char-robot_rig_alex_v003.hip` | `char-robot_rig.hda` |
+| Where it lives | The work tree (`$WORK`) | The project tree, `houdini/otls/` |
 | Who owns it | The rigger, individually | The Rigging role, shared with the team |
 | Versioning | Filename increments freely | Filename stable — SVN tracks history |
 | Is it a deliverable? | No — never handed over | Yes — this is the handoff |
+
+The HDA is the one thing in this pipeline that is a deliverable without being a USD layer. Nothing resolves it by path the way a layer resolves its sublayers, but artists depend on it by name through the tab menu — so it lives in the project tree with the published data, not in the work tree with the HIP that built it (Section 17.3).
 
 When the rig changes, the rigger republishes the HDA and commits. The animator runs `svn update`, and the definition refreshes in place inside their existing scene — animation authored on the rig's parameters survives. No merging, no re-copying.
 
@@ -1025,7 +1046,7 @@ A representative invocation:
 husk --renderer Karma \
      --frame 1001 --frame-count 100 --make-output-path \
      --output "$SHOTS/kilo/0010/render/beauty.$F4.exr" \
-     $SHOTS/kilo/0010/assembly/usd/kilo-0010.usda
+     $SHOTS/kilo/0010/kilo-0010.usda
 ```
 
 `--frame` is the start frame and `--frame-count` the number of frames. `--renderer` selects the Hydra render delegate.
@@ -1102,9 +1123,10 @@ When a prim is marked `instanceable = true`, USD recognises that all prims shari
 **The flag is authored where the asset is placed, not inside the asset.** `instanceable` goes on the prim that carries the reference — so it is set by whoever does the placing: the set dresser, or layout. The asset's own assembly file knows nothing about it, which is correct, since the same asset may be instanced in one context and not in another.
 
 ```
+# in sets/warehouse/set-warehouse_dressing.usda
 def Xform "CrateA" (
     instanceable = true
-    references = @../../../../assets/prop-crate/assembly/usd/prop-crate.usda@
+    references = @../../assets/prop-crate/prop-crate.usda@
 )
 {
     double3 xformOp:translate = (4, 0, 2)
@@ -1240,7 +1262,7 @@ For consistency, use these conventional names for the common disciplines rather 
 
 These are recommendations, not an enforced enum. When a block is more specific — a second lighting pass, a foreground dressing block, a per-room lighting block — name it descriptively with hyphens: `fg-dressing`, `room-a-lighting`, `key-light-pass`. The point is that the name communicates the block's single concern at a glance.
 
-`assembly` is reserved: it names the working HIP that composes a tier's blocks into its assembly file. It is not itself a block name (the assembly file holds no scene opinions of its own — see Section 9).
+**`assembly` is not a block name.** An assembly file holds no scene opinions of its own and so carries no block token — it is named with the clean entity name (Section 16.5). `assembly` is available as a *task* name for a HIP whose job is composing an entity's blocks, but composing an assembly is usually done in the same session as one of the blocks and needs no HIP of its own.
 
 ---
 
@@ -1279,38 +1301,39 @@ The assembly is the file downstream work references or subLayers — shots refer
 
 ### 16.6 HIP filenames
 
-Shot HIP pattern:
+One pattern covers every tier:
 
 ```
-<sequence>-<shot>_<block>[_<descriptor>]_<artist>_v###.hip
+<context>_<task>[_<descriptor>]_<artist>_v###.hip
 ```
 
-Asset HIP pattern:
+**`<context>` is what the work is about.** Usually an entity, named exactly as its published files are — `char-robot`, `set-living-room`, `kilo-0010`. Where one HIP covers several entities at once, it is instead a descriptive group name under the same token rules: `props-batch-a`.
 
-```
-<asset>_<block>[_<descriptor>]_<artist>_v###.hip
-```
+As everywhere else in the guide, the *token* and the *folder* are spelled differently for sets and shots: the token is `set-living-room` where the folder is `living-room/`, and `kilo-0010` where the folders are `kilo/0010/` (Sections 16.2 and 16.3). The HIP sits in the work tree folder for that context (Section 17.2); its filename uses the token.
 
-Here `<block>` is the block being authored, or `assembly` for the HIP that composes a tier's blocks. The `<descriptor>` is optional. When omitted, remove the token and its underscore entirely.
+**`<task>` is the work being done, not the block being written.** A session may publish one layer or several, so the task names the job rather than its output: `lighting` for a session that publishes the lighting block *and* the shot root, `model` for one that publishes eight props. Use the conventional discipline names from 16.4 where they fit.
+
+**`<descriptor>` is optional.** When omitted, remove the token and its underscore entirely.
 
 Examples:
 
 ```
+kilo-0010_layout_ina_v001.hip
 kilo-0010_anim_erik_v001.hip
 kilo-0010_anim_blocking_erik_v002.hip      ← with descriptor
-kilo-0010_layout_ina_v001.hip
-kilo-0010_lighting_maria_v003.hip
-kilo-0010_assembly_maria_v001.hip          ← the shot root's working HIP
+kilo-0010_lighting_maria_v003.hip          ← publishes the lighting block and the shot root
 char-robot_model_alex_v001.hip
 char-robot_rig_alex_v002.hip
 char-robot_lookdev_maria_v001.hip
-char-robot_assembly_alex_v001.hip          ← the asset assembly's working HIP
+prop-lamp_model_ina_v002.hip               ← one HIP builds the whole asset
+props-batch-a_model_alex_v002.hip          ← one HIP builds eight props
 ```
 
 **Rules:**
 - Always include the artist name — HIP files are personal working files
 - Always include the version number
 - Increment the version on meaningful saves, handoffs, or significant changes
+- The convention applies wherever the file sits — no local renaming schemes
 
 ---
 
@@ -1415,7 +1438,7 @@ Every token has the same shape: `[a-z0-9]+(?:-[a-z0-9]+)*` — lowercase, words 
 ^[a-z]{3,5}-[0-9]{4}\.usda$
 ```
 
-**HIP files** (`<name>_<block>[_<descriptor>]_<artist>_v###`)
+**HIP files** (`<context>_<task>[_<descriptor>]_<artist>_v###`)
 
 ```
 ^[a-z0-9]+(?:-[a-z0-9]+)*_[a-z0-9]+(?:-[a-z0-9]+)*(?:_[a-z0-9]+(?:-[a-z0-9]+)*)?_[a-z0-9]+(?:-[a-z0-9]+)*_v[0-9]{3}\.hip$
@@ -1437,117 +1460,55 @@ Every token has the same shape: `[a-z0-9]+(?:-[a-z0-9]+)*` — lowercase, words 
 
 ## 17. Folder Structure
 
-Every asset, set, and shot has the same internal shape — a `blocks/` folder holding one folder per block, and an `assembly/` folder holding the working HIP and the published assembly (for a shot, that assembly is its shot root):
+There are two trees, on two different storage systems, organised on different principles.
 
-```
-<name>/
-├── blocks/
-│   └── <block>/
-│       ├── hip/          ← working files, versioned per artist
-│       └── usd/          ← the published block
-└── assembly/
-    ├── hip/              ← the HIP that composes the blocks
-    └── usd/              ← the published assembly
-```
+The **project tree** holds published data — every file the pipeline resolves by path. It lives in SVN, reached through `$PROJECT` and its derived variables (Section 18.2).
 
-Some blocks carry extra folders alongside `hip/` and `usd/` — `tex/` for textures, `materials/` for separate material files, `cache/` for simulation data. The full tree is that shape repeated:
+The **work tree** holds HIPs and everything that feeds them. It lives on the shared work drive, reached through `$WORK`.
+
+The split is the one drawn in Section 4: published USD is the production data, a HIP is the tool that produces it. Nothing in the pipeline resolves a HIP by path, which is why the two can live apart — and why the work tree can be organised for the convenience of the person working rather than for a downstream reference.
+
+### 17.1 The project tree
+
+One folder per asset, set, and shot. Its published layers sit directly in it, and the assembly is identifiable at a glance because it is the one with no block token in its name (Section 16.5).
 
 ```
 project_root/
 ├── assets/                                       ← individual reusable assets
 │   └── char-robot/
-│       ├── blocks/
-│       │   ├── model/
-│       │   │   ├── hip/
-│       │   │   │   └── char-robot_model_alex_v001.hip
-│       │   │   └── usd/
-│       │   │       └── char-robot_model.usdc
-│       │   ├── rig/
-│       │   │   ├── hip/
-│       │   │   │   └── char-robot_rig_alex_v001.hip
-│       │   │   └── usd/
-│       │   │       └── char-robot_rig.usda       ← bind-pose skeleton, UsdSkel only (12.2)
-│       │   └── lookdev/
-│       │       ├── hip/
-│       │       │   └── char-robot_lookdev_maria_v001.hip
-│       │       ├── tex/
-│       │       │   ├── char-robot_bc_4k.exr
-│       │       │   ├── char-robot_n_2k.exr
-│       │       │   └── char-robot_aormt_4k.exr
-│       │       ├── materials/                    ← only if using separate material files
-│       │       │   ├── char-robot_paint.usda
-│       │       │   └── char-robot_metal.usda
-│       │       └── usd/
-│       │           └── char-robot_lookdev.usda
-│       └── assembly/
-│           ├── hip/
-│           │   └── char-robot_assembly_alex_v001.hip
-│           └── usd/
-│               └── char-robot.usda               ← sets and shots reference this
+│       ├── char-robot_model.usdc
+│       ├── char-robot_rig.usda                   ← bind-pose skeleton, UsdSkel only (12.2)
+│       ├── char-robot_lookdev.usda
+│       ├── char-robot.usda                       ← assembly: clean name, no block token
+│       ├── tex/
+│       │   ├── char-robot_bc_4k.exr
+│       │   ├── char-robot_n_2k.exr
+│       │   └── char-robot_aormt_4k.exr
+│       └── materials/                            ← only if using separate material files
+│           ├── char-robot_paint.usda
+│           └── char-robot_metal.usda
 │
 ├── sets/                                         ← dressed spaces shared across shots
 │   └── living-room/
-│       ├── blocks/
-│       │   ├── dressing/
-│       │   │   ├── hip/
-│       │   │   │   └── set-living-room_dressing_ina_v001.hip
-│       │   │   └── usd/
-│       │   │       └── set-living-room_dressing.usda    ← prop placement, furniture
-│       │   ├── lighting/
-│       │   │   ├── hip/
-│       │   │   │   └── set-living-room_lighting_maria_v001.hip
-│       │   │   └── usd/
-│       │   │       └── set-living-room_lighting.usda    ← practicals, env lights
-│       │   ├── lookdev/
-│       │   │   ├── hip/
-│       │   │   │   └── set-living-room_lookdev_maria_v001.hip
-│       │   │   ├── tex/
-│       │   │   │   ├── set-living-room_walls_bc_4k.exr
-│       │   │   │   └── set-living-room_walls_aormt_4k.exr
-│       │   │   └── usd/
-│       │   │       └── set-living-room_lookdev.usda     ← surface overrides
-│       │   └── fx/                               ← optional: persistent effects
-│       │       ├── hip/
-│       │       │   └── set-living-room_fx_nora_v001.hip
-│       │       └── usd/
-│       │           └── set-living-room_fx.usda
-│       └── assembly/
-│           ├── hip/
-│           │   └── set-living-room_assembly_ina_v001.hip
-│           └── usd/
-│               └── set-living-room.usda          ← shot roots subLayer this
+│       ├── set-living-room_dressing.usda         ← prop placement, furniture
+│       ├── set-living-room_lighting.usda         ← practicals, env lights
+│       ├── set-living-room_lookdev.usda          ← location-specific surface overrides
+│       ├── set-living-room_fx.usda               ← optional: persistent effects
+│       ├── set-living-room.usda                  ← assembly: shot roots subLayer this
+│       └── tex/
+│           ├── set-living-room_walls_bc_4k.exr
+│           └── set-living-room_walls_aormt_4k.exr
 │
 ├── shots/                                        ← shot-specific work only
 │   └── kilo/
 │       └── 0010/
-│           ├── blocks/
-│           │   ├── layout/
-│           │   │   ├── hip/
-│           │   │   │   └── kilo-0010_layout_ina_v001.hip
-│           │   │   └── usd/
-│           │   │       └── kilo-0010_layout.usda
-│           │   ├── anim/
-│           │   │   ├── hip/
-│           │   │   │   └── kilo-0010_anim_erik_v001.hip
-│           │   │   └── usd/
-│           │   │       └── kilo-0010_anim.usdc   ← baked animation (12.2)
-│           │   ├── fx/
-│           │   │   ├── hip/
-│           │   │   │   └── kilo-0010_fx_nora_v001.hip
-│           │   │   ├── cache/
-│           │   │   │   └── sim.####.vdb
-│           │   │   └── usd/
-│           │   │       └── kilo-0010_fx.usdc
-│           │   └── lighting/
-│           │       ├── hip/
-│           │       │   └── kilo-0010_lighting_maria_v001.hip
-│           │       └── usd/
-│           │           └── kilo-0010_lighting.usda
-│           └── assembly/
-│               ├── hip/
-│               │   └── kilo-0010_assembly_maria_v001.hip
-│               └── usd/
-│                   └── kilo-0010.usda            ← shot root (the shot's assembly)
+│           ├── kilo-0010_layout.usda
+│           ├── kilo-0010_anim.usdc               ← baked animation (12.2)
+│           ├── kilo-0010_fx.usdc
+│           ├── kilo-0010_lighting.usda
+│           ├── kilo-0010.usda                    ← shot root (the shot's assembly)
+│           └── cache/
+│               └── sim.####.vdb                  ← published cache (21.3)
 │
 ├── library/                                      ← reusable shared assets
 │   ├── materials/
@@ -1567,6 +1528,79 @@ project_root/
 └── docs/
     └── pipeline-guide.md
 ```
+
+Because every layer sits beside its siblings, the paths inside a published file are short — an assembly points at its blocks by filename alone, and the longest path in the project is a shot root reaching across to a set (Section 18.1).
+
+Subfolders appear only where an entity needs them. `tex/` holds textures a published layer resolves. `materials/` holds separate material files, and only if the project uses Option B in Section 11.1. `cache/` holds any cache a published layer references — production data on the same footing as the layer itself (Section 21.3). `versions/` holds rollback snapshots where someone wants them (Section 20.2).
+
+### 17.2 The work tree
+
+Every HIP has an **owning folder** holding all of its versions and everything it depends on. Below each tier there is always a **context** folder; where a context holds more than one HIP, each gets a **task** subfolder.
+
+```
+$WORK/
+├── assets/
+│   ├── char-robot/                               ← context: one entity
+│   │   ├── model/
+│   │   │   ├── char-robot_model_alex_v001.hip
+│   │   │   ├── char-robot_model_alex_v004.hip
+│   │   │   └── geo/
+│   │   │       └── robot-blockout.fbx
+│   │   ├── rig/
+│   │   │   └── char-robot_rig_alex_v011.hip
+│   │   └── lookdev/
+│   │       ├── char-robot_lookdev_maria_v003.hip
+│   │       ├── render/                           ← lookdev turntables
+│   │       └── ref/
+│   │           └── paint-reference.jpg
+│   │
+│   ├── prop-lamp/                                ← one HIP builds it end to end,
+│   │   ├── prop-lamp_model_ina_v002.hip             so no task folder is needed
+│   │   └── geo/
+│   │       └── lamp-scan.fbx
+│   │
+│   └── props-batch-a/                            ← context: a group, not one entity
+│       ├── props-batch-a_model_alex_v002.hip
+│       └── geo/
+│           └── kitbash-set.fbx
+│
+├── sets/
+│   └── living-room/
+│       ├── dressing/
+│       │   └── set-living-room_dressing_ina_v006.hip
+│       └── lighting/
+│           └── set-living-room_lighting_maria_v002.hip
+│
+└── shots/
+    └── kilo/
+        └── 0010/
+            ├── layout/
+            │   └── kilo-0010_layout_ina_v003.hip
+            ├── anim/
+            │   ├── kilo-0010_anim_erik_v012.hip
+            │   └── geo/
+            │       └── walk-test_v003.bgeo.sc    ← working cache, disposable
+            └── lighting/
+                └── kilo-0010_lighting_maria_v007.hip
+```
+
+**Nothing sits loose at tier level or above.** Every HIP is inside a context folder — that is what keeps one batch of background props and the next from silting up into the same directory.
+
+**The context is the narrowest subject covering everything the HIP produces.** Where that is a single asset, set, or shot, the context folder mirrors that entity's folder path in the project tree — `assets/char-robot/`, `sets/living-room/`, `shots/kilo/0010/`. Where it is not — one HIP building eight background props — the context is a descriptive group name following the same token rules, and it has no counterpart in the project tree. It does not need one: each prop gets its own project folder, and the publisher records which HIP produced it.
+
+**Inside the owning folder, use Houdini's standard project folders** — `geo/`, `sim/`, `render/`, `tex/`, `abc/`, `comp/` and the rest. This is not tidiness for its own sake. Because every version of a HIP lives in its owning folder, `$HIP` resolves to that folder, so Houdini's out-of-the-box defaults land exactly where they should with no parameter editing: a File Cache SOP writes to `$HIP/geo`, a DOP cache to `$HIP/sim`, a ROP to `$HIP/render`. Add whatever else a job needs — a `ref/` folder, a folder of client plates — but add to the standard layout rather than inventing a different one.
+
+### 17.3 What decides where a file goes
+
+One question sorts everything the pipeline produces: **does anything resolve it by path?**
+
+| | Lives in | Examples |
+| --- | --- | --- |
+| Referenced by a published layer | Project tree | USD layers, textures, published caches |
+| Handed to another artist, not referenced by a layer | Project tree | Rig HDAs (12.1) |
+| Referenced by nothing | Work tree | HIPs, source geometry, reference, scratch caches |
+
+Anything in the first two rows has a stable path that other people's work depends on, and moving it is a breaking change (Section 9.6). Anything in the third can be moved, renamed, or reorganised at any time without consequence — which is why artists are free to arrange the inside of an owning folder as the work demands.
 
 *For texture naming conventions and validation patterns, see Section 16.9.*
 
@@ -1591,15 +1625,17 @@ The alternative failure is just as bad. If Houdini expands the variable at write
 So published USD uses **relative paths**, anchored to the file that contains them:
 
 ```
-# in assets/char-robot/assembly/usd/char-robot.usda
-@../../blocks/model/usd/char-robot_model.usdc@
+# in assets/char-robot/char-robot.usda
+@char-robot_model.usdc@
 
-# in shots/kilo/0010/assembly/usd/kilo-0010.usda
-@../../blocks/layout/usd/kilo-0010_layout.usda@
-@../../../../../sets/living-room/assembly/usd/set-living-room.usda@
+# in shots/kilo/0010/kilo-0010.usda
+@kilo-0010_layout.usda@
+@../../../sets/living-room/set-living-room.usda@
 ```
 
 Relative paths need no configuration at all. The project can be moved, copied, checked out to a different drive letter, or handed to someone outside the team, and every reference still resolves — because the folder structure travels with the files.
+
+They stay short, too, because every entity's layers sit in one folder (Section 17.1). An assembly reaches its blocks by filename alone; the longest path in the project is a shot root reaching across to a set.
 
 **Solaris already does this for you.** The USD ROP converts the paths you author into relative paths when it writes the file, by default. You author `$ASSETS/char-robot/...` in your parameters and get a relative path in the published USD without setting anything up — so this is a property of the pipeline to be aware of, not a step you have to perform.
 
@@ -1607,22 +1643,28 @@ Relative paths need no configuration at all. The project can be moved, copied, c
 
 ### 18.2 Project variables
 
-| Variable | Points to |
-| --- | --- |
-| `$PROJECT` | Project root |
-| `$ASSETS` | `$PROJECT/assets/` |
-| `$SETS` | `$PROJECT/sets/` |
-| `$SHOTS` | `$PROJECT/shots/` |
-| `$LIBRARY` | `$PROJECT/library/` |
+A project has **two roots**, because the project tree and the work tree live on different storage systems (Section 17). Everything else derives from one or the other.
+
+| Variable | Points to | Tree |
+| --- | --- | --- |
+| `$PROJECT` | Project root | Project (SVN) |
+| `$ASSETS` | `$PROJECT/assets/` | Project |
+| `$SETS` | `$PROJECT/sets/` | Project |
+| `$SHOTS` | `$PROJECT/shots/` | Project |
+| `$LIBRARY` | `$PROJECT/library/` | Project |
+| `$WORK` | Work root | Work (shared drive) |
 
 Examples in use — in HIP parameters:
 
 ```
-$ASSETS/char-robot/assembly/usd/char-robot.usda
-$SETS/living-room/assembly/usd/set-living-room.usda
-$SHOTS/kilo/0010/blocks/anim/usd/kilo-0010_anim.usdc
+$ASSETS/char-robot/char-robot.usda
+$SETS/living-room/set-living-room.usda
+$SHOTS/kilo/0010/kilo-0010_anim.usdc
 $LIBRARY/materials/metal-bare.usda
+$WORK/shots/kilo/0010/lighting/
 ```
+
+Inside a HIP, `$HIP` resolves to that HIP's owning folder, which is why Houdini's own defaults — `$HIP/geo`, `$HIP/sim`, `$HIP/render` — already point where they should (Section 17.2). Use `$WORK` when you need to reach across to another artist's working files; use `$HIP` for your own.
 
 ### 18.3 Distributing the environment: use a package
 
@@ -1640,6 +1682,7 @@ Use a **package** instead. Houdini reads JSON package files from `packages/` dir
         { "SETS":    "$PROJECT_ROOT/sets" },
         { "SHOTS":   "$PROJECT_ROOT/shots" },
         { "LIBRARY": "$PROJECT_ROOT/library" },
+        { "WORK":    "$PROJECT_WORK_ROOT" },
         { "OCIO":    "$PROJECT_ROOT/houdini/ocio/config.ocio" }
     ],
     "path": [
@@ -1648,11 +1691,11 @@ Use a **package** instead. Houdini reads JSON package files from `packages/` dir
 }
 ```
 
-Each artist sets one thing — `PROJECT_ROOT`, wherever the project lives on their machine or mount — and everything else derives from it. `HOUDINI_OTLSCAN_PATH` is covered by the `path` entry, which is how the rig HDAs in `houdini/otls/` (Section 12.1) reach everyone.
+Each artist sets two things — `PROJECT_ROOT`, wherever the SVN checkout lives on their machine, and `PROJECT_WORK_ROOT`, wherever the work drive is mounted — and everything else derives from those. `HOUDINI_OTLSCAN_PATH` is covered by the `path` entry, which is how the rig HDAs in `houdini/otls/` (Section 12.1) reach everyone.
 
 The advantages over `houdini.env`: the configuration is versioned in the repo with everything else, multiple projects can coexist, and the farm gets the identical environment by pointing at the same file. When the project's environment changes, it changes for everyone on the next SVN update instead of requiring an email telling four people to edit a file in their home directory.
 
-If references are broken when you open a HIP, check the environment before anything else — open a Houdini shell and run `echo $ASSETS` to verify the variable is resolving.
+If references are broken when you open a HIP, check the environment before anything else — open a Houdini shell and run `echo $ASSETS` and `echo $WORK` to verify both roots are resolving.
 
 ---
 
@@ -1678,6 +1721,7 @@ Houdini ships with a bundled ACES config, and for a small all-Karma team that is
 
 A USD file is not published until all of these are true:
 
+- The HIP that produced it was **saved first** — the publisher records where a layer came from
 - Exports without errors
 - Loads correctly in a **fresh** Houdini session — not the one you authored it in
 - Contains **only your layer** — no restated upstream data (check the Layer Break, Section 13.1)
@@ -1692,7 +1736,7 @@ A file on disk that is not committed to SVN is not published — it exists only 
 
 ### 20.1 How to verify a publish
 
-1. Write USD via the USD ROP
+1. Save your HIP, then write USD via the USD ROP
 2. Open the published file as text (or in `usdview`) and read the top of it — are the sublayer/reference paths relative? Is the metadata right?
 3. Open a blank Houdini session
 4. Use a Sublayer or Reference LOP to load your file
@@ -1707,9 +1751,9 @@ Step 5 cuts both ways. A layer with less in it than you expected usually means t
 Published USD filenames are stable. If you need versioned snapshots for rollback, use a `versions/` subfolder:
 
 ```
-$SHOTS/kilo/0010/blocks/anim/usd/kilo-0010_anim.usdc              ← stable, referenced by others
-$SHOTS/kilo/0010/blocks/anim/usd/versions/kilo-0010_anim_v001.usdc
-$SHOTS/kilo/0010/blocks/anim/usd/versions/kilo-0010_anim_v002.usdc
+$SHOTS/kilo/0010/kilo-0010_anim.usdc              ← stable, referenced by others
+$SHOTS/kilo/0010/versions/kilo-0010_anim_v001.usdc
+$SHOTS/kilo/0010/versions/kilo-0010_anim_v002.usdc
 ```
 
 Nothing in the pipeline references the `versions/` folder.
@@ -1718,34 +1762,37 @@ Nothing in the pipeline references the `versions/` folder.
 
 ## 21. Source Control (SVN)
 
+**SVN holds the project tree, and only the project tree** (Section 17.1). It is the record of what the production has produced — the published layers, and everything they resolve by path. Working files live on the work drive and are not part of it.
+
 ### 21.1 Commit these
 
-- HIP files
 - Published USD files
 - Textures and material files
-- Small project tools and scripts
+- Published caches (21.3)
+- Rig HDAs
+- Small project tools and scripts, and the project package
 - Documentation
 
 ### 21.2 Do not commit these
 
+- Working files — HIPs, source geometry, reference, scratch caches (these live in `$WORK`)
 - Render outputs
 - Houdini backup files (`.hip.bak`)
 - Crash files
-- Temporary caches
 - Personal scratch files
 
-Heavy simulation caches should be discussed with the team before committing — they may need external storage.
+The test for anything not on either list is the one in 17.3: **does a published layer resolve it by path?** If yes, it is production data and belongs in SVN. If nothing resolves it, it belongs in the work tree.
 
 ### 21.3 Caches that published layers depend on
 
-There is an important distinction inside "caches", and it is not about size:
+That test matters most for caches, where the distinction is not about size:
 
-- A **working cache** is scratch — an intermediate sim, a test wedge, anything only you will ever read. Keep it local, do not commit it, delete it freely.
-- A **published cache** is any file a published USD layer *references* — the VDBs behind `kilo-0010_fx.usdc`, an Alembic a layer points at. These are production data, whether or not they live in SVN.
+- A **working cache** is scratch — an intermediate sim, a test wedge, anything only you will ever read. It lives in your HIP's owning folder, usually under `$HIP/geo` or `$HIP/sim`, and you can delete it freely.
+- A **published cache** is any file a published USD layer *references* — the VDBs behind `kilo-0010_fx.usdc`, an Alembic a layer points at. These are production data, and they live in the project tree beside the layer that references them.
 
-**Rule: anything a published layer references must live on shared storage that every artist and the farm can reach, at a path that does not change.** A published layer pointing at a cache on your workstation is a broken publish — it renders correctly for you and fails for everyone else, usually silently and usually at the worst moment.
+**Rule: anything a published layer references must live on shared storage that every artist and the farm can reach, at a path that does not change.** A published layer pointing at a cache in your working folder is a broken publish — it renders correctly for you and fails for everyone else, usually silently and usually at the worst moment.
 
-Where that shared storage *is* — in SVN, or on a separate cache volume — is a team decision that depends on size. What is not optional is that it is shared, stable, and reachable from the farm. If a cache moves, treat it exactly like a renamed prim path: a breaking change requiring coordination.
+Very heavy caches may need a separate volume rather than SVN; that is a team decision that depends on size. What is not optional is that the location is shared, stable, and reachable from the farm. If a cache moves, treat it exactly like a renamed prim path: a breaking change requiring coordination.
 
 The same test as everywhere else applies: publish it, then open it in a **fresh** session on **another machine**. Local absolute cache paths are one of the listed silent failures in Section 22 for good reason.
 
@@ -1762,7 +1809,7 @@ Work through this in order. Most problems are a file path issue, a prim path iss
 ### File and path
 
 - [ ]  Does the file exist at the referenced path?
-- [ ]  Are environment variables set correctly for this project?
+- [ ]  Are both project roots resolving? (`echo $ASSETS`, `echo $WORK` — Section 18.3)
 - [ ]  Is the HIP parameter using `$ASSETS` / `$SHOTS` — not a local absolute path?
 - [ ]  Are the paths written *inside* the published USD relative — not `$VARIABLE`, not absolute? (Section 18.1)
 - [ ]  Does SVN have the latest upstream file?
@@ -1820,9 +1867,9 @@ Work through this in order. Most problems are a file path issue, a prim path iss
 ## 23. Core Rules
 
 1. One role owns one USD layer at a time.
-2. One task lives in one HIP file.
+2. Every HIP has an owning folder holding all its versions and everything it depends on.
 3. Never edit a layer you do not currently own.
-4. Always publish USD before handing off.
+4. Always save your HIP, then publish USD, before handing off.
 5. Never pass a HIP file as a deliverable.
 6. Published USD filenames stay stable — they do not version.
 7. Always use environment variables for paths.
@@ -1880,12 +1927,12 @@ This traces a complete production cycle for one shot on a four-person flat team.
 
 **Alex: Modeling**
 
-Builds geometry in SOPs. Establishes the prim hierarchy in Solaris. On a **Configure Layer LOP**, sets the default prim to `CharRobot` and the stage metrics — Y up, `metersPerUnit = 1`, project frame rate (Section 10.6).
+Works in `$WORK/assets/char-robot/model/`, saving versions as he goes. Builds geometry in SOPs. Establishes the prim hierarchy in Solaris. On a **Configure Layer LOP**, sets the default prim to `CharRobot` and the stage metrics — Y up, `metersPerUnit = 1`, project frame rate (Section 10.6).
 
-Publishes:
+Saves, then publishes:
 
 ```
-$ASSETS/char-robot/blocks/model/usd/char-robot_model.usdc
+$ASSETS/char-robot/char-robot_model.usdc
 ```
 
 Verifies in a fresh session, commits. Notifies Maria and himself: *“Model published. Prim root `/CharRobot`, geometry under `/CharRobot/Geo`. Y up, metres.”*
@@ -1894,7 +1941,7 @@ Verifies in a fresh session, commits. Notifies Maria and himself: *“Model publ
 
 **Alex: Rigging** (parallel with Maria)
 
-References the model USD. Builds the rig. The robot is mechanical — no deformation — so this is a **Lane 1** asset (Section 12.2): animation will publish transform overrides, and no bind-pose skeleton USD is needed. The `rig` block therefore publishes no USD at all.
+Works in `$WORK/assets/char-robot/rig/` — a separate task, so a separate owning folder. References the model USD. Builds the rig. The robot is mechanical — no deformation — so this is a **Lane 1** asset (Section 12.2): animation will publish transform overrides, and no bind-pose skeleton USD is needed. The `rig` block therefore publishes no USD at all.
 
 What it publishes is the **rig HDA**:
 
@@ -1910,7 +1957,7 @@ Note what did *not* happen: Erik was not sent a HIP file to copy from. When Alex
 
 **Maria: Lookdev** (parallel with rigging)
 
-SVN updates. References the model USD for context. Builds MaterialX materials under `/CharRobot/Mtl`, inline in the lookdev file (Option A — small production).
+SVN updates. Works in `$WORK/assets/char-robot/lookdev/`, with her turntable renders landing in `$HIP/render` by default. References the model USD for context. Builds MaterialX materials under `/CharRobot/Mtl`, inline in the lookdev file (Option A — small production).
 
 ```
 [Reference: char-robot_model.usdc]   ← context: the geometry to shade
@@ -1924,7 +1971,7 @@ SVN updates. References the model USD for context. Builds MaterialX materials un
 Publishes:
 
 ```
-$ASSETS/char-robot/blocks/lookdev/usd/char-robot_lookdev.usda
+$ASSETS/char-robot/char-robot_lookdev.usda
 ```
 
 Opens the published file as text and confirms it contains materials and bindings — not a copy of the geometry. Notifies Alex: *“Lookdev done. Ready for assembly.”*
@@ -1933,7 +1980,9 @@ Opens the published file as text and confirms it contains materials and bindings
 
 **Alex: Assembly**
 
-SVN updates. Creates the assembly HIP: Sublayer LOPs bring in the lookdev and model blocks (no rig block — Lane 1 asset), a Configure Layer LOP sets `CharRobot` as the default prim, and an **Add Variant / Set Variant** LOP sets production defaults for any VariantSets modeling defined. The USD ROP writes the assembled file.
+SVN updates and reopens his model HIP — assembling this asset is four nodes and does not need a session of its own. Sublayer LOPs bring in the lookdev and model blocks (no rig block — Lane 1 asset), a Configure Layer LOP sets `CharRobot` as the default prim, and an **Add Variant / Set Variant** LOP sets production defaults for any VariantSets modeling defined. A second USD ROP writes the assembled file.
+
+That HIP now publishes two layers, which is normal — the pipeline fixes where published files go, not how many sessions produced them (Section 4).
 
 The resulting assembly file:
 
@@ -1944,8 +1993,8 @@ The resulting assembly file:
     metersPerUnit = 1
     upAxis = "Y"
     subLayers = [
-        @../../blocks/lookdev/usd/char-robot_lookdev.usda@,
-        @../../blocks/model/usd/char-robot_model.usdc@
+        @char-robot_lookdev.usda@,
+        @char-robot_model.usdc@
     ]
 )
 ```
@@ -1955,7 +2004,7 @@ Alex opens it as text and checks the two things that matter: the sublayer paths 
 Publishes:
 
 ```
-$ASSETS/char-robot/assembly/usd/char-robot.usda
+$ASSETS/char-robot/char-robot.usda
 ```
 
 Notifies Ina and Maria: *“char-robot.usda ready. Set dressing and shot layout can begin.”*
@@ -1970,7 +2019,7 @@ Set creation happens in parallel with asset work where possible, but requires th
 
 **Ina: Set Dressing**
 
-SVN updates. Opens the set dressing HIP. References all the prop and furniture assets and places them in the world. The set dressing layer establishes the full spatial layout of the living room — where every piece of furniture sits, where props are arranged.
+SVN updates. Opens her dressing HIP in `$WORK/sets/living-room/dressing/`. References all the prop and furniture assets and places them in the world. The set dressing layer establishes the full spatial layout of the living room — where every piece of furniture sits, where props are arranged.
 
 LOP network:
 
@@ -1988,7 +2037,7 @@ LOP network:
 Publishes:
 
 ```
-$SETS/living-room/blocks/dressing/usd/set-living-room_dressing.usda
+$SETS/living-room/set-living-room_dressing.usda
 ```
 
 Notifies Maria: *“Set dressing published. Ready for set lighting.”*
@@ -2013,7 +2062,7 @@ LOP network:
 Publishes:
 
 ```
-$SETS/living-room/blocks/lighting/usd/set-living-room_lighting.usda
+$SETS/living-room/set-living-room_lighting.usda
 ```
 
 Checks the published file: two lights, no furniture.
@@ -2027,14 +2076,14 @@ If the location needs surface overrides that aren't part of any individual asset
 Publishes (if needed):
 
 ```
-$SETS/living-room/blocks/lookdev/usd/set-living-room_lookdev.usda
+$SETS/living-room/set-living-room_lookdev.usda
 ```
 
 ---
 
 **Ina: Set Assembly**
 
-SVN updates. Creates the set assembly — a simple HIP with Sublayer LOPs stacking the set's blocks and a USD ROP writing the assembled file.
+SVN updates and reopens her dressing HIP, adding Sublayer LOPs that stack the set's blocks and a second USD ROP to write the assembled file.
 
 ```
 #usda 1.0
@@ -2042,9 +2091,9 @@ SVN updates. Creates the set assembly — a simple HIP with Sublayer LOPs stacki
     metersPerUnit = 1
     upAxis = "Y"
     subLayers = [
-        @../../blocks/lighting/usd/set-living-room_lighting.usda@,
-        @../../blocks/lookdev/usd/set-living-room_lookdev.usda@,
-        @../../blocks/dressing/usd/set-living-room_dressing.usda@
+        @set-living-room_lighting.usda@,
+        @set-living-room_lookdev.usda@,
+        @set-living-room_dressing.usda@
     ]
 )
 ```
@@ -2052,7 +2101,7 @@ SVN updates. Creates the set assembly — a simple HIP with Sublayer LOPs stacki
 Publishes:
 
 ```
-$SETS/living-room/assembly/usd/set-living-room.usda
+$SETS/living-room/set-living-room.usda
 ```
 
 Notifies the team: *“Set published. Shot layout can begin.”*
@@ -2063,7 +2112,7 @@ Notifies the team: *“Set published. Shot layout can begin.”*
 
 **Ina: Layout**
 
-SVN updates. Her layout HIP subLayers the assembled set for context — the room is already dressed and lit with its practicals — then breaks. Her job is to add the camera and place the robot for this specific shot, and to establish the shot's frame range.
+SVN updates. Her layout HIP, in `$WORK/shots/kilo/0010/layout/`, subLayers the assembled set for context — the room is already dressed and lit with its practicals — then breaks. Her job is to add the camera and place the robot for this specific shot, and to establish the shot's frame range.
 
 LOP network:
 
@@ -2084,7 +2133,7 @@ Layout also owns the shot's frame range (Section 10.6), because layout is where 
 Publishes:
 
 ```
-$SHOTS/kilo/0010/blocks/layout/usd/kilo-0010_layout.usda
+$SHOTS/kilo/0010/kilo-0010_layout.usda
 ```
 
 Notifies Erik: *“Layout published. Hero at `/World/Characters/Hero`, camera at `/World/Cameras/Main`. Frames 1001–1100.”*
@@ -2095,7 +2144,7 @@ Notifies Erik: *“Layout published. Hero at `/World/Characters/Hero`, camera at
 
 SVN updates — which brings him both the layout block and any rig HDA changes.
 
-His animation HIP does two things. For **context**, it subLayers the shot's stack so far, in shot root order: the set, then layout. This matters — the layout block on its own is sparse. It contains a camera and a reference to the robot, and nothing else; the living room only appears when the set is subLayered beneath it. Loading just the previous block gives an almost-empty stage, which is the most common confusion when people first work this way.
+His animation HIP, in `$WORK/shots/kilo/0010/anim/`, does two things. For **context**, it subLayers the shot's stack so far, in shot root order: the set, then layout. This matters — the layout block on its own is sparse. It contains a camera and a reference to the robot, and nothing else; the living room only appears when the set is subLayered beneath it. Loading just the previous block gives an almost-empty stage, which is the most common confusion when people first work this way.
 
 For **authoring**, it contains the `char-robot_rig` HDA from the tab menu, giving Erik live controls. He animates on those controls, then bakes: this is a Lane 1 asset (Section 12.2), so the bake extracts per-part transforms and a SOP Import LOP brings them onto the stage as time-sampled overrides on the prims layout already established.
 
@@ -2115,7 +2164,7 @@ Published as `.usdc` — it is time-sampled cache data, not composition (Section
 Publishes:
 
 ```
-$SHOTS/kilo/0010/blocks/anim/usd/kilo-0010_anim.usdc
+$SHOTS/kilo/0010/kilo-0010_anim.usdc
 ```
 
 Notifies Maria: *“Anim published, kilo-0010. Rough pass.”*
@@ -2124,7 +2173,7 @@ Notifies Maria: *“Anim published, kilo-0010. Rough pass.”*
 
 **Maria: Shot Lighting**
 
-SVN updates. Same pattern: subLayer the stack so far for context — set, layout, anim, in shot root order — then break. The practical lights from the set are already present in that context; her job is the hero lighting that shapes this shot.
+SVN updates. Works in `$WORK/shots/kilo/0010/lighting/`. Same pattern: subLayer the stack so far for context — set, layout, anim, in shot root order — then break. The practical lights from the set are already present in that context; her job is the hero lighting that shapes this shot.
 
 LOP network:
 
@@ -2140,7 +2189,7 @@ LOP network:
 [USD ROP → kilo-0010_lighting.usda]
 ```
 
-As the last artist in the shot chain, Maria also creates the shot root. Note that it subLayers the **set** directly as the weakest layer — the set does not arrive through any block (Section 9.4):
+As the last artist in the shot chain, Maria also creates the shot root — a second USD ROP in the same lighting HIP, since it is five lines of composition and needs no session of its own. Note that it subLayers the **set** directly as the weakest layer, which does not arrive through any block (Section 9.4):
 
 ```
 #usda 1.0
@@ -2148,10 +2197,10 @@ As the last artist in the shot chain, Maria also creates the shot root. Note tha
     metersPerUnit = 1
     upAxis = "Y"
     subLayers = [
-        @../../blocks/lighting/usd/kilo-0010_lighting.usda@,
-        @../../blocks/anim/usd/kilo-0010_anim.usdc@,
-        @../../blocks/layout/usd/kilo-0010_layout.usda@,
-        @../../../../../sets/living-room/assembly/usd/set-living-room.usda@
+        @kilo-0010_lighting.usda@,
+        @kilo-0010_anim.usdc@,
+        @kilo-0010_layout.usda@,
+        @../../../sets/living-room/set-living-room.usda@
     ]
 )
 ```
@@ -2161,8 +2210,8 @@ Five lines, and the whole shot is legible: every ingredient named, strongest fir
 Publishes both:
 
 ```
-$SHOTS/kilo/0010/blocks/lighting/usd/kilo-0010_lighting.usda
-$SHOTS/kilo/0010/assembly/usd/kilo-0010.usda
+$SHOTS/kilo/0010/kilo-0010_lighting.usda
+$SHOTS/kilo/0010/kilo-0010.usda
 ```
 
 Renders from the shot root — interactively via the USD Render ROP, or on the farm with Husk (Section 13.6).
