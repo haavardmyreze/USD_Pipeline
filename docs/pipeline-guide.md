@@ -14,21 +14,26 @@
 
 **Part II — How the Pipeline Works**
 
+*How the work is organised*
+
 6. Roles
 7. The Daily Loop
 8. Naming at a Glance
 9. The Pipeline
-10. Scene Graph Conventions
-11. Materials
-12. Rigging
-13. Solaris Essentials
-14. VariantSets
-15. Instancing
+10. Folder Structure
+
+*How the scene is built*
+
+11. Solaris Essentials
+12. Scene Graph Conventions
+13. Materials
+14. Rigging
+15. VariantSets
+16. Instancing
 
 **Part III — Reference**
 
-16. Naming Conventions
-17. Folder Structure
+17. Naming Conventions
 18. Paths and Environment Variables
 19. Colour Management (OCIO)
 20. Publishing
@@ -66,7 +71,7 @@ On a traditional production — Maya, Cinema 4D, Blender — a scene lives in on
 - It is hard to know what changed, when, or why
 - The file grows heavier and more fragile as production continues
 
-Every one of those tools has an answer — references, XRefs, linked files — and those answers genuinely work up to a point. Where they run out is worth naming precisely, because it is exactly what USD fixes. They let you *split* a scene, but they give you no shared rules for how the pieces recombine: every studio invents its own, informally, and the conventions end up living in people’s heads rather than in the format. Changing upstream data from downstream is possible in some of them and fragile in all of them.
+Every one of those tools has an answer — references, XRefs, linked files — and they work, up to a point. Where they run out is worth naming precisely, because it is exactly what USD fixes. They let you *split* a scene, but they give you no shared rules for how the pieces recombine: every studio invents its own, informally, and the conventions end up living in people’s heads rather than in the format. Changing upstream data from downstream is possible in some of them and fragile in all of them.
 
 **USD is the missing shared system.** It defines a consistent way for many partial files to combine into one coherent scene at runtime. No single file owns the scene. Every artist contributes their own, and the scene is assembled from those contributions automatically — including, and this is the part that changes how a team works, contributions that override what someone upstream authored without touching their file.
 
@@ -78,7 +83,7 @@ Before any of the detail, here is the shape of the whole thing. Strip everything
 
 **Work on the work drive, publish to the project tree.** Everything you produce lives in one of two places. Your Houdini files sit on the shared work drive: personal, versioned freely, never handed to anyone as a deliverable, and divided into as many or as few files as the job wants. What you *publish* goes to the project tree in SVN: a small USD layer holding only your contribution, at a fixed path that never changes. That published layer is what other people build on, and it is the only thing they ever see of your work. (Sections 4, 17, 20)
 
-**Layers stack, and the strongest opinion wins.** Nobody edits anybody else’s file, ever. You author your opinions in your own layer, and USD composes every layer into a single scene at runtime, resolving conflicts by a fixed strength order. This is what lets a lighter nudge a prop the layout artist placed — and keep the nudge when layout republishes. (Sections 5, 9)
+**Layers stack, and the strongest opinion wins.** Nobody edits anybody else’s file, ever. You author your opinions in your own layer, and USD composes every layer into a single scene at runtime, resolving conflicts by a fixed strength order. That order carries creative intent, not just technical precedence. And nothing upstream is lost when it is overridden — each artist's intent stays intact in their own layer, still readable and still theirs. (Sections 5, 9)
 
 **Three tiers, one shape.** **Assets** are built once and reused: characters, props, vehicles. **Sets** assemble assets into spaces that persist across shots. **Shots** add what is unique to one moment — camera, animation, effects, lighting. All three are built identically: a handful of sparse **blocks**, one per concern, plus a small **assembly** file that composes them. Learn the shape once and it applies everywhere. (Section 9)
 
@@ -94,15 +99,16 @@ That loop is the pipeline. Everything else in this guide is detail in service of
 
 ### 1.3 What we get out of it
 
-USD was built for productions far larger than ours, and much of what it can do we will never need. These five things are what we actually want from it — and what the overhead in 1.4 is buying:
+USD was built for productions far larger than ours, and much of what it can do we will never need. These six things are what we actually want out of working this way — and what the overhead in 1.4 is buying:
 
 - **Parallel work on the same shot.** Layout, animation, FX, and lighting proceed at once, without waiting, locking, or merging.
-- **Overrides that survive.** A lighter can adjust something layout authored, and when layout republishes, the adjustment still applies.
+- **A clean line between the work and the production data.** Your Houdini files are yours to break, restructure, and version however you like — nothing reaches anyone until you publish. The production data holds only finished contributions, so it can be handed to the farm, a vendor, or whoever picks up your task next without explanation.
+- **Overrides that survive.** Any stage can override what came before it without editing anyone's file. If a shot needs a lamp brighter than the set has it, you author that in your own layer — the set is untouched, other shots are unaffected, and it holds after the set is republished.
 - **Sets built once, used everywhere.** A room is dressed and lit one time. Every shot in that location inherits it, and fixing the room fixes every shot at once.
 - **One file to render, with links that hold.** The farm is handed a single shot file that pulls in everything through composition — no scene assembly step, no exports to keep in sync. And because every link between those files is a relative path to a stable location (Section 18), it resolves the same on a farm node as on the machine it was authored on. Missing textures and broken references on submission — the classic farm failure — largely stop happening, because the links are part of the published data rather than something reconstructed at submission time.
 - **A history that means something.** Every change is a commit by a named person with a reason attached, and any state can be recovered.
 
-If a rule in this guide ever seems arbitrary, the right question to ask is which of those five it serves.
+If a rule in this guide ever seems arbitrary, the right question to ask is which of those six it serves.
 
 ### 1.4 What it costs
 
@@ -114,11 +120,11 @@ It would be dishonest to present this as free. There are three real costs, and k
 
 **Discipline is load-bearing.** In a single-file pipeline, conventions are tidiness. Here, a filename, a prim path, or a published path is a contract that other people’s files depend on by name. Breaking one quietly breaks someone else’s work, often with no visible error. The naming rules in this guide are not aesthetics.
 
-Below a certain scale — one artist, one shot, one afternoon — this overhead genuinely is not worth it. We are past that scale, which is why we work this way.
+Below a certain scale — one artist, one shot, one afternoon — this overhead is not worth it. We are past that scale, which is why we work this way.
 
 ### 1.5 What does not change
 
-Most of your work is unaffected. Modelling is still modelling. Lookdev is still building materials and looking at them. Animation is still animation. SOPs are still SOPs, and Houdini is still Houdini.
+Most of your work is unaffected. Modelling is still modelling. Lookdev is still lookdev. Animation is still animation. SOPs are still SOPs, and Houdini is still Houdini.
 
 What changes is the **handoff**: where your work goes when you are finished with it, and how someone else builds on it. That is the entire subject of this guide. If it feels like a lot of rules, notice that nearly all of them are about the boundaries between people’s work rather than the work itself.
 
@@ -134,9 +140,9 @@ Which means a fair amount of what follows is **ours, not USD’s** — decided h
 | --- | --- |
 | New to USD | Part I (Sections 1–5) in order, then Part II |
 | Starting a task | Section 7 (the daily loop) + Section 8 (naming at a glance) |
-| Wondering where a file goes | Section 17 (folder structure) |
-| Looking up a filename pattern | Section 16 (naming conventions) |
-| Setting up a new project | Section 17 (folder structure) + Section 18 (paths) + Section 19 (colour) |
+| Wondering where a file goes | Section 10 (folder structure) |
+| Looking up a filename pattern | Section 17 (naming conventions) |
+| Setting up a new project | Section 10 (folder structure) + Section 18 (paths) + Section 19 (colour) |
 | Going deeper on USD | Section 5 (USD in Depth) |
 | Something is broken | Section 22 (debugging) |
 | Onboarding someone | Part I, then walk through Section 25 together |
@@ -286,15 +292,15 @@ HIP files are **yours**. They are versioned and iterative — the version lives 
 
 HIP files are **not** the production data. They are the tool you use to produce the production data.
 
-They live on the shared work drive, reached through `$WORK` (Section 17.2). **Nothing in the pipeline resolves a HIP by path.** No USD layer points at one. The farm never opens one. No downstream artist has a parameter with your HIP's name in it. That single fact is why they can live outside SVN, why they can be reorganised at any time without warning anyone, and why the rules about them are so much looser than the rules about published files.
+They live on the shared work drive, reached through `$WORK` (Section 10.2). **Nothing in the pipeline resolves a HIP by path.** No USD layer points at one. The farm never opens one. No downstream artist has a parameter with your HIP's name in it. That single fact is why they can live outside SVN, why they can be reorganised at any time without warning anyone, and why the rules about them are so much looser than the rules about published files.
 
 ### USD files — the production data
 
-A USD file is what you publish when your work is ready for the next person. It is the output of your HIP. It is what other departments reference. It is the source of truth.
+A USD file is the production data. It is the output of your HIP, and the source of truth for what the scene contains.
 
 USD files have **stable filenames**. They do not version in their filename — SVN tracks their history instead. Other departments reference them by path, so a published filename is a promise: change it and their work breaks, usually with no error at all (Section 5.2).
 
-They live in the project tree in SVN, reached through `$ASSETS`, `$SETS`, and `$SHOTS` (Section 17.1). Everything there has a fixed path that other people's work depends on by name.
+They live in the project tree in SVN, reached through `$ASSETS`, `$SETS`, and `$SHOTS` (Section 10.1). Everything there has a fixed path that other people's work depends on by name.
 
 ### The relationship
 
@@ -325,7 +331,7 @@ There is no rule that a Houdini session produces exactly one published layer, an
 
 **What the pipeline fixes is where published files go and what they are called. How many Houdini sessions it took to make them is yours.** That is the practical meaning of the split above: the right-hand column is governed, the left-hand column is yours to arrange.
 
-The one thing this costs you is that "which HIP made this file?" is no longer answered by the folder a file sits in. Section 17.2 covers how the work tree is organised so that question stays easy to answer.
+The one thing this costs you is that "which HIP made this file?" is no longer answered by the folder a file sits in. Section 10.2 covers how the work tree is organised so that question stays easy to answer.
 
 ---
 
@@ -410,7 +416,7 @@ So the choice is a tradeoff between readability and speed, and it is made per fi
 
 The rule of thumb: **if you would ever want to read it, `.usda`; if it is mostly numbers, `.usdc`.**
 
-We spell the extension out rather than using bare `.usd`, so that a filename says what you can do with the file without opening it (Section 16).
+We spell the extension out rather than using bare `.usd`, so that a filename says what you can do with the file without opening it (Section 17).
 
 **Setting it in Solaris.** There is no format parameter. The extension you type into the USD ROP's **Output File** decides it — end the path in `.usda` and Houdini writes text, end it in `.usdc` and it writes crate.
 
@@ -424,6 +430,12 @@ We spell the extension out rather than using bare `.usd`, so that a filename say
 
 ---
 
+**How the work is organised**
+
+Sections 6–10: who does what, when, what things are called, and where they go.
+
+---
+
 ## 6. Roles
 
 This guide uses role names to describe responsibilities, not job titles. On a small team, one person will cover multiple roles. That is expected and normal. The rules do not change based on team size — one person simply owns more layers.
@@ -432,7 +444,7 @@ This guide uses role names to describe responsibilities, not job titles. On a sm
 | --- | --- |
 | **Modeling** | Geometry, prim hierarchy, VariantSet definitions |
 | **Lookdev** | Materials, shading, material assignments on assets |
-| **Rigging** | Rig setup in HIP, published as an HDA for animation (Section 12) |
+| **Rigging** | Rig setup in HIP, published as an HDA for animation (Section 14) |
 | **Assembly** | Final asset package, combining model, rig, and lookdev |
 | **Set Dressing** | Prop placement and furniture arrangement within a set |
 | **Set Lighting** | Practical lights and persistent environment lighting within a set |
@@ -497,7 +509,7 @@ test
 
 ## 8. Naming at a Glance
 
-The full naming reference — every pattern, the regex, texture channels — is **Section 16**. This is the minimum you need to follow the rest of Part II.
+The full naming reference — every pattern, the regex, texture channels — is **Section 17**. This is the minimum you need to follow the rest of Part II.
 
 One rule governs every filename: **underscores separate tokens; hyphens join words inside a token.** An underscore never appears inside a token.
 
@@ -522,9 +534,9 @@ Everything this pipeline produces falls into one of three tiers:
 | **Set** | A dressed, populated space that assembles assets | Shared by every shot in that location |
 | **Shot** | One moment — camera, animation, effects, lighting | This shot only |
 
-**All three are built identically.** There is no structural difference between an asset, a set, and a shot — only a difference in what they contain and who works on them. 9.1 defines the structure once. 9.2, 9.3, and 9.4 then cover only what is genuinely specific to each tier, which is why they are short.
+**All three are built identically.** There is no structural difference between an asset, a set, and a shot — only a difference in what they contain and who works on them. 9.1 defines the structure once. 9.2, 9.3, and 9.4 then cover only what is specific to each tier, which is why they are short.
 
-This three-tier structure also shapes the folder layout (Section 17), the naming conventions (Section 16), and the ownership rules (9.5).
+This three-tier structure also shapes the folder layout (Section 10), the naming conventions (Section 17), and the ownership rules (9.5).
 
 ### 9.1 Blocks and assemblies
 
@@ -546,12 +558,12 @@ Both words are ours. USD gives us layers and the arcs that compose them, but it 
 
 **These rules apply to all three tiers without exception:**
 
-- **Block names are free-form** — lowercase, hyphens for word separation, never underscores. There is no closed list; create whatever blocks the asset, set, or shot needs. Use the conventional names in Section 16.4 for the common disciplines rather than inventing synonyms.
+- **Block names are free-form** — lowercase, hyphens for word separation, never underscores. There is no closed list; create whatever blocks the asset, set, or shot needs. Use the conventional names in Section 17.4 for the common disciplines rather than inventing synonyms.
 - **A block owns one concern.** Two blocks should not author opinions on the same prims unless that overlap is intentional and coordinated.
 - **The assembly is always `.usda`** — pure composition, kept readable and diffable. Blocks choose their extension by content (Section 5.4).
 - **Assembly sublayer order is opinion strength** — earlier listed is stronger (Section 5.1). Whoever owns the assembly owns that ordering.
 - **Downstream work points at the assembly, never at individual blocks.** That indirection is what lets blocks be added, split, or renamed without breaking anything downstream.
-- **Blocks and their assembly share one folder** — the entity's folder in the project tree (Section 17.1), so an assembly names its blocks by filename alone.
+- **Blocks and their assembly share one folder** — the entity's folder in the project tree (Section 10.1), so an assembly names its blocks by filename alone.
 - **How many HIPs produced them is not part of the structure.** One session may publish several blocks, or a block and the assembly together (Section 4).
 
 An asset assembly, for example:
@@ -602,13 +614,13 @@ Modeling publishes first. Rig and lookdev can then run in parallel. Assembly wai
 
 ```
 char-robot_model.usdc       ← block: geometry and prim hierarchy
-char-robot_rig.usda         ← block: bind-pose skeleton — only for UsdSkel assets (Section 12)
+char-robot_rig.usda         ← block: bind-pose skeleton — only for UsdSkel assets (Section 14)
 char-robot_lookdev.usda     ← block: materials and bindings
         ↓
 char-robot.usda             ← assembly: what sets and shots reference
 ```
 
-**Only assets require a default prim.** The asset assembly is pulled in at a prim path by sets and shots, so it has to declare which prim to pull. A missing default prim is a silent failure — nothing appears, nothing errors (Section 13.4).
+**Only assets require a default prim.** The asset assembly is pulled in at a prim path by sets and shots, so it has to declare which prim to pull. A missing default prim is a silent failure — nothing appears, nothing errors (Section 11.4).
 
 **How it is consumed:** sets and shots **reference** the asset assembly at a prim path — `/World/Characters/Hero`, `/World/Props/CrateA` — because they are placing one scene inside another (Section 5.3).
 
@@ -631,7 +643,7 @@ set-landscape.usda                  ← assembly: what shots subLayer
 
 **How it is consumed:** the shot root **subLayers** the set assembly rather than referencing it, because the set already defines the full scene graph structure — `/World/Props/Sofa`, `/World/Environment/Walls`. The shot adds new prims on top of that structure rather than placing the set somewhere inside it (Section 5.3).
 
-**Set dressing usually needs no Layer Break.** A set dressing HIP starts from an empty stage, and the references it authors *are* its contribution — there is no upstream context to discard (Section 13.1).
+**Set dressing usually needs no Layer Break.** A set dressing HIP starts from an empty stage, and the references it authors *are* its contribution — there is no upstream context to discard (Section 11.1).
 
 ### 9.4 Shots — what is specific
 
@@ -662,7 +674,7 @@ Set → Layout → Animation → FX → Lighting → Shot Root
 
 Five lines, and every ingredient of the shot is named — strongest first, with the set as the weakest layer, so everything the shot authors sits above it and can override it.
 
-**The set is subLayered by the shot root, not by the layout block.** Layout *loads* the set for context while working, but what layout *publishes* is only its own sparse contribution — camera, character placement, and overrides. If the set arrived through the layout block instead, the shot root would not name it, and whether the set appeared in the shot at all would depend on how one artist happened to configure one Layer Break (Section 13.1). Naming the set in the shot root makes the shot self-describing.
+**The set is subLayered by the shot root, not by the layout block.** Layout *loads* the set for context while working, but what layout *publishes* is only its own sparse contribution — camera, character placement, and overrides. If the set arrived through the layout block instead, the shot root would not name it, and whether the set appeared in the shot at all would depend on how one artist happened to configure one Layer Break (Section 11.1). Naming the set in the shot root makes the shot self-describing.
 
 **Shot-specific changes to the space live in the layout block.** A prop moved for a stunt, a door left open — the set file is unchanged, and layout's opinion wins automatically because it is the stronger layer:
 
@@ -677,7 +689,7 @@ over "World" {
 }
 ```
 
-**Layout owns the shot's frame range** — `startTimeCode` and `endTimeCode`, because layout is where a shot's timing is first established (Section 10.6).
+**Layout owns the shot's frame range** — `startTimeCode` and `endTimeCode`, because layout is where a shot's timing is first established (Section 12.6).
 
 **Who creates the shot root:** whoever is acting as project lead for the shot — on a small flat team, typically the lighting artist, since they are last in the chain.
 
@@ -721,775 +733,7 @@ USD is a dependency chain. When something upstream changes, everything downstrea
 
 ---
 
-## 10. Scene Graph Conventions
-
-USD does not require any particular scene graph shape. It has no `/World`, no reserved names, no rule that geometry sits under `/Geo`. Everything in this section is a convention we adopted — some of it common across the industry, none of it enforced by the standard.
-
-It matters anyway, and arguably more than the parts USD does enforce: every override, every material binding, and every reference in this pipeline targets a prim **by path**. A path that does not match is a silent failure, not an error (5.2). Consistency here is what makes overrides possible at all, which is why these paths are fixed rather than per-artist preference.
-
-The one exception is 10.6, stage metrics — those are real USD metadata with real defaults, and are called out as such.
-
-### 10.1 Shot scene graph structure
-
-Every shot uses this fixed root structure:
-
-```
-/World                   (Xform)
-  /Characters            (Scope)
-  /Props                 (Scope)
-  /Environment           (Scope)
-  /FX                    (Scope)
-  /Cameras               (Scope)
-  /Lighting              (Scope)
-```
-
-`/World` is the root transform. All scene content lives under it. Do not add new top-level scopes without a team discussion.
-
-Scopes are organisational — they have no transform. Use Xforms when you need a transform.
-
-### 10.2 Asset instances in shots
-
-Assets placed into a shot live under the appropriate scope with a unique PascalCase instance name:
-
-```
-/World/Characters/Hero        ← char-hero.usda
-/World/Props/CrateA           ← prop-crate.usda, first instance
-/World/Props/CrateB           ← prop-crate.usda, second instance
-/World/Environment/Ground     ← env-ground.usda
-```
-
-### 10.3 Asset internal structure
-
-Inside a published asset USD, the root prim is PascalCase with no underscores:
-
-```
-/CharRobot               (Xform — root prim and default prim)
-  /Geo                   (Scope — all geometry)
-    /Body                (Mesh)
-    /Head                (Mesh)
-  /Mtl                   (Scope — materials)
-    /Paint               (Material)
-    /Metal               (Material)
-  /Rig                   (SkelRoot — if skeletal)
-    /Skel                (Skeleton)
-```
-
-Geometry always under `/Geo`. Materials always under `/Mtl`. Skeleton always under `/Rig`. These paths must be consistent across all assets — downstream references depend on them.
-
-### 10.4 Cameras and lights
-
-Cameras (owned by Layout):
-
-```
-/World/Cameras/Main
-/World/Cameras/Witness
-```
-
-Lights (owned by Lighting), named with descriptive PascalCase:
-
-```
-/World/Lighting/KeyLight
-/World/Lighting/FillLight
-/World/Lighting/SkyDome
-```
-
-Never name lights `Light1`, `Light2`. Names should communicate intent.
-
-### 10.5 Prim naming conventions
-
-Prim names follow **PascalCase** — capitalised words, no underscores, no spaces. This distinguishes them visually from filenames (which are lowercase, hyphen-and-underscore) and makes the scene graph easier to read.
-
-| Context | Convention | Examples |
-| --- | --- | --- |
-| Asset root prim | PascalCase, no underscores | `CharRobot`, `PropCrate`, `EnvWarehouse` |
-| Asset instance in shot | PascalCase, unique within its scope | `Hero`, `CrateA`, `CrateB` |
-| Lights | PascalCase, descriptive | `KeyLight`, `FillLight`, `SkyDome` |
-| Cameras | PascalCase | `Main`, `Witness` |
-| Internal asset structure | PascalCase | `Geo`, `Mtl`, `Rig`, `Body`, `Head` |
-
-Multiple instances of the same asset get a letter suffix: `CrateA`, `CrateB`, `CrateC`. Never `Crate1`, `Crate2` — letters sort more predictably and avoid confusion with shot numbering.
-
-The asset root prim name is derived directly from the asset name token, with hyphens removed and each word capitalised: `char-robot` → `CharRobot`, `prop-crate` → `PropCrate`. This makes the relationship between filename and prim path unambiguous.
-
-### 10.6 Stage metrics and time
-
-Scene graph structure is only half of what has to agree between layers. The other half is the **stage metrics** — the units, the up axis, and the timing. These are layer metadata, not prims, and they are silent when they disagree: an asset authored in centimetres composed into a set authored in metres does not error, it just arrives a hundred times too big or too small.
-
-Set these once, project-wide, and treat them as fixed:
-
-| Metadata | Project value | Notes |
-| --- | --- | --- |
-| `upAxis` | `Y` | USD's default and Houdini's default. Do not vary it per asset. |
-| `metersPerUnit` | `1` | One Houdini unit is one metre. USD's own default is `0.01` (centimetres), so this is a deliberate choice that must be authored, not assumed. |
-| `timeCodesPerSecond` | project frame rate | Must match the Houdini scene FPS. Mismatches show up as animation playing at the wrong speed, not as an error. |
-| `startTimeCode` / `endTimeCode` | the shot's frame range | Per shot, not project-wide. |
-
-**Who authors what.** Units and up axis belong on every published layer that contains geometry — set them in the **Configure Layer LOP** before your USD ROP, the same node that sets the default prim (Section 13.4). The frame rate is also per-layer metadata and should match everywhere.
-
-**The shot frame range is owned by layout.** Layout is where a shot's identity is first established — the camera, the blocking, and therefore the timing. The layout block authors `startTimeCode` and `endTimeCode`; every downstream block inherits the shot's range from the composed stage rather than each artist deciding independently. This matters practically as well as conceptually: recent Houdini builds initialise the frame range for command-line rendering from the stage's `startTimeCode` and `endTimeCode` (Section 13.6), so if those are wrong or missing, farm renders come out with the wrong frame count.
-
-Add these to the publish check: **every published layer states its units, up axis, and frame rate, and shot layers state the shot's frame range.** They cost one node to author and are close to impossible to debug after the fact.
-
----
-
-## 11. Materials
-
-Lookdev and final render are always Houdini/Karma, so shading is authored in **MaterialX** and rendered by **Karma**. This section covers where material files live and how they are shaded. Colour management is project-wide infrastructure rather than a materials topic, and has its own section — see Section 19.
-
-### 11.1 Where materials can live
-
-**Option A — Inline in the lookdev file**
-
-Material definitions sit directly inside `char-robot_lookdev.usda`. The same file contains both the material networks and the bindings.
-
-This is the right choice for small productions where:
-- Materials are specific to one asset
-- You do not expect to share them elsewhere
-- The overhead of separate files is not justified
-
-**Option B — Separate material definition files**
-
-Material definitions live in their own files. The lookdev assignment layer references them.
-
-```
-assets/char-robot/
-    char-robot_lookdev.usda        ← references the below, adds bindings
-    materials/
-        char-robot_paint.usda
-        char-robot_metal.usda
-```
-
-This is the right choice when:
-- Materials are shared or reused across multiple assets
-- You want material definitions to be individually addressable for overrides
-
-**Be consistent within a project. Do not mix both approaches for the same asset.**
-
-### 11.2 Library materials
-
-Generic reusable materials — not specific to one asset — live in the library:
-
-```
-$LIBRARY/materials/metal-bare.usda
-$LIBRARY/materials/plastic.usda
-$LIBRARY/materials/glass.usda
-```
-
-Asset materials can reference library materials as a starting point. Changes to library materials affect every asset that references them — communicate before changing.
-
-### 11.3 Shading: MaterialX and Karma
-
-Author all shading in **MaterialX**. It is the USD-native shading standard, it is what Karma renders directly, and — unlike a renderer-specific VOP network — it survives the two things this pipeline depends on: USD interchange and the layering/override model. A MaterialX network travels with the asset and reads the same wherever the asset is referenced.
-
-Use `mtlxstandard_surface` as the default surface. Build the network inside a **Material Library LOP** (a MaterialX subnet); Karma CPU and XPU both render it natively.
-
-Materials live under the asset's `/Mtl` scope (Section 10.3) and are attached with a `material:binding`. Keeping every asset's materials under `/Mtl` is what lets lookdev publish a consistent, predictable structure that downstream layers can find.
-
-**`UsdPreviewSurface` is optional here.** Because lookdev and final render are always Karma, you do not need a separate preview surface for rendering. Author one only if you want assets to preview correctly in `usdview`, the Storm/GL viewport, or another DCC — it is a lightweight, portable fallback, not part of the Karma path.
-
-**Binding strength is the technical basis for the lookdev/lighting boundary.** A material binding carries a strength (`bindMaterialAs`): the default `weakerThanDescendants` lets a more specific binding deeper in the hierarchy win, while `strongerThanDescendants` forces a binding to override descendants. This is the exact mechanism behind the boundary in Section 9.5 — a lighter can rebind or tweak a material in the shot's lighting block and have it win over the asset's own binding, without editing the asset. The override lives in the lighting layer; the asset is untouched. When an override reveals a real problem with the base material, the fix goes back to lookdev.
-
-**Texture colour space is set by the channel token.** `bc` is colour-managed; `n`, `aormt`, and `m` are raw data and must not be. Naming a texture correctly (Section 16.9) is what gets its colour space right — see Section 19.
-
----
-
-## 12. Rigging
-
-Rigging is the one place where the pipeline's normal shape does not quite fit, because **USD has no concept of a live rig**. Constraints, IK handles, control objects, and muscle systems do not exist in USD and cannot be published as a USD layer. They live in Houdini.
-
-The way through is to stop treating "rigging" as one handoff and split it into two independent contracts:
-
-1. **How the rig reaches the animator** — a Houdini-side problem, solved with an HDA. USD is not involved.
-2. **What animation publishes downstream** — a USD problem, solved with baked data. The rig is not involved.
-
-Solve them separately and rigging stops being an exception. Each half becomes an ordinary instance of the rules the rest of this guide already uses.
-
-### 12.1 The rig is published as an HDA
-
-Do **not** hand the rig HIP to the animator to copy from. A copied rig network is a one-time snapshot: every later rig fix has to be manually re-merged into the animator's scene, and nothing tracks whether what the animator has is current. That is the same failure this pipeline exists to prevent, just in HIP-land instead of USD-land.
-
-Package the rig as a **digital asset (HDA)** instead, saved to `$PROJECT/houdini/otls/`. That directory is already on `HOUDINI_OTLSCAN_PATH` (Section 18), so the rig simply appears in every artist's tab menu after an SVN update. The animator drops one node and has controls.
-
-The structure mirrors the HIP/USD split exactly:
-
-| | Rig HIP | Rig HDA |
-| --- | --- | --- |
-| Example | `char-robot_rig_alex_v003.hip` | `char-robot_rig.hda` |
-| Where it lives | The work tree (`$WORK`) | The project tree, `houdini/otls/` |
-| Who owns it | The rigger, individually | The Rigging role, shared with the team |
-| Versioning | Filename increments freely | Filename stable — SVN tracks history |
-| Is it a deliverable? | No — never handed over | Yes — this is the handoff |
-
-The HDA is the one thing in this pipeline that is a deliverable without being a USD layer. Nothing resolves it by path the way a layer resolves its sublayers, but artists depend on it by name through the tab menu — so it lives in the project tree with the published data, not in the work tree with the HIP that built it (Section 17.3).
-
-When the rig changes, the rigger republishes the HDA and commits. The animator runs `svn update`, and the definition refreshes in place inside their existing scene — animation authored on the rig's parameters survives. No merging, no re-copying.
-
-**The HDA's interface is a contract.** Control names and parameter names are to rigging what prim paths are to everything else: rename or remove a control the animator has already animated on and their work breaks. Treat an interface change as a breaking change — coordinate before making it, exactly as Section 9.6 requires for prim paths.
-
-**The HDA references the published model USD internally**, so the geometry it deforms is always the current published asset. That is plumbing inside the HDA; the animator never sees it.
-
-> 👉 The HDA is the only published deliverable in this pipeline that is not a USD layer. It follows every publishing rule — stable filename, SVN history, notify downstream, interface-is-a-contract — but it is a tool handed to another artist, not a contribution to the composed scene. Nobody downstream of animation ever loads it. They see only the referenced asset and the animation overrides on top of it.
-
-### 12.2 What animation publishes
-
-There is no single right answer here, and picking one globally is a mistake. Choose per asset, from three lanes, in ascending order of machinery. Prefer the simplest lane the asset allows.
-
-**Lane 1 — Transform bake (the default for rigid and mechanical assets).**
-If the asset does not deform — a robot, a vehicle, a mechanism, most props — animation publishes time-sampled `xformOp` overrides on the prims that already exist under the instance path:
-
-```
-over "World" {
-    over "Characters" {
-        over "Hero" {
-            over "Geo" {
-                over "Head" {
-                    double3 xformOp:translate.timeSamples = { ... }
-                }
-            }
-        }
-    }
-}
-```
-
-This is the ideal citizen of this pipeline: genuinely sparse, small on disk, and readable. Use it wherever it is possible.
-
-**Lane 2 — Deformed geometry bake (the default for deforming characters).**
-Publish time-sampled point positions as overrides on the model's existing meshes: SOP Import the deformed character and write it out. Files are heavier — publish as `.usdc` (Section 5.4) — but the renderer sees exactly what the animator saw, nothing is re-evaluated downstream, and material bindings hold because the prim hierarchy is untouched.
-
-The contract this creates is **topology**: point count and point order must match the published model. A model topology change is therefore a breaking change for animation, on the same footing as a prim path rename — flag it under Section 9.6 and re-bake.
-
-**Lane 3 — UsdSkel (escalation only).**
-Publish the bind-pose skeleton (`char-robot_rig.usda`) with the asset and joint animation from the shot, and let the renderer skin at render time. This earns its complexity when you have crowds, memory pressure from many animated characters, or retargeting needs. It is also the most fragile corner of USD in practice — skinning is re-evaluated by Hydra, and it has more silent-failure modes than either lane above. For a small team's hero shots, you will probably never need it.
-
-**Consequence:** the `_rig` USD block is only required in Lane 3. In Lanes 1 and 2 the asset assembly does not need a skeleton at all, and the block should simply be omitted.
-
-### 12.3 The update loop
-
-Rigging and animation now run on the standard daily loop, with no special cases:
-
-```
-Model republished
-   → Rigger updates the rig against the new model, republishes char-robot_rig.hda, commits, notifies
-   → Animator SVN updates; the HDA definition refreshes in their open scene
-   → Animator verifies the animation still reads, re-bakes, republishes kilo-0010_anim.usdc, notifies lighting
-```
-
-Because both bake lanes publish *time-sampled* data, the stage timing conventions in Section 10.6 are a prerequisite, not a nicety: if `timeCodesPerSecond` disagrees between layers, animation plays at the wrong speed with no error anywhere.
-
-### 12.4 A note on KineFX and APEX
-
-This guide does not mandate a rigging technology. KineFX is the established path and is the safer floor for a team new to Houdini. APEX is SideFX's forward direction for character animation and is worth evaluating before you commit, particularly if character work will grow.
-
-The choice can wait, and it can differ per asset. Because the USD contract in 12.2 is technology-agnostic — downstream sees only transforms, deformed points, or UsdSkel data, never a rig — the KineFX/APEX decision lives entirely inside HIP-land and can be changed later without touching the pipeline. Rig one test character each way if it helps, let whoever does the most animation choose, and do not let the decision block anything else.
-
----
-
-## 13. Solaris Essentials
-
-### 13.1 The Layer Break LOP
-
-First, what a Layer Break does **not** do: nothing you do in a LOP network ever modifies an upstream file on disk. Composition is read-only in that direction, always.
-
-The real problem it solves is what your *published file* contains. A LOP network's stage includes everything you loaded for context. Without a Layer Break, the USD ROP writes all of it — so your sparse block would come out containing a full restatement of the set, the assets, and every upstream block. You would be re-publishing data you do not own, in a stronger layer than the artist who does own it, and their future changes would stop reaching the shot.
-
-A Layer Break discards everything below it from what gets written and starts a fresh layer above. Everything authored above the break — and only that — ends up in your published file.
-
-```
-[Sublayer LOP]       ← upstream context you are loading to work against
-[Layer Break]        ← everything below this is context, not your output
-[Edit/Override LOPs] ← your opinions
-[USD ROP]            ← writes only your layer
-```
-
-**Where the break goes: after context, before contribution.** The rule is not "after all references" — it is that the break separates what you *loaded to look at* from what you are *publishing*. Those are different things, and confusing them is the most common way to publish an empty layer.
-
-- A **Sublayer LOP bringing in upstream published work** for context goes *below* the break. You are not republishing the set.
-- A **Reference LOP placing an asset that is your own deliverable** goes *above* the break. When layout places the hero character, or the set dresser places a sofa, that reference **is** the contribution — put it below the break and it vanishes from the published file.
-- Anything that authors new prims you own — cameras, lights, imported caches — goes *above* the break.
-
-The test to apply: *if this disappeared from my published file, would my work be missing?* If yes, it belongs above the break.
-
-A network whose stage starts empty — a set dressing HIP that references props into a blank stage — needs no Layer Break at all. There is no upstream context to discard. (References to files on disk remain composition arcs in the written file; they are not flattened into it.)
-
-**Node colours confirm this is working.** Houdini assigns each layer a colour — not meaningful in itself, but the colour is consistent across all nodes writing to the same layer. When the colour changes at your Layer Break, that visually confirms your edits are isolated in a separate layer. If everything in your network is one colour and you expected a break, the Layer Break is missing or in the wrong position.
-
-### 13.2 The USD ROP
-
-Key settings:
-
-- **Save Path** — use environment variables here (Section 18). Never a local absolute path
-- **Output Primitive** — for asset publishing, set this to write only the subtree from a specific prim, not the entire stage
-- **Save Style** — this is the setting that controls flattening, and it is the one to get right. Choose the option that writes **only your layer**, not a flattened composed stage. A flattened publish loses composition structure and destroys downstream override capability
-- Verify the paths written *inside* the file are relative (Section 18), not absolute paths baked in at write time
-
-After publishing: open the USD file in `usdview` or as text and verify it contains only what you intended.
-
-### 13.3 The Reference LOP
-
-- **File Path** — use environment variables
-- **Primitive Path** — where in your stage the asset is placed: `/World/Characters/Hero`
-- **Reference Primitive** — which prim inside the file to pull from: `/CharRobot`. If blank, uses the default prim. Always set the default prim on published assets.
-
-### 13.4 Setting a Default Prim
-
-Every published asset USD must define a default prim. Without it, a reference with no explicit prim path produces nothing and shows no error — a silent failure.
-
-In USDA:
-
-```
-#usda 1.0
-(
-    defaultPrim = "CharRobot"
-)
-```
-
-In Solaris: set it on the **Configure Layer LOP** before your USD ROP — the same node that carries the stage metrics from Section 10.6. Treat a missing default prim as a publish error.
-
-### 13.5 Network organisation
-
-Node colours are assigned by Houdini and communicate layer membership — not node type. Use **named null nodes** as your own labelling system:
-
-```
-[NULL: INCOMING_LAYOUT_USD]
-[Reference LOP]
-[NULL: LAYER_BREAK_START]
-[Layer Break]
-[NULL: ANIM_EDITS_BEGIN]
-[SOP Import]
-[NULL: PUBLISH_OUTPUT]
-[USD ROP]
-```
-
-Anyone opening your HIP — including future you — should be able to understand the network without tracing every wire. A well-organised HIP is not optional. Iterative does not mean unreadable.
-
-### 13.6 Rendering: Karma and Husk
-
-What you render is the **shot root** — the fully composed `kilo-0010.usda`. Because it pulls in the set, the assets, and every block through composition, the renderer sees the whole assembled scene from that one file.
-
-There are two ways to render the same stage:
-
-- **Interactively, in Houdini.** The lighting block's Karma Render Settings LOP defines the camera, resolution, samples, AOVs, and output paths; a USD Render ROP renders from the GUI. This is where look and settings are dialled in.
-- **On the farm, with Husk.** `husk` is the standalone command-line USD renderer that ships with Houdini. It loads a composed USD stage, picks a Hydra render delegate (Karma by default), and renders with no interactive session — exactly what a farm needs. Each node runs the same stage for a different frame range.
-
-A representative invocation:
-
-```
-husk --renderer Karma \
-     --frame 1001 --frame-count 100 --make-output-path \
-     --output "$SHOTS/kilo/0010/render/beauty.$F4.exr" \
-     $SHOTS/kilo/0010/kilo-0010.usda
-```
-
-`--frame` is the start frame and `--frame-count` the number of frames. `--renderer` selects the Hydra render delegate.
-
-**Choosing CPU vs XPU is not a command-line flag.** It is part of the render delegate selection and is authored in the stage on the Karma Render Settings LOP, alongside everything else about the render. Set it in the lighting block, not on the farm submission.
-
-**Recent Houdini builds initialise the frame range from the stage.** `--frame` and `--frame-count` default to the stage's `startTimeCode` and `endTimeCode` metadata, which is exactly why Section 10.6 makes layout responsible for authoring them. On the farm you still pass the range explicitly, because each node renders a different slice of it.
-
-Flags change between Houdini builds — check `husk --help` for the version you are on.
-
-**Render settings live in the stage, not on the command line.** Camera, resolution, samples, and AOVs are authored as RenderSettings and Render Var prims (from the Karma Render Settings and Render Var LOPs) in the lighting block, so Husk reads them straight from the USD — you do not re-specify them as flags. Husk looks for RenderSettings under `/Render`.
-
-**Karma CPU vs XPU.** XPU is the hybrid CPU+GPU path — faster, shading with the same MaterialX, and a sensible default for look-dev and most shots. CPU is the full reference feature set and the ground truth. The production habit: when an XPU frame looks off, confirm it on CPU before committing a sequence.
-
-**Output.** Karma writes scene-linear ACEScg EXRs (Section 19), one per frame, into a per-shot `render/` folder that is **not** committed to SVN (Section 21). The view transform is applied in comp, never baked into the EXR.
-
----
-
-## 14. VariantSets
-
-VariantSets allow a single asset to carry named switchable alternatives that can be toggled without creating separate files.
-
-### 14.1 When to use VariantSets vs separate files
-
-| Situation | Use |
-| --- | --- |
-| Same asset, different LOD levels | VariantSet |
-| Same asset, different damage states | VariantSet |
-| Same asset, different seasonal look | VariantSet |
-| Two genuinely different assets | Separate files |
-
-### 14.2 Standard VariantSet names
-
-| VariantSet | Variants | Notes |
-| --- | --- | --- |
-| `lodVariant` | `LOD0`, `LOD1`, `LOD2`… | Add as many levels as needed. LOD0 is highest detail. Matches Unreal Engine convention. |
-| `damageVariant` | `pristine`, `damaged`, `destroyed` |  |
-
-Do not invent alternate names without a team discussion. Consistent names allow programmatic access.
-
-### 14.3 Who defines and who overrides
-
-**Modeling** defines the VariantSet structure. **Assembly** sets the production default. **Layout and Lighting** can override the active variant in their own layers without touching the asset:
-
-```
-over "World" {
-    over "Props" {
-        over "CrateA" (
-            variants = {
-                string damageVariant = "damaged"
-            }
-        ) {
-        }
-    }
-}
-```
-
-Note the syntax: `variants` is prim **metadata**, so it goes in the parentheses after the prim name — not inside the prim's body with the properties. Putting it in the body is a parse error, and it is the single most common mistake when hand-writing a variant override.
-
-This opinion lives only in the overriding block (here, layout). The asset file is unchanged.
-
----
-
-## 15. Instancing
-
-When the same asset appears many times in a scene — rocks, trees, crowd characters, debris — placing each one as a separate Reference would create a scene graph with thousands of individually composed prims. This is slow to load and slow to render.
-
-USD provides two mechanisms for this: **scene-level instancing** for a moderate number of repeated assets, and **PointInstancer** for very large numbers.
-
-### 15.1 Scene-level instancing
-
-When a prim is marked `instanceable = true`, USD recognises that all prims sharing the same composition structure can share a single composed prototype in memory. The scene graph shows each instance individually, but the underlying data is shared.
-
-**The flag is authored where the asset is placed, not inside the asset.** `instanceable` goes on the prim that carries the reference — so it is set by whoever does the placing: the set dresser, or layout. The asset's own assembly file knows nothing about it, which is correct, since the same asset may be instanced in one context and not in another.
-
-```
-# in sets/warehouse/set-warehouse_dressing.usda
-def Xform "CrateA" (
-    instanceable = true
-    references = @../../assets/prop-crate/prop-crate.usda@
-)
-{
-    double3 xformOp:translate = (4, 0, 2)
-    uniform token[] xformOpOrder = ["xformOp:translate"]
-}
-```
-
-**What you can and cannot override per instance.** This is the part that trips people up, and the boundary is not where most people guess. It is not about transforms versus materials — it is about the **instance root prim** versus everything **inside** the instance:
-
-- **On the instance root prim — allowed, and does not fork the prototype:** the transform, visibility, and even the material binding. These properties live on the instance prim itself, above the shared prototype, so varying them costs nothing. Scatter a hundred crates at different positions, hide a few, bind three of them to a different material — still one prototype.
-- **Inside the instance — not possible at all.** You cannot author an override on a prim beneath an instance. Descendants of an instance are *instance proxies*, and they are not editable. If you need to move the lid of one crate specifically, that crate cannot be an instance.
-- **Forks the prototype:** a difference in the instance's **composition** — in practice, a different variant selection. Each distinct variant selection produces its own prototype. A handful of distinct variants is fine; a unique variant per instance defeats the purpose, and you are back to one prototype per instance with extra steps.
-
-So: vary transforms, visibility, and root-level bindings freely. If instances need different *variants* and there are many of them, group them so each distinct look is one shared prototype, or use a PointInstancer (15.2) with the variation baked into the prototypes. If any instance needs edits *inside* it, do not instance that one.
-
-Use scene-level instancing when:
-- You have up to a few hundred repeated instances
-- No instance needs internal edits, and there are at most a handful of distinct variant selections
-- The asset is complex enough that memory sharing matters
-
-### 15.2 PointInstancer
-
-`UsdGeomPointInstancer` is the right tool for very large numbers of instances — foliage, rocks, crowd simulations, particle-driven props. It stores instances as a list of point positions, orientations, and scales referencing a set of prototype prims, rather than as individual scene graph entries.
-
-A PointInstancer can represent millions of instances with minimal scene graph cost. The tradeoff is that individual instances cannot easily carry overrides — they are all driven by the point data.
-
-In Houdini, PointInstancers are most naturally generated from SOP networks using the **Copy to Points** pattern, then brought into Solaris via a SOP Import LOP. The resulting USD is compact and renderer-friendly.
-
-Use this when:
-- You have hundreds to millions of instances
-- Instances do not need individual overrides
-- The content is driven procedurally (scatter, simulation, crowd)
-
-### 15.3 Which to use
-
-| Situation | Use |
-| --- | --- |
-| 5–200 repeated props varying by transform, visibility, or root-level binding | Scene-level instancing |
-| Forests, rocks, ground cover, crowds | PointInstancer |
-| A handful of manually placed assets | Plain references, no instancing needed |
-
----
-
-**Part III — Reference**
-
----
-
-## 16. Naming Conventions
-
-This section is the single reference for how all files, folders, and prims are named. It applies to every project. When in doubt about a name, come here first.
-
-**All of it is ours.** USD places almost no constraints on filenames, and none at all on the tokens and prefixes below. Everything in this section is a house convention, chosen so that a filename can be read — and parsed by tooling (16.10) — without opening it.
-
-### 16.1 General rules
-
-A filename is a sequence of **tokens**. The two separators have strict, non-overlapping jobs:
-
-- **Underscore (`_`) separates tokens** — and nothing else. Each `_` marks a boundary between, say, the asset name and the block, or the block and the artist.
-- **Hyphen (`-`) joins words inside a single token.** A multi-word name, block, or descriptor is written with hyphens: `char-robot`, `set-living-room`, `fg-dressing`, `rough-pass`.
-- **An underscore never appears inside a token, and a hyphen never separates tokens.** So `char-robot_model` is correct (name token `char-robot`, block token `model`); `char_robot_model` is wrong.
-
-The remaining rules:
-
-- All filenames and folders use **lowercase**
-- No spaces
-- No special characters
-- No words like `final`, `latest`, `new`, `test`, `fix`, or `FINAL` — ever
-- No dates in filenames
-- No double underscores — if a token is omitted, remove its underscore too
-- If a filename cannot be understood without opening it, it is wrong
-
-Allowed characters: `a-z  0-9  _  -  .`
-
----
-
-### 16.2 Asset prefixes
-
-An asset name is a single token. Its first word is a category prefix:
-
-| Category | Prefix | Examples |
-| --- | --- | --- |
-| Character | `char-` | `char-robot`, `char-hero`, `char-villain` |
-| Prop | `prop-` | `prop-crate`, `prop-table`, `prop-lamp` |
-| Environment | `env-` | `env-warehouse`, `env-ground`, `env-cliff` |
-| Vehicle | `veh-` | `veh-truck`, `veh-hovercraft` |
-| FX element | `fx-` | `fx-smoke`, `fx-sparks` |
-
-The prefix is hyphen-joined to the rest of the name because it is part of one token, not a separate token. `env-` is for standalone environment geometry that is referenced into a set — terrain, ground planes, architectural shells, large background structures. The distinction from `set-`: an `env-` asset is a single reusable building block (the warehouse shell), while a `set-` is the dressed, assembled space that references environments, props, and other assets together (the warehouse floor with crates, lighting, and surface wear).
-
-Sets use their own prefix:
-
-| Category | Prefix | Examples |
-| --- | --- | --- |
-| Set | `set-` | `set-living-room`, `set-warehouse`, `set-forest-clearing` |
-
----
-
-### 16.3 Sequence and shot codes
-
-**Sequences** use 3–5 lowercase letters: `kilo`, `lima`, `zulu`
-
-Those three are placeholders, and so is every sequence code in this guide's examples — a real project picks its own, usually something that names the location or the beat (`roof`, `chase`, `alley`). Whatever they are, they are decided once at the start of a project and recorded with it, not invented per shot by whoever sets one up first.
-
-**Shots** use 4-digit numbers, incrementing by 10: `0010`, `0020`, `0030`
-
-Incrementing by 10 leaves room to insert shots later without renumbering.
-
-**Shot context** is a single token: the sequence and shot joined by a hyphen — `kilo-0010`, `lima-0020`. (In the folder tree the sequence and shot are separate directories, `kilo/0010/`; in filenames they form one token.)
-
-> Note: Production tracking tools may display sequences as uppercase (KILO, LIMA). Filenames and folders always use lowercase.
-> 
-
----
-
-### 16.4 Block names
-
-Assets, sets, and shots are all built the same way: from any number of named **blocks** plus one **assembly** file that composes them (see Section 9). A block is one sparse layer owning a single concern. Its name is the last token in the published filename.
-
-Block names are **free-form**, lowercase, and use **hyphens** for word separation within the block name (never underscores — underscores separate the asset/set/shot name from the block name). There is no closed list of valid block names; you can create whatever blocks a given asset, set, or shot needs.
-
-For consistency, use these conventional names for the common disciplines rather than inventing synonyms:
-
-| Discipline | Conventional block name |
-| --- | --- |
-| Modeling | `model` |
-| Lookdev | `lookdev` |
-| Rigging | `rig` |
-| Set / shot dressing | `dressing` |
-| Layout | `layout` |
-| Animation | `anim` |
-| FX | `fx` |
-| Lighting | `lighting` |
-
-These are recommendations, not an enforced enum. When a block is more specific — a second lighting pass, a foreground dressing block, a per-room lighting block — name it descriptively with hyphens: `fg-dressing`, `room-a-lighting`, `key-light-pass`. The point is that the name communicates the block's single concern at a glance.
-
-**`assembly` is not a block name.** An assembly file holds no scene opinions of its own and so carries no block token — it is named with the clean entity name (Section 16.5). `assembly` is available as a *task* name for a HIP whose job is composing an entity's blocks, but composing an assembly is usually done in the same session as one of the blocks and needs no HIP of its own.
-
----
-
-### 16.5 Published USD filenames
-
-Assets, sets, and shots are all named the same way: **blocks carry a block token, assemblies do not.** Section 9 covers what blocks and assemblies *are*; this is only the naming.
-
-| Tier | Block pattern | Assembly pattern |
-| --- | --- | --- |
-| Asset | `<asset>_<block>.<ext>` | `<asset>.usda` |
-| Set | `set-<name>_<block>.<ext>` | `set-<name>.usda` |
-| Shot | `<sequence>-<shot>_<block>.<ext>` | `<sequence>-<shot>.usda` (the shot root) |
-
-Examples:
-
-```
-char-robot_model.usdc                 char-robot.usda
-char-robot_lookdev.usda               prop-crate.usda
-set-living-room_dressing.usda         set-living-room.usda
-set-living-room_fg-dressing.usda      set-warehouse.usda
-kilo-0010_layout.usda                 kilo-0010.usda
-kilo-0010_anim.usdc
-kilo-0010_fx-sparks.usdc              ← a second, more specific FX block
-```
-
-**Rules — identical for all three tiers:**
-
-- No artist name, no version number, in any published USD filename
-- The filename is stable — SVN tracks its history
-- The assembly (and shot root) is always `.usda` — pure composition, kept readable and diffable
-- Blocks choose their extension by content: `.usda` for composition, overrides, and materials; `.usdc` for geometry, animation, and caches (Section 5.4)
-
-The assembly is the file downstream work references or subLayers — shots reference asset assemblies, and the shot root subLayers the set assembly (Section 9.4).
-
----
-
-### 16.6 HIP filenames
-
-One pattern covers every tier:
-
-```
-<context>_<task>[_<descriptor>]_<artist>_v###.hip
-```
-
-**`<context>` is what the work is about.** Usually an entity, named exactly as its published files are — `char-robot`, `set-living-room`, `kilo-0010`. Where one HIP covers several entities at once, it is instead a descriptive group name under the same token rules: `props-batch-a`.
-
-As everywhere else in the guide, the *token* and the *folder* are spelled differently for sets and shots: the token is `set-living-room` where the folder is `living-room/`, and `kilo-0010` where the folders are `kilo/0010/` (Sections 16.2 and 16.3). The HIP sits in the work tree folder for that context (Section 17.2); its filename uses the token.
-
-**`<task>` is the work being done, not the block being written.** A session may publish one layer or several, so the task names the job rather than its output: `lighting` for a session that publishes the lighting block *and* the shot root, `model` for one that publishes eight props. Use the conventional discipline names from 16.4 where they fit.
-
-**`<descriptor>` is optional.** When omitted, remove the token and its underscore entirely.
-
-Examples:
-
-```
-kilo-0010_layout_ina_v001.hip
-kilo-0010_anim_erik_v001.hip
-kilo-0010_anim_blocking_erik_v002.hip      ← with descriptor
-kilo-0010_lighting_maria_v003.hip          ← publishes the lighting block and the shot root
-char-robot_model_alex_v001.hip
-char-robot_rig_alex_v002.hip
-char-robot_lookdev_maria_v001.hip
-prop-lamp_model_ina_v002.hip               ← one HIP builds the whole asset
-props-batch-a_model_alex_v002.hip          ← one HIP builds eight props
-```
-
-**Rules:**
-- Always include the artist name — HIP files are personal working files
-- Always include the version number
-- Increment the version on meaningful saves, handoffs, or significant changes
-- The convention applies wherever the file sits — no local renaming schemes
-
----
-
-### 16.7 Versioning
-
-- Always `v###` — three digits, zero-padded
-- Start at `v001`
-- Increment meaningfully — not on every minor save, but on any save you might want to return to
-- Never: `v1`, `v01`, `final`, `latest`, `v_real_final_2`
-
----
-
-### 16.8 Good and bad examples
-
-| Bad | Good | Why |
-| --- | --- | --- |
-| `char_robot_model.usdc` | `char-robot_model.usdc` | Underscore inside a name token — words within a token use hyphens |
-| `final_anim_v2.hip` | `kilo-0010_anim_erik_v002.hip` | Missing shot context, no artist |
-| `robotStuff.usd` | `char-robot_model.usdc` | Unclear asset, unclear task |
-| `lighting_new_v5.hip` | `kilo-0010_lighting_maria_v005.hip` | Missing shot context, no artist |
-| `test_render_latest.usd` | `kilo-0010_lighting.usda` | `latest` is not a version |
-| `kilo-0010_anim__erik_v001.hip` | `kilo-0010_anim_erik_v001.hip` | Double underscore means empty token |
-| `KILO-0010_layout.usda` | `kilo-0010_layout.usda` | Uppercase in filename |
-| `char-robot_lookdev_v3_FINAL.usda` | `char-robot_lookdev.usda` | Version and FINAL in published USD |
-
----
-
-### 16.9 Texture filenames
-
-Pattern:
-
-```
-<asset-or-set>[_<descriptor>]_<channel>_<resolution>.<ext>
-<asset-or-set>[_<descriptor>]_<channel>_<resolution>.<udim>.<ext>
-```
-
-The descriptor is optional. When omitted, remove the token and its underscore entirely — matching the same rule as HIP file descriptors. The channel token is a closed enum and acts as the parse anchor, making the descriptor unambiguous to both humans and tooling.
-
-**Channel tokens — closed list, no other values permitted**
-
-| Token | Meaning |
-| --- | --- |
-| `bc` | Base colour (RGB) |
-| `n` | Normal (RGB) |
-| `aormt` | AO / Roughness / Metalness (R / G / B in that order) |
-| `m` | Mask (Grayscale) |
-
-**Resolution tokens:** `1k`, `2k`, `4k`, `8k`
-
-**File formats:** `.exr`, `.png`, `.tif`
-
-**UDIM tiles** insert between resolution and extension.
-
-Examples:
-
-```
-char-robot_bc_4k.exr
-char-robot_body_bc_4k.exr
-char-robot_head_n_2k.exr
-char-robot_aormt_4k.1001.exr
-set-living-room_walls_aormt_4k.exr
-```
-
-Rules:
-
-- The channel token list is closed. Do not invent new tokens without a team discussion.
-- `aormt` channel order is always AO in R, Roughness in G, Metalness in B — never vary this.
-- The channel also fixes the colour space: `bc` is colour-managed, while `n`, `aormt`, and `m` are raw/linear data and must not be colour-managed. This is what OCIO's file rules rely on — see Section 19.
-- All filenames follow the same general rules as the rest of the guide: lowercase, no spaces, no dates, no version numbers.
-
----
-
-### 16.10 Regex validation patterns
-
-For tooling and pre-commit checks.
-
-Because `_` is the only token separator and tokens never contain `_`, every filename parses unambiguously: split on `_` and you have the tokens. A published block file is exactly `<name>_<block>` (one underscore); an assembly is `<name>` (no underscore). So the patterns below can validate structure, not just casing — though the authoritative record of which blocks actually exist for a tier is still the assembly's subLayer list (Section 9).
-
-Every token has the same shape: `[a-z0-9]+(?:-[a-z0-9]+)*` — lowercase, words joined by hyphens, no underscores. The patterns simply chain tokens with `_`.
-
-**Published asset/set block** (`<name>_<block>`; `.usda` or `.usdc`)
-
-```
-^[a-z0-9]+(?:-[a-z0-9]+)*_[a-z0-9]+(?:-[a-z0-9]+)*\.(usda|usdc)$
-```
-
-**Published asset/set assembly** (clean name, no underscore; `.usda` only)
-
-```
-^[a-z0-9]+(?:-[a-z0-9]+)*\.usda$
-```
-
-**Published shot block** (`<sequence>-<shot>_<block>`; `.usda` or `.usdc`)
-
-```
-^[a-z]{3,5}-[0-9]{4}_[a-z0-9]+(?:-[a-z0-9]+)*\.(usda|usdc)$
-```
-
-**Shot root** (`<sequence>-<shot>`; `.usda` only)
-
-```
-^[a-z]{3,5}-[0-9]{4}\.usda$
-```
-
-**HIP files** (`<context>_<task>[_<descriptor>]_<artist>_v###`)
-
-```
-^[a-z0-9]+(?:-[a-z0-9]+)*_[a-z0-9]+(?:-[a-z0-9]+)*(?:_[a-z0-9]+(?:-[a-z0-9]+)*)?_[a-z0-9]+(?:-[a-z0-9]+)*_v[0-9]{3}\.hip$
-```
-
-**Texture filename (non-UDIM)** (`<asset-or-set>[_<descriptor>]_<channel>_<resolution>`)
-
-```
-^[a-z0-9]+(?:-[a-z0-9]+)*(?:_[a-z0-9]+(?:-[a-z0-9]+)*)?_(bc|n|aormt|m)_(1k|2k|4k|8k)\.(exr|png|tif)$
-```
-
-**Texture filename (UDIM)**
-
-```
-^[a-z0-9]+(?:-[a-z0-9]+)*(?:_[a-z0-9]+(?:-[a-z0-9]+)*)?_(bc|n|aormt|m)_(1k|2k|4k|8k)\.[0-9]{4}\.(exr|png|tif)$
-```
-
----
-
-## 17. Folder Structure
+## 10. Folder Structure
 
 There are two trees, on two different storage systems, organised on different principles.
 
@@ -1499,16 +743,16 @@ The **work tree** holds HIPs and everything that feeds them. It lives on the sha
 
 The split is the one drawn in Section 4: published USD is the production data, a HIP is the tool that produces it. Nothing in the pipeline resolves a HIP by path, which is why the two can live apart — and why the work tree can be organised for the convenience of the person working rather than for a downstream reference.
 
-### 17.1 The project tree
+### 10.1 The project tree
 
-One folder per asset, set, and shot. Its published layers sit directly in it, and the assembly is identifiable at a glance because it is the one with no block token in its name (Section 16.5).
+One folder per asset, set, and shot. Its published layers sit directly in it, and the assembly is identifiable at a glance because it is the one with no block token in its name (Section 17.5).
 
 ```
 project_root/
 ├── assets/                                       ← individual reusable assets
 │   └── char-robot/
 │       ├── char-robot_model.usdc
-│       ├── char-robot_rig.usda                   ← bind-pose skeleton, UsdSkel only (12.2)
+│       ├── char-robot_rig.usda                   ← bind-pose skeleton, UsdSkel only (14.2)
 │       ├── char-robot_lookdev.usda
 │       ├── char-robot.usda                       ← assembly: clean name, no block token
 │       ├── tex/
@@ -1534,7 +778,7 @@ project_root/
 │   └── kilo/
 │       └── 0010/
 │           ├── kilo-0010_layout.usda
-│           ├── kilo-0010_anim.usdc               ← baked animation (12.2)
+│           ├── kilo-0010_anim.usdc               ← baked animation (14.2)
 │           ├── kilo-0010_fx.usdc
 │           ├── kilo-0010_lighting.usda
 │           ├── kilo-0010.usda                    ← shot root (the shot's assembly)
@@ -1550,7 +794,7 @@ project_root/
 │
 ├── houdini/
 │   ├── otls/
-│   │   └── char-robot_rig.hda                    ← published rig HDAs (12.1)
+│   │   └── char-robot_rig.hda                    ← published rig HDAs (14.1)
 │   ├── ocio/
 │   │   └── config.ocio                           ← pinned colour config (Section 19)
 │   └── packages/
@@ -1562,9 +806,9 @@ project_root/
 
 Because every layer sits beside its siblings, the paths inside a published file are short — an assembly points at its blocks by filename alone, and the longest path in the project is a shot root reaching across to a set (Section 18.1).
 
-Subfolders appear only where an entity needs them. `tex/` holds textures a published layer resolves. `materials/` holds separate material files, and only if the project uses Option B in Section 11.1. `cache/` holds any cache a published layer references — production data on the same footing as the layer itself (Section 21.3). `versions/` holds rollback snapshots where someone wants them (Section 20.2).
+Subfolders appear only where an entity needs them. `tex/` holds textures a published layer resolves. `materials/` holds separate material files, and only if the project uses Option B in Section 13.1. `cache/` holds any cache a published layer references — production data on the same footing as the layer itself (Section 21.3). `versions/` holds rollback snapshots where someone wants them (Section 20.2).
 
-### 17.2 The work tree
+### 10.2 The work tree
 
 Every HIP has an **owning folder** holding all of its versions and everything it depends on. Below each tier there is always a **context** folder; where a context holds more than one HIP, each gets a **task** subfolder.
 
@@ -1621,19 +865,795 @@ $WORK/
 
 **Inside the owning folder, use Houdini's standard project folders** — `geo/`, `sim/`, `render/`, `tex/`, `abc/`, `comp/` and the rest. This is not tidiness for its own sake. Because every version of a HIP lives in its owning folder, `$HIP` resolves to that folder, so Houdini's out-of-the-box defaults land exactly where they should with no parameter editing: a File Cache SOP writes to `$HIP/geo`, a DOP cache to `$HIP/sim`, a ROP to `$HIP/render`. Add whatever else a job needs — a `ref/` folder, a folder of client plates — but add to the standard layout rather than inventing a different one.
 
-### 17.3 What decides where a file goes
+### 10.3 What decides where a file goes
 
 One question sorts everything the pipeline produces: **does anything resolve it by path?**
 
 | | Lives in | Examples |
 | --- | --- | --- |
 | Referenced by a published layer | Project tree | USD layers, textures, published caches |
-| Handed to another artist, not referenced by a layer | Project tree | Rig HDAs (12.1) |
+| Handed to another artist, not referenced by a layer | Project tree | Rig HDAs (14.1) |
 | Referenced by nothing | Work tree | HIPs, source geometry, reference, scratch caches |
 
 Anything in the first two rows has a stable path that other people's work depends on, and moving it is a breaking change (Section 9.6). Anything in the third can be moved, renamed, or reorganised at any time without consequence — which is why artists are free to arrange the inside of an owning folder as the work demands.
 
-*For texture naming conventions and validation patterns, see Section 16.9.*
+*For texture naming conventions and validation patterns, see Section 17.9.*
+
+---
+
+**How the scene is built**
+
+Sections 11–16: what you author once you are inside a scene — the nodes, the prim paths, and the materials, rigs, variants, and instances built against them.
+
+---
+
+## 11. Solaris Essentials
+
+These are the nodes everything after this section assumes, which is why they come first. The Layer Break in particular decides whether a publish is correct or quietly wrong, and it is referenced throughout the rest of the guide.
+
+### 11.1 The Layer Break LOP
+
+First, what a Layer Break does **not** do: nothing you do in a LOP network ever modifies an upstream file on disk. Composition is read-only in that direction, always.
+
+The real problem it solves is what your *published file* contains. A LOP network's stage includes everything you loaded for context. Without a Layer Break, the USD ROP writes all of it — so your sparse block would come out containing a full restatement of the set, the assets, and every upstream block. You would be re-publishing data you do not own, in a stronger layer than the artist who does own it, and their future changes would stop reaching the shot.
+
+A Layer Break discards everything below it from what gets written and starts a fresh layer above. Everything authored above the break — and only that — ends up in your published file.
+
+```
+[Sublayer LOP]       ← upstream context you are loading to work against
+[Layer Break]        ← everything below this is context, not your output
+[Edit/Override LOPs] ← your opinions
+[USD ROP]            ← writes only your layer
+```
+
+**Where the break goes: after context, before contribution.** The rule is not "after all references" — it is that the break separates what you *loaded to look at* from what you are *publishing*. Those are different things, and confusing them is the most common way to publish an empty layer.
+
+- A **Sublayer LOP bringing in upstream published work** for context goes *below* the break. You are not republishing the set.
+- A **Reference LOP placing an asset that is your own deliverable** goes *above* the break. When layout places the hero character, or the set dresser places a sofa, that reference **is** the contribution — put it below the break and it vanishes from the published file.
+- Anything that authors new prims you own — cameras, lights, imported caches — goes *above* the break.
+
+The test to apply: *if this disappeared from my published file, would my work be missing?* If yes, it belongs above the break.
+
+A network whose stage starts empty — a set dressing HIP that references props into a blank stage — needs no Layer Break at all. There is no upstream context to discard. (References to files on disk remain composition arcs in the written file; they are not flattened into it.)
+
+**Node colours confirm this is working.** Houdini assigns each layer a colour — not meaningful in itself, but the colour is consistent across all nodes writing to the same layer. When the colour changes at your Layer Break, that visually confirms your edits are isolated in a separate layer. If everything in your network is one colour and you expected a break, the Layer Break is missing or in the wrong position.
+
+### 11.2 The USD ROP
+
+Key settings:
+
+- **Save Path** — use environment variables here (Section 18). Never a local absolute path
+- **Output Primitive** — for asset publishing, set this to write only the subtree from a specific prim, not the entire stage
+- **Save Style** — this is the setting that controls flattening, and it is the one to get right. Choose the option that writes **only your layer**, not a flattened composed stage. A flattened publish loses composition structure and destroys downstream override capability
+- Verify the paths written *inside* the file are relative (Section 18), not absolute paths baked in at write time
+
+After publishing: open the USD file in `usdview` or as text and verify it contains only what you intended.
+
+### 11.3 The Reference LOP
+
+- **File Path** — use environment variables
+- **Primitive Path** — where in your stage the asset is placed: `/World/Characters/Hero`
+- **Reference Primitive** — which prim inside the file to pull from: `/CharRobot`. If blank, uses the default prim. Always set the default prim on published assets.
+
+### 11.4 Setting a Default Prim
+
+Every published asset USD must define a default prim. Without it, a reference with no explicit prim path produces nothing and shows no error — a silent failure.
+
+In USDA:
+
+```
+#usda 1.0
+(
+    defaultPrim = "CharRobot"
+)
+```
+
+In Solaris: set it on the **Configure Layer LOP** before your USD ROP — the same node that carries the stage metrics from Section 12.6. Treat a missing default prim as a publish error.
+
+### 11.5 Network organisation
+
+Node colours are assigned by Houdini and communicate layer membership — not node type. Use **named null nodes** as your own labelling system:
+
+```
+[NULL: INCOMING_LAYOUT_USD]
+[Reference LOP]
+[NULL: LAYER_BREAK_START]
+[Layer Break]
+[NULL: ANIM_EDITS_BEGIN]
+[SOP Import]
+[NULL: PUBLISH_OUTPUT]
+[USD ROP]
+```
+
+Anyone opening your HIP — including future you — should be able to understand the network without tracing every wire. A well-organised HIP is not optional. Iterative does not mean unreadable.
+
+### 11.6 Rendering: Karma and Husk
+
+What you render is the **shot root** — the fully composed `kilo-0010.usda`. Because it pulls in the set, the assets, and every block through composition, the renderer sees the whole assembled scene from that one file.
+
+There are two ways to render the same stage:
+
+- **Interactively, in Houdini.** The lighting block's Karma Render Settings LOP defines the camera, resolution, samples, AOVs, and output paths; a USD Render ROP renders from the GUI. This is where look and settings are dialled in.
+- **On the farm, with Husk.** `husk` is the standalone command-line USD renderer that ships with Houdini. It loads a composed USD stage, picks a Hydra render delegate (Karma by default), and renders with no interactive session — exactly what a farm needs. Each node runs the same stage for a different frame range.
+
+A representative invocation:
+
+```
+husk --renderer Karma \
+     --frame 1001 --frame-count 100 --make-output-path \
+     --output "$SHOTS/kilo/0010/render/beauty.$F4.exr" \
+     $SHOTS/kilo/0010/kilo-0010.usda
+```
+
+`--frame` is the start frame and `--frame-count` the number of frames. `--renderer` selects the Hydra render delegate.
+
+**Choosing CPU vs XPU is not a command-line flag.** It is part of the render delegate selection and is authored in the stage on the Karma Render Settings LOP, alongside everything else about the render. Set it in the lighting block, not on the farm submission.
+
+**Recent Houdini builds initialise the frame range from the stage.** `--frame` and `--frame-count` default to the stage's `startTimeCode` and `endTimeCode` metadata, which is exactly why Section 12.6 makes layout responsible for authoring them. On the farm you still pass the range explicitly, because each node renders a different slice of it.
+
+Flags change between Houdini builds — check `husk --help` for the version you are on.
+
+**Render settings live in the stage, not on the command line.** Camera, resolution, samples, and AOVs are authored as RenderSettings and Render Var prims (from the Karma Render Settings and Render Var LOPs) in the lighting block, so Husk reads them straight from the USD — you do not re-specify them as flags. Husk looks for RenderSettings under `/Render`.
+
+**Karma CPU vs XPU.** XPU is the hybrid CPU+GPU path — faster, shading with the same MaterialX, and a sensible default for look-dev and most shots. CPU is the full reference feature set and the ground truth. The production habit: when an XPU frame looks off, confirm it on CPU before committing a sequence.
+
+**Output.** Karma writes scene-linear ACEScg EXRs (Section 19), one per frame, into a per-shot `render/` folder that is **not** committed to SVN (Section 21). The view transform is applied in comp, never baked into the EXR.
+
+---
+
+## 12. Scene Graph Conventions
+
+USD does not require any particular scene graph shape. It has no `/World`, no reserved names, no rule that geometry sits under `/Geo`. Everything in this section is a convention we adopted — some of it common across the industry, none of it enforced by the standard.
+
+It matters anyway, and arguably more than the parts USD does enforce: every override, every material binding, and every reference in this pipeline targets a prim **by path**. A path that does not match is a silent failure, not an error (5.2). Consistency here is what makes overrides possible at all, which is why these paths are fixed rather than per-artist preference.
+
+The one exception is 12.6, stage metrics — those are real USD metadata with real defaults, and are called out as such.
+
+### 12.1 Shot scene graph structure
+
+Every shot uses this fixed root structure:
+
+```
+/World                   (Xform)
+  /Characters            (Scope)
+  /Props                 (Scope)
+  /Environment           (Scope)
+  /FX                    (Scope)
+  /Cameras               (Scope)
+  /Lighting              (Scope)
+```
+
+`/World` is the root transform. All scene content lives under it. Do not add new top-level scopes without a team discussion.
+
+Scopes are organisational — they have no transform. Use Xforms when you need a transform.
+
+### 12.2 Asset instances in shots
+
+Assets placed into a shot live under the appropriate scope with a unique PascalCase instance name:
+
+```
+/World/Characters/Hero        ← char-hero.usda
+/World/Props/CrateA           ← prop-crate.usda, first instance
+/World/Props/CrateB           ← prop-crate.usda, second instance
+/World/Environment/Ground     ← env-ground.usda
+```
+
+### 12.3 Asset internal structure
+
+Inside a published asset USD, the root prim is PascalCase with no underscores:
+
+```
+/CharRobot               (Xform — root prim and default prim)
+  /Geo                   (Scope — all geometry)
+    /Body                (Mesh)
+    /Head                (Mesh)
+  /Mtl                   (Scope — materials)
+    /Paint               (Material)
+    /Metal               (Material)
+  /Rig                   (SkelRoot — if skeletal)
+    /Skel                (Skeleton)
+```
+
+Geometry always under `/Geo`. Materials always under `/Mtl`. Skeleton always under `/Rig`. These paths must be consistent across all assets — downstream references depend on them.
+
+### 12.4 Cameras and lights
+
+Cameras (owned by Layout):
+
+```
+/World/Cameras/Main
+/World/Cameras/Witness
+```
+
+Lights (owned by Lighting), named with descriptive PascalCase:
+
+```
+/World/Lighting/KeyLight
+/World/Lighting/FillLight
+/World/Lighting/SkyDome
+```
+
+Never name lights `Light1`, `Light2`. Names should communicate intent.
+
+### 12.5 Prim naming conventions
+
+Prim names follow **PascalCase** — capitalised words, no underscores, no spaces. This distinguishes them visually from filenames (which are lowercase, hyphen-and-underscore) and makes the scene graph easier to read.
+
+| Context | Convention | Examples |
+| --- | --- | --- |
+| Asset root prim | PascalCase, no underscores | `CharRobot`, `PropCrate`, `EnvWarehouse` |
+| Asset instance in shot | PascalCase, unique within its scope | `Hero`, `CrateA`, `CrateB` |
+| Lights | PascalCase, descriptive | `KeyLight`, `FillLight`, `SkyDome` |
+| Cameras | PascalCase | `Main`, `Witness` |
+| Internal asset structure | PascalCase | `Geo`, `Mtl`, `Rig`, `Body`, `Head` |
+
+Multiple instances of the same asset get a letter suffix: `CrateA`, `CrateB`, `CrateC`. Never `Crate1`, `Crate2` — letters sort more predictably and avoid confusion with shot numbering.
+
+The asset root prim name is derived directly from the asset name token, with hyphens removed and each word capitalised: `char-robot` → `CharRobot`, `prop-crate` → `PropCrate`. This makes the relationship between filename and prim path unambiguous.
+
+### 12.6 Stage metrics and time
+
+Scene graph structure is only half of what has to agree between layers. The other half is the **stage metrics** — the units, the up axis, and the timing. These are layer metadata, not prims, and they are silent when they disagree: an asset authored in centimetres composed into a set authored in metres does not error, it just arrives a hundred times too big or too small.
+
+Set these once, project-wide, and treat them as fixed:
+
+| Metadata | Project value | Notes |
+| --- | --- | --- |
+| `upAxis` | `Y` | USD's default and Houdini's default. Do not vary it per asset. |
+| `metersPerUnit` | `1` | One Houdini unit is one metre. USD's own default is `0.01` (centimetres), so this is a deliberate choice that must be authored, not assumed. |
+| `timeCodesPerSecond` | project frame rate | Must match the Houdini scene FPS. Mismatches show up as animation playing at the wrong speed, not as an error. |
+| `startTimeCode` / `endTimeCode` | the shot's frame range | Per shot, not project-wide. |
+
+**Who authors what.** Units and up axis belong on every published layer that contains geometry — set them in the **Configure Layer LOP** before your USD ROP, the same node that sets the default prim (Section 11.4). The frame rate is also per-layer metadata and should match everywhere.
+
+**The shot frame range is owned by layout.** Layout is where a shot's identity is first established — the camera, the blocking, and therefore the timing. The layout block authors `startTimeCode` and `endTimeCode`; every downstream block inherits the shot's range from the composed stage rather than each artist deciding independently. This matters practically as well as conceptually: recent Houdini builds initialise the frame range for command-line rendering from the stage's `startTimeCode` and `endTimeCode` (Section 11.6), so if those are wrong or missing, farm renders come out with the wrong frame count.
+
+Add these to the publish check: **every published layer states its units, up axis, and frame rate, and shot layers state the shot's frame range.** They cost one node to author and are close to impossible to debug after the fact.
+
+---
+
+## 13. Materials
+
+Lookdev and final render are always Houdini/Karma, so shading is authored in **MaterialX** and rendered by **Karma**. This section covers where material files live and how they are shaded. Colour management is project-wide infrastructure rather than a materials topic, and has its own section — see Section 19.
+
+### 13.1 Where materials can live
+
+**Option A — Inline in the lookdev file**
+
+Material definitions sit directly inside `char-robot_lookdev.usda`. The same file contains both the material networks and the bindings.
+
+This is the right choice for small productions where:
+- Materials are specific to one asset
+- You do not expect to share them elsewhere
+- The overhead of separate files is not justified
+
+**Option B — Separate material definition files**
+
+Material definitions live in their own files. The lookdev assignment layer references them.
+
+```
+assets/char-robot/
+    char-robot_lookdev.usda        ← references the below, adds bindings
+    materials/
+        char-robot_paint.usda
+        char-robot_metal.usda
+```
+
+This is the right choice when:
+- Materials are shared or reused across multiple assets
+- You want material definitions to be individually addressable for overrides
+
+**Be consistent within a project. Do not mix both approaches for the same asset.**
+
+### 13.2 Library materials
+
+Generic reusable materials — not specific to one asset — live in the library:
+
+```
+$LIBRARY/materials/metal-bare.usda
+$LIBRARY/materials/plastic.usda
+$LIBRARY/materials/glass.usda
+```
+
+Asset materials can reference library materials as a starting point. Changes to library materials affect every asset that references them — communicate before changing.
+
+### 13.3 Shading: MaterialX and Karma
+
+Author all shading in **MaterialX**. It is the USD-native shading standard, it is what Karma renders directly, and — unlike a renderer-specific VOP network — it survives the two things this pipeline depends on: USD interchange and the layering/override model. A MaterialX network travels with the asset and reads the same wherever the asset is referenced.
+
+Use `mtlxstandard_surface` as the default surface. Build the network inside a **Material Library LOP** (a MaterialX subnet); Karma CPU and XPU both render it natively.
+
+Materials live under the asset's `/Mtl` scope (Section 12.3) and are attached with a `material:binding`. Keeping every asset's materials under `/Mtl` is what lets lookdev publish a consistent, predictable structure that downstream layers can find.
+
+**`UsdPreviewSurface` is optional here.** Because lookdev and final render are always Karma, you do not need a separate preview surface for rendering. Author one only if you want assets to preview correctly in `usdview`, the Storm/GL viewport, or another DCC — it is a lightweight, portable fallback, not part of the Karma path.
+
+**Binding strength is the technical basis for the lookdev/lighting boundary.** A material binding carries a strength (`bindMaterialAs`): the default `weakerThanDescendants` lets a more specific binding deeper in the hierarchy win, while `strongerThanDescendants` forces a binding to override descendants. This is the exact mechanism behind the boundary in Section 9.5 — a lighter can rebind or tweak a material in the shot's lighting block and have it win over the asset's own binding, without editing the asset. The override lives in the lighting layer; the asset is untouched. When an override reveals a real problem with the base material, the fix goes back to lookdev.
+
+**Texture colour space is set by the channel token.** `bc` is colour-managed; `n`, `aormt`, and `m` are raw data and must not be. Naming a texture correctly (Section 17.9) is what gets its colour space right — see Section 19.
+
+---
+
+## 14. Rigging
+
+Rigging is the one place where the pipeline's normal shape does not quite fit, because **USD has no concept of a live rig**. Constraints, IK handles, control objects, and muscle systems do not exist in USD and cannot be published as a USD layer. They live in Houdini.
+
+The way through is to stop treating "rigging" as one handoff and split it into two independent contracts:
+
+1. **How the rig reaches the animator** — a Houdini-side problem, solved with an HDA. USD is not involved.
+2. **What animation publishes downstream** — a USD problem, solved with baked data. The rig is not involved.
+
+Solve them separately and rigging stops being an exception. Each half becomes an ordinary instance of the rules the rest of this guide already uses.
+
+### 14.1 The rig is published as an HDA
+
+Do **not** hand the rig HIP to the animator to copy from. A copied rig network is a one-time snapshot: every later rig fix has to be manually re-merged into the animator's scene, and nothing tracks whether what the animator has is current. That is the same failure this pipeline exists to prevent, just in HIP-land instead of USD-land.
+
+Package the rig as a **digital asset (HDA)** instead, saved to `$PROJECT/houdini/otls/`. That directory is already on `HOUDINI_OTLSCAN_PATH` (Section 18), so the rig simply appears in every artist's tab menu after an SVN update. The animator drops one node and has controls.
+
+The structure mirrors the HIP/USD split exactly:
+
+| | Rig HIP | Rig HDA |
+| --- | --- | --- |
+| Example | `char-robot_rig_alex_v003.hip` | `char-robot_rig.hda` |
+| Where it lives | The work tree (`$WORK`) | The project tree, `houdini/otls/` |
+| Who owns it | The rigger, individually | The Rigging role, shared with the team |
+| Versioning | Filename increments freely | Filename stable — SVN tracks history |
+| Is it a deliverable? | No — never handed over | Yes — this is the handoff |
+
+The HDA is the one thing in this pipeline that is a deliverable without being a USD layer. Nothing resolves it by path the way a layer resolves its sublayers, but artists depend on it by name through the tab menu — so it lives in the project tree with the published data, not in the work tree with the HIP that built it (Section 10.3).
+
+When the rig changes, the rigger republishes the HDA and commits. The animator runs `svn update`, and the definition refreshes in place inside their existing scene — animation authored on the rig's parameters survives. No merging, no re-copying.
+
+**The HDA's interface is a contract.** Control names and parameter names are to rigging what prim paths are to everything else: rename or remove a control the animator has already animated on and their work breaks. Treat an interface change as a breaking change — coordinate before making it, exactly as Section 9.6 requires for prim paths.
+
+**The HDA references the published model USD internally**, so the geometry it deforms is always the current published asset. That is plumbing inside the HDA; the animator never sees it.
+
+> 👉 The HDA is the only published deliverable in this pipeline that is not a USD layer. It follows every publishing rule — stable filename, SVN history, notify downstream, interface-is-a-contract — but it is a tool handed to another artist, not a contribution to the composed scene. Nobody downstream of animation ever loads it. They see only the referenced asset and the animation overrides on top of it.
+
+### 14.2 What animation publishes
+
+There is no single right answer here, and picking one globally is a mistake. Choose per asset, from three lanes, in ascending order of machinery. Prefer the simplest lane the asset allows.
+
+**Lane 1 — Transform bake (the default for rigid and mechanical assets).**
+If the asset does not deform — a robot, a vehicle, a mechanism, most props — animation publishes time-sampled `xformOp` overrides on the prims that already exist under the instance path:
+
+```
+over "World" {
+    over "Characters" {
+        over "Hero" {
+            over "Geo" {
+                over "Head" {
+                    double3 xformOp:translate.timeSamples = { ... }
+                }
+            }
+        }
+    }
+}
+```
+
+This is the ideal citizen of this pipeline: sparse, small on disk, and readable. Use it wherever it is possible.
+
+**Lane 2 — Deformed geometry bake (the default for deforming characters).**
+Publish time-sampled point positions as overrides on the model's existing meshes: SOP Import the deformed character and write it out. Files are heavier — publish as `.usdc` (Section 5.4) — but the renderer sees exactly what the animator saw, nothing is re-evaluated downstream, and material bindings hold because the prim hierarchy is untouched.
+
+The contract this creates is **topology**: point count and point order must match the published model. A model topology change is therefore a breaking change for animation, on the same footing as a prim path rename — flag it under Section 9.6 and re-bake.
+
+**Lane 3 — UsdSkel (escalation only).**
+Publish the bind-pose skeleton (`char-robot_rig.usda`) with the asset and joint animation from the shot, and let the renderer skin at render time. This earns its complexity when you have crowds, memory pressure from many animated characters, or retargeting needs. It is also the most fragile corner of USD in practice — skinning is re-evaluated by Hydra, and it has more silent-failure modes than either lane above. For a small team's hero shots, you will probably never need it.
+
+**Consequence:** the `_rig` USD block is only required in Lane 3. In Lanes 1 and 2 the asset assembly does not need a skeleton at all, and the block should simply be omitted.
+
+### 14.3 The update loop
+
+Rigging and animation now run on the standard daily loop, with no special cases:
+
+```
+Model republished
+   → Rigger updates the rig against the new model, republishes char-robot_rig.hda, commits, notifies
+   → Animator SVN updates; the HDA definition refreshes in their open scene
+   → Animator verifies the animation still reads, re-bakes, republishes kilo-0010_anim.usdc, notifies lighting
+```
+
+Because both bake lanes publish *time-sampled* data, the stage timing conventions in Section 12.6 are a prerequisite, not a nicety: if `timeCodesPerSecond` disagrees between layers, animation plays at the wrong speed with no error anywhere.
+
+### 14.4 A note on KineFX and APEX
+
+This guide does not mandate a rigging technology. KineFX is the established path and is the safer floor for a team new to Houdini. APEX is SideFX's forward direction for character animation and is worth evaluating before you commit, particularly if character work will grow.
+
+The choice can wait, and it can differ per asset. Because the USD contract in 14.2 is technology-agnostic — downstream sees only transforms, deformed points, or UsdSkel data, never a rig — the KineFX/APEX decision lives entirely inside HIP-land and can be changed later without touching the pipeline. Rig one test character each way if it helps, let whoever does the most animation choose, and do not let the decision block anything else.
+
+---
+
+## 15. VariantSets
+
+VariantSets allow a single asset to carry named switchable alternatives that can be toggled without creating separate files.
+
+### 15.1 When to use VariantSets vs separate files
+
+| Situation | Use |
+| --- | --- |
+| Same asset, different LOD levels | VariantSet |
+| Same asset, different damage states | VariantSet |
+| Same asset, different seasonal look | VariantSet |
+| Two genuinely different assets | Separate files |
+
+### 15.2 Standard VariantSet names
+
+| VariantSet | Variants | Notes |
+| --- | --- | --- |
+| `lodVariant` | `LOD0`, `LOD1`, `LOD2`… | Add as many levels as needed. LOD0 is highest detail. Matches Unreal Engine convention. |
+| `damageVariant` | `pristine`, `damaged`, `destroyed` |  |
+
+Do not invent alternate names without a team discussion. Consistent names allow programmatic access.
+
+### 15.3 Who defines and who overrides
+
+**Modeling** defines the VariantSet structure. **Assembly** sets the production default. **Layout and Lighting** can override the active variant in their own layers without touching the asset:
+
+```
+over "World" {
+    over "Props" {
+        over "CrateA" (
+            variants = {
+                string damageVariant = "damaged"
+            }
+        ) {
+        }
+    }
+}
+```
+
+Note the syntax: `variants` is prim **metadata**, so it goes in the parentheses after the prim name — not inside the prim's body with the properties. Putting it in the body is a parse error, and it is the single most common mistake when hand-writing a variant override.
+
+This opinion lives only in the overriding block (here, layout). The asset file is unchanged.
+
+---
+
+## 16. Instancing
+
+When the same asset appears many times in a scene — rocks, trees, crowd characters, debris — placing each one as a separate Reference would create a scene graph with thousands of individually composed prims. This is slow to load and slow to render.
+
+USD provides two mechanisms for this: **scene-level instancing** for a moderate number of repeated assets, and **PointInstancer** for very large numbers.
+
+### 16.1 Scene-level instancing
+
+When a prim is marked `instanceable = true`, USD recognises that all prims sharing the same composition structure can share a single composed prototype in memory. The scene graph shows each instance individually, but the underlying data is shared.
+
+**The flag is authored where the asset is placed, not inside the asset.** `instanceable` goes on the prim that carries the reference — so it is set by whoever does the placing: the set dresser, or layout. The asset's own assembly file knows nothing about it, which is correct, since the same asset may be instanced in one context and not in another.
+
+```
+# in sets/warehouse/set-warehouse_dressing.usda
+def Xform "CrateA" (
+    instanceable = true
+    references = @../../assets/prop-crate/prop-crate.usda@
+)
+{
+    double3 xformOp:translate = (4, 0, 2)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+```
+
+**What you can and cannot override per instance.** This is the part that trips people up, and the boundary is not where most people guess. It is not about transforms versus materials — it is about the **instance root prim** versus everything **inside** the instance:
+
+- **On the instance root prim — allowed, and does not fork the prototype:** the transform, visibility, and even the material binding. These properties live on the instance prim itself, above the shared prototype, so varying them costs nothing. Scatter a hundred crates at different positions, hide a few, bind three of them to a different material — still one prototype.
+- **Inside the instance — not possible at all.** You cannot author an override on a prim beneath an instance. Descendants of an instance are *instance proxies*, and they are not editable. If you need to move the lid of one crate specifically, that crate cannot be an instance.
+- **Forks the prototype:** a difference in the instance's **composition** — in practice, a different variant selection. Each distinct variant selection produces its own prototype. A handful of distinct variants is fine; a unique variant per instance defeats the purpose, and you are back to one prototype per instance with extra steps.
+
+So: vary transforms, visibility, and root-level bindings freely. If instances need different *variants* and there are many of them, group them so each distinct look is one shared prototype, or use a PointInstancer (16.2) with the variation baked into the prototypes. If any instance needs edits *inside* it, do not instance that one.
+
+Use scene-level instancing when:
+- You have up to a few hundred repeated instances
+- No instance needs internal edits, and there are at most a handful of distinct variant selections
+- The asset is complex enough that memory sharing matters
+
+### 16.2 PointInstancer
+
+`UsdGeomPointInstancer` is the right tool for very large numbers of instances — foliage, rocks, crowd simulations, particle-driven props. It stores instances as a list of point positions, orientations, and scales referencing a set of prototype prims, rather than as individual scene graph entries.
+
+A PointInstancer can represent millions of instances with minimal scene graph cost. The tradeoff is that individual instances cannot easily carry overrides — they are all driven by the point data.
+
+In Houdini, PointInstancers are most naturally generated from SOP networks using the **Copy to Points** pattern, then brought into Solaris via a SOP Import LOP. The resulting USD is compact and renderer-friendly.
+
+Use this when:
+- You have hundreds to millions of instances
+- Instances do not need individual overrides
+- The content is driven procedurally (scatter, simulation, crowd)
+
+### 16.3 Which to use
+
+| Situation | Use |
+| --- | --- |
+| 5–200 repeated props varying by transform, visibility, or root-level binding | Scene-level instancing |
+| Forests, rocks, ground cover, crowds | PointInstancer |
+| A handful of manually placed assets | Plain references, no instancing needed |
+
+---
+
+**Part III — Reference**
+
+---
+
+## 17. Naming Conventions
+
+This section is the single reference for how all files, folders, and prims are named. It applies to every project. When in doubt about a name, come here first.
+
+**All of it is ours.** USD places almost no constraints on filenames, and none at all on the tokens and prefixes below. Everything in this section is a house convention, chosen so that a filename can be read — and parsed by tooling (17.10) — without opening it.
+
+### 17.1 General rules
+
+A filename is a sequence of **tokens**. The two separators have strict, non-overlapping jobs:
+
+- **Underscore (`_`) separates tokens** — and nothing else. Each `_` marks a boundary between, say, the asset name and the block, or the block and the artist.
+- **Hyphen (`-`) joins words inside a single token.** A multi-word name, block, or descriptor is written with hyphens: `char-robot`, `set-living-room`, `fg-dressing`, `rough-pass`.
+- **An underscore never appears inside a token, and a hyphen never separates tokens.** So `char-robot_model` is correct (name token `char-robot`, block token `model`); `char_robot_model` is wrong.
+
+The remaining rules:
+
+- All filenames and folders use **lowercase**
+- No spaces
+- No special characters
+- No words like `final`, `latest`, `new`, `test`, `fix`, or `FINAL` — ever
+- No dates in filenames
+- No double underscores — if a token is omitted, remove its underscore too
+- If a filename cannot be understood without opening it, it is wrong
+
+Allowed characters: `a-z  0-9  _  -  .`
+
+---
+
+### 17.2 Asset prefixes
+
+An asset name is a single token. Its first word is a category prefix:
+
+| Category | Prefix | Examples |
+| --- | --- | --- |
+| Character | `char-` | `char-robot`, `char-hero`, `char-villain` |
+| Prop | `prop-` | `prop-crate`, `prop-table`, `prop-lamp` |
+| Environment | `env-` | `env-warehouse`, `env-ground`, `env-cliff` |
+| Vehicle | `veh-` | `veh-truck`, `veh-hovercraft` |
+| FX element | `fx-` | `fx-smoke`, `fx-sparks` |
+
+The prefix is hyphen-joined to the rest of the name because it is part of one token, not a separate token. `env-` is for standalone environment geometry that is referenced into a set — terrain, ground planes, architectural shells, large background structures. The distinction from `set-`: an `env-` asset is a single reusable building block (the warehouse shell), while a `set-` is the dressed, assembled space that references environments, props, and other assets together (the warehouse floor with crates, lighting, and surface wear).
+
+Sets use their own prefix:
+
+| Category | Prefix | Examples |
+| --- | --- | --- |
+| Set | `set-` | `set-living-room`, `set-warehouse`, `set-forest-clearing` |
+
+---
+
+### 17.3 Sequence and shot codes
+
+**Sequences** use 3–5 lowercase letters: `kilo`, `lima`, `zulu`
+
+Those three are placeholders, and so is every sequence code in this guide's examples — a real project picks its own, usually something that names the location or the beat (`roof`, `chase`, `alley`). Whatever they are, they are decided once at the start of a project and recorded with it, not invented per shot by whoever sets one up first.
+
+**Shots** use 4-digit numbers, incrementing by 10: `0010`, `0020`, `0030`
+
+Incrementing by 10 leaves room to insert shots later without renumbering.
+
+**Shot context** is a single token: the sequence and shot joined by a hyphen — `kilo-0010`, `lima-0020`. (In the folder tree the sequence and shot are separate directories, `kilo/0010/`; in filenames they form one token.)
+
+> Note: Production tracking tools may display sequences as uppercase (KILO, LIMA). Filenames and folders always use lowercase.
+> 
+
+---
+
+### 17.4 Block names
+
+Assets, sets, and shots are all built the same way: from any number of named **blocks** plus one **assembly** file that composes them (see Section 9). A block is one sparse layer owning a single concern. Its name is the last token in the published filename.
+
+Block names are **free-form**, lowercase, and use **hyphens** for word separation within the block name (never underscores — underscores separate the asset/set/shot name from the block name). There is no closed list of valid block names; you can create whatever blocks a given asset, set, or shot needs.
+
+For consistency, use these conventional names for the common disciplines rather than inventing synonyms:
+
+| Discipline | Conventional block name |
+| --- | --- |
+| Modeling | `model` |
+| Lookdev | `lookdev` |
+| Rigging | `rig` |
+| Set / shot dressing | `dressing` |
+| Layout | `layout` |
+| Animation | `anim` |
+| FX | `fx` |
+| Lighting | `lighting` |
+
+These are recommendations, not an enforced enum. When a block is more specific — a second lighting pass, a foreground dressing block, a per-room lighting block — name it descriptively with hyphens: `fg-dressing`, `room-a-lighting`, `key-light-pass`. The point is that the name communicates the block's single concern at a glance.
+
+**`assembly` is not a block name.** An assembly file holds no scene opinions of its own and so carries no block token — it is named with the clean entity name (Section 17.5). `assembly` is available as a *task* name for a HIP whose job is composing an entity's blocks, but composing an assembly is usually done in the same session as one of the blocks and needs no HIP of its own.
+
+---
+
+### 17.5 Published USD filenames
+
+Assets, sets, and shots are all named the same way: **blocks carry a block token, assemblies do not.** Section 9 covers what blocks and assemblies *are*; this is only the naming.
+
+| Tier | Block pattern | Assembly pattern |
+| --- | --- | --- |
+| Asset | `<asset>_<block>.<ext>` | `<asset>.usda` |
+| Set | `set-<name>_<block>.<ext>` | `set-<name>.usda` |
+| Shot | `<sequence>-<shot>_<block>.<ext>` | `<sequence>-<shot>.usda` (the shot root) |
+
+Examples:
+
+```
+char-robot_model.usdc                 char-robot.usda
+char-robot_lookdev.usda               prop-crate.usda
+set-living-room_dressing.usda         set-living-room.usda
+set-living-room_fg-dressing.usda      set-warehouse.usda
+kilo-0010_layout.usda                 kilo-0010.usda
+kilo-0010_anim.usdc
+kilo-0010_fx-sparks.usdc              ← a second, more specific FX block
+```
+
+**Rules — identical for all three tiers:**
+
+- No artist name, no version number, in any published USD filename
+- The filename is stable — SVN tracks its history
+- The assembly (and shot root) is always `.usda` — pure composition, kept readable and diffable
+- Blocks choose their extension by content: `.usda` for composition, overrides, and materials; `.usdc` for geometry, animation, and caches (Section 5.4)
+
+The assembly is the file downstream work references or subLayers — shots reference asset assemblies, and the shot root subLayers the set assembly (Section 9.4).
+
+---
+
+### 17.6 HIP filenames
+
+One pattern covers every tier:
+
+```
+<context>_<task>[_<descriptor>]_<artist>_v###.hip
+```
+
+**`<context>` is what the work is about.** Usually an entity, named exactly as its published files are — `char-robot`, `set-living-room`, `kilo-0010`. Where one HIP covers several entities at once, it is instead a descriptive group name under the same token rules: `props-batch-a`.
+
+As everywhere else in the guide, the *token* and the *folder* are spelled differently for sets and shots: the token is `set-living-room` where the folder is `living-room/`, and `kilo-0010` where the folders are `kilo/0010/` (Sections 17.2 and 17.3). The HIP sits in the work tree folder for that context (Section 10.2); its filename uses the token.
+
+**`<task>` is the work being done, not the block being written.** A session may publish one layer or several, so the task names the job rather than its output: `lighting` for a session that publishes the lighting block *and* the shot root, `model` for one that publishes eight props. Use the conventional discipline names from 17.4 where they fit.
+
+**`<descriptor>` is optional.** When omitted, remove the token and its underscore entirely.
+
+Examples:
+
+```
+kilo-0010_layout_ina_v001.hip
+kilo-0010_anim_erik_v001.hip
+kilo-0010_anim_blocking_erik_v002.hip      ← with descriptor
+kilo-0010_lighting_maria_v003.hip          ← publishes the lighting block and the shot root
+char-robot_model_alex_v001.hip
+char-robot_rig_alex_v002.hip
+char-robot_lookdev_maria_v001.hip
+prop-lamp_model_ina_v002.hip               ← one HIP builds the whole asset
+props-batch-a_model_alex_v002.hip          ← one HIP builds eight props
+```
+
+**Rules:**
+- Always include the artist name — HIP files are personal working files
+- Always include the version number
+- Increment the version on meaningful saves, handoffs, or significant changes
+- The convention applies wherever the file sits — no local renaming schemes
+
+---
+
+### 17.7 Versioning
+
+- Always `v###` — three digits, zero-padded
+- Start at `v001`
+- Increment meaningfully — not on every minor save, but on any save you might want to return to
+- Never: `v1`, `v01`, `final`, `latest`, `v_real_final_2`
+
+---
+
+### 17.8 Good and bad examples
+
+| Bad | Good | Why |
+| --- | --- | --- |
+| `char_robot_model.usdc` | `char-robot_model.usdc` | Underscore inside a name token — words within a token use hyphens |
+| `final_anim_v2.hip` | `kilo-0010_anim_erik_v002.hip` | Missing shot context, no artist |
+| `robotStuff.usd` | `char-robot_model.usdc` | Unclear asset, unclear task |
+| `lighting_new_v5.hip` | `kilo-0010_lighting_maria_v005.hip` | Missing shot context, no artist |
+| `test_render_latest.usd` | `kilo-0010_lighting.usda` | `latest` is not a version |
+| `kilo-0010_anim__erik_v001.hip` | `kilo-0010_anim_erik_v001.hip` | Double underscore means empty token |
+| `KILO-0010_layout.usda` | `kilo-0010_layout.usda` | Uppercase in filename |
+| `char-robot_lookdev_v3_FINAL.usda` | `char-robot_lookdev.usda` | Version and FINAL in published USD |
+
+---
+
+### 17.9 Texture filenames
+
+Pattern:
+
+```
+<asset-or-set>[_<descriptor>]_<channel>_<resolution>.<ext>
+<asset-or-set>[_<descriptor>]_<channel>_<resolution>.<udim>.<ext>
+```
+
+The descriptor is optional. When omitted, remove the token and its underscore entirely — matching the same rule as HIP file descriptors. The channel token is a closed enum and acts as the parse anchor, making the descriptor unambiguous to both humans and tooling.
+
+**Channel tokens — closed list, no other values permitted**
+
+| Token | Meaning |
+| --- | --- |
+| `bc` | Base colour (RGB) |
+| `n` | Normal (RGB) |
+| `aormt` | AO / Roughness / Metalness (R / G / B in that order) |
+| `m` | Mask (Grayscale) |
+
+**Resolution tokens:** `1k`, `2k`, `4k`, `8k`
+
+**File formats:** `.exr`, `.png`, `.tif`
+
+**UDIM tiles** insert between resolution and extension.
+
+Examples:
+
+```
+char-robot_bc_4k.exr
+char-robot_body_bc_4k.exr
+char-robot_head_n_2k.exr
+char-robot_aormt_4k.1001.exr
+set-living-room_walls_aormt_4k.exr
+```
+
+Rules:
+
+- The channel token list is closed. Do not invent new tokens without a team discussion.
+- `aormt` channel order is always AO in R, Roughness in G, Metalness in B — never vary this.
+- The channel also fixes the colour space: `bc` is colour-managed, while `n`, `aormt`, and `m` are raw/linear data and must not be colour-managed. This is what OCIO's file rules rely on — see Section 19.
+- All filenames follow the same general rules as the rest of the guide: lowercase, no spaces, no dates, no version numbers.
+
+---
+
+### 17.10 Regex validation patterns
+
+For tooling and pre-commit checks.
+
+Because `_` is the only token separator and tokens never contain `_`, every filename parses unambiguously: split on `_` and you have the tokens. A published block file is exactly `<name>_<block>` (one underscore); an assembly is `<name>` (no underscore). So the patterns below can validate structure, not just casing — though the authoritative record of which blocks actually exist for a tier is still the assembly's subLayer list (Section 9).
+
+Every token has the same shape: `[a-z0-9]+(?:-[a-z0-9]+)*` — lowercase, words joined by hyphens, no underscores. The patterns simply chain tokens with `_`.
+
+**Published asset/set block** (`<name>_<block>`; `.usda` or `.usdc`)
+
+```
+^[a-z0-9]+(?:-[a-z0-9]+)*_[a-z0-9]+(?:-[a-z0-9]+)*\.(usda|usdc)$
+```
+
+**Published asset/set assembly** (clean name, no underscore; `.usda` only)
+
+```
+^[a-z0-9]+(?:-[a-z0-9]+)*\.usda$
+```
+
+**Published shot block** (`<sequence>-<shot>_<block>`; `.usda` or `.usdc`)
+
+```
+^[a-z]{3,5}-[0-9]{4}_[a-z0-9]+(?:-[a-z0-9]+)*\.(usda|usdc)$
+```
+
+**Shot root** (`<sequence>-<shot>`; `.usda` only)
+
+```
+^[a-z]{3,5}-[0-9]{4}\.usda$
+```
+
+**HIP files** (`<context>_<task>[_<descriptor>]_<artist>_v###`)
+
+```
+^[a-z0-9]+(?:-[a-z0-9]+)*_[a-z0-9]+(?:-[a-z0-9]+)*(?:_[a-z0-9]+(?:-[a-z0-9]+)*)?_[a-z0-9]+(?:-[a-z0-9]+)*_v[0-9]{3}\.hip$
+```
+
+**Texture filename (non-UDIM)** (`<asset-or-set>[_<descriptor>]_<channel>_<resolution>`)
+
+```
+^[a-z0-9]+(?:-[a-z0-9]+)*(?:_[a-z0-9]+(?:-[a-z0-9]+)*)?_(bc|n|aormt|m)_(1k|2k|4k|8k)\.(exr|png|tif)$
+```
+
+**Texture filename (UDIM)**
+
+```
+^[a-z0-9]+(?:-[a-z0-9]+)*(?:_[a-z0-9]+(?:-[a-z0-9]+)*)?_(bc|n|aormt|m)_(1k|2k|4k|8k)\.[0-9]{4}\.(exr|png|tif)$
+```
 
 ---
 
@@ -1666,7 +1686,7 @@ So published USD uses **relative paths**, anchored to the file that contains the
 
 Relative paths need no configuration at all. The project can be moved, copied, checked out to a different drive letter, or handed to someone outside the team, and every reference still resolves — because the folder structure travels with the files.
 
-They stay short, too, because every entity's layers sit in one folder (Section 17.1). An assembly reaches its blocks by filename alone; the longest path in the project is a shot root reaching across to a set.
+They stay short, too, because every entity's layers sit in one folder (Section 10.1). An assembly reaches its blocks by filename alone; the longest path in the project is a shot root reaching across to a set.
 
 **Solaris already does this for you.** The USD ROP converts the paths you author into relative paths when it writes the file, by default. You author `$ASSETS/char-robot/...` in your parameters and get a relative path in the published USD without setting anything up — so this is a property of the pipeline to be aware of, not a step you have to perform.
 
@@ -1674,7 +1694,7 @@ They stay short, too, because every entity's layers sit in one folder (Section 1
 
 ### 18.2 Project variables
 
-A project has **two roots**, because the project tree and the work tree live on different storage systems (Section 17). Everything else derives from one or the other.
+A project has **two roots**, because the project tree and the work tree live on different storage systems (Section 10). Everything else derives from one or the other.
 
 | Variable | Points to | Tree |
 | --- | --- | --- |
@@ -1695,7 +1715,7 @@ $LIBRARY/materials/metal-bare.usda
 $WORK/shots/kilo/0010/lighting/
 ```
 
-Inside a HIP, `$HIP` resolves to that HIP's owning folder, which is why Houdini's own defaults — `$HIP/geo`, `$HIP/sim`, `$HIP/render` — already point where they should (Section 17.2). Use `$WORK` when you need to reach across to another artist's working files; use `$HIP` for your own.
+Inside a HIP, `$HIP` resolves to that HIP's owning folder, which is why Houdini's own defaults — `$HIP/geo`, `$HIP/sim`, `$HIP/render` — already point where they should (Section 10.2). Use `$WORK` when you need to reach across to another artist's working files; use `$HIP` for your own.
 
 ### 18.3 Distributing the environment: use a package
 
@@ -1722,7 +1742,7 @@ Use a **package** instead. Houdini reads JSON package files from `packages/` dir
 }
 ```
 
-Each artist sets two things — `PROJECT_ROOT`, wherever the SVN checkout lives on their machine, and `PROJECT_WORK_ROOT`, wherever the work drive is mounted — and everything else derives from those. `HOUDINI_OTLSCAN_PATH` is covered by the `path` entry, which is how the rig HDAs in `houdini/otls/` (Section 12.1) reach everyone.
+Each artist sets two things — `PROJECT_ROOT`, wherever the SVN checkout lives on their machine, and `PROJECT_WORK_ROOT`, wherever the work drive is mounted — and everything else derives from those. `HOUDINI_OTLSCAN_PATH` is covered by the `path` entry, which is how the rig HDAs in `houdini/otls/` (Section 14.1) reach everyone.
 
 The advantages over `houdini.env`: the configuration is versioned in the repo with everything else, multiple projects can coexist, and the farm gets the identical environment by pointing at the same file. When the project's environment changes, it changes for everyone on the next SVN update instead of requiring an email telling four people to edit a file in their home directory.
 
@@ -1740,7 +1760,7 @@ Houdini ships with a bundled ACES config, and for a small all-Karma team that is
 
 **Set the working space once.** In Edit ▸ OCIO Settings, set the Render Working Space to **ACEScg** and the View Transform to an ACES SDR video transform. Houdini's out-of-the-box defaults depend on the build and on whether an `OCIO` variable is present, so do not assume — open the settings, look, and set them deliberately at the start of a project. ACEScg is the house default; where a project needs something else (a client delivery spec, a broadcast requirement), that is a project-level decision and it should be written down with the project, not carried in anyone's head.
 
-**Texture colour spaces follow the channel tokens.** Houdini and Karma convert textures automatically from the OCIO file rules, and the channel tokens from Section 16.9 line up with those rules exactly: `bc` (base colour) is colour-managed (sRGB texture → working space); `n`, `aormt`, and `m` are **raw/linear data** and must not be colour-managed. The packed `aormt` map in particular must be read raw, or roughness and metalness come out wrong. Naming a texture correctly is therefore also what gets its colour space right.
+**Texture colour spaces follow the channel tokens.** Houdini and Karma convert textures automatically from the OCIO file rules, and the channel tokens from Section 17.9 line up with those rules exactly: `bc` (base colour) is colour-managed (sRGB texture → working space); `n`, `aormt`, and `m` are **raw/linear data** and must not be colour-managed. The packed `aormt` map in particular must be read raw, or roughness and metalness come out wrong. Naming a texture correctly is therefore also what gets its colour space right.
 
 **Render output stays linear; the look is applied downstream.** Karma writes scene-linear EXRs. Render in ACEScg — set it on the Karma Render Settings LOP (Image Output ▸ AOVs ▸ Output Colorspace) or include the colour space in the output filename, since an unmarked EXR may be interpreted by a default file rule rather than by what you intended. Do not bake the display/view transform into the EXR you hand to comp; the view transform — and any filmic tone map under Karma Render Settings ▸ Image Output ▸ Filters — is for review and LDR deliverables, applied on top of the linear render, not burned into it.
 
@@ -1754,9 +1774,9 @@ A USD file is not published until all of these are true:
 
 - Exports without errors
 - Loads correctly in a **fresh** Houdini session — not the one you authored it in
-- Contains **only your layer** — no restated upstream data (check the Layer Break, Section 13.1)
+- Contains **only your layer** — no restated upstream data (check the Layer Break, Section 11.1)
 - Asset paths written *inside* the file are **relative**, with no absolute path baked in (Section 18.1)
-- Stage metrics are set: units, up axis, frame rate — and frame range on shot layers (Section 10.6)
+- Stage metrics are set: units, up axis, frame rate — and frame range on shot layers (Section 12.6)
 - Default prim is set (for asset files)
 - Follows naming conventions
 - Committed to SVN
@@ -1792,7 +1812,7 @@ Nothing in the pipeline references the `versions/` folder.
 
 ## 21. Source Control (SVN)
 
-**SVN holds the project tree, and only the project tree** (Section 17.1). It is the record of what the production has produced — the published layers, and everything they resolve by path. Working files live on the work drive and are not part of it.
+**SVN holds the project tree, and only the project tree** (Section 10.1). It is the record of what the production has produced — the published layers, and everything they resolve by path. Working files live on the work drive and are not part of it.
 
 ### 21.1 Commit these
 
@@ -1811,7 +1831,7 @@ Nothing in the pipeline references the `versions/` folder.
 - Crash files
 - Personal scratch files
 
-The test for anything not on either list is the one in 17.3: **does a published layer resolve it by path?** If yes, it is production data and belongs in SVN. If nothing resolves it, it belongs in the work tree.
+The test for anything not on either list is the one in 10.3: **does a published layer resolve it by path?** If yes, it is production data and belongs in SVN. If nothing resolves it, it belongs in the work tree.
 
 ### 21.3 Caches that published layers depend on
 
@@ -1853,7 +1873,7 @@ Work through this in order. Most problems are a file path issue, a prim path iss
 
 ### Layer and composition
 
-- [ ]  Is your Layer Break placed correctly — context below it, your contribution above it? (Section 13.1)
+- [ ]  Is your Layer Break placed correctly — context below it, your contribution above it? (Section 11.1)
 - [ ]  Is your published layer **empty of your own work**? The break is probably too low — your own references or cameras fell below it.
 - [ ]  Is your published layer **full of upstream data**? The break is too high, or missing.
 - [ ]  Are all expected layers in the shot root? (Open `kilo-0010.usda` in a text editor)
@@ -1869,15 +1889,15 @@ Work through this in order. Most problems are a file path issue, a prim path iss
 
 ### Stage metrics and time
 
-- [ ]  Does every layer agree on `metersPerUnit` and `upAxis`? (An asset arriving 100× too large or small is a units mismatch, not a modelling error — Section 10.6)
+- [ ]  Does every layer agree on `metersPerUnit` and `upAxis`? (An asset arriving 100× too large or small is a units mismatch, not a modelling error — Section 12.6)
 - [ ]  Does `timeCodesPerSecond` match the Houdini scene FPS everywhere? (Animation at the wrong speed with no error)
 - [ ]  Does the shot have `startTimeCode` / `endTimeCode` authored in the layout block? (Wrong farm frame counts)
 
 ### Rigging and animation
 
-- [ ]  Did you SVN update to get the current rig HDA? (Section 12.1)
+- [ ]  Did you SVN update to get the current rig HDA? (Section 14.1)
 - [ ]  Did the HDA's control interface change — are your keys still on controls that exist?
-- [ ]  For a deformed-geometry bake: does point count and order still match the published model? (Section 12.2, Lane 2)
+- [ ]  For a deformed-geometry bake: does point count and order still match the published model? (Section 14.2, Lane 2)
 - [ ]  For UsdSkel: does the skeleton in the published rig USD match what the animation bake expects?
 - [ ]  If the rig was updated, was animation re-baked from the new rig?
 
@@ -1886,8 +1906,8 @@ Work through this in order. Most problems are a file path issue, a prim path iss
 - [ ]  Reference LOP with no default prim and no explicit prim path — produces nothing, no error
 - [ ]  Material binding pointing to a prim that was renamed in a model update
 - [ ]  FX cache with an absolute or local path that resolves on your machine but not others (Section 21.3)
-- [ ]  A variant override written with `variants` inside the prim body instead of its metadata — a parse error, easy to misread (Section 14.3)
-- [ ]  An override authored on a prim *inside* an instanceable prim — instance proxies are not editable and the edit is silently ignored (Section 15.1)
+- [ ]  A variant override written with `variants` inside the prim body instead of its metadata — a parse error, easy to misread (Section 15.3)
+- [ ]  An override authored on a prim *inside* an instanceable prim — instance proxies are not editable and the edit is silently ignored (Section 16.1)
 
 > 👉 Most problems are path problems, prim path problems, or a missing Layer Break. Start there.
 >
@@ -1957,7 +1977,7 @@ This traces a complete production cycle for one shot on a four-person flat team.
 
 **Alex: Modeling**
 
-Works in `$WORK/assets/char-robot/model/`, saving versions as he goes. Builds geometry in SOPs. Establishes the prim hierarchy in Solaris. On a **Configure Layer LOP**, sets the default prim to `CharRobot` and the stage metrics — Y up, `metersPerUnit = 1`, project frame rate (Section 10.6).
+Works in `$WORK/assets/char-robot/model/`, saving versions as he goes. Builds geometry in SOPs. Establishes the prim hierarchy in Solaris. On a **Configure Layer LOP**, sets the default prim to `CharRobot` and the stage metrics — Y up, `metersPerUnit = 1`, project frame rate (Section 12.6).
 
 Publishes:
 
@@ -1971,7 +1991,7 @@ Verifies in a fresh session, commits. Notifies Maria and himself: *“Model publ
 
 **Alex: Rigging** (parallel with Maria)
 
-Works in `$WORK/assets/char-robot/rig/` — a separate task, so a separate owning folder. References the model USD. Builds the rig. The robot is mechanical — no deformation — so this is a **Lane 1** asset (Section 12.2): animation will publish transform overrides, and no bind-pose skeleton USD is needed. The `rig` block therefore publishes no USD at all.
+Works in `$WORK/assets/char-robot/rig/` — a separate task, so a separate owning folder. References the model USD. Builds the rig. The robot is mechanical — no deformation — so this is a **Lane 1** asset (Section 14.2): animation will publish transform overrides, and no bind-pose skeleton USD is needed. The `rig` block therefore publishes no USD at all.
 
 What it publishes is the **rig HDA**:
 
@@ -2062,7 +2082,7 @@ LOP network:
 [USD ROP → set-living-room_dressing.usda]
 ```
 
-**No Layer Break here.** The stage starts empty and the references *are* Ina's contribution — placing those props is the entire job of set dressing. A Layer Break below the references would discard them and publish a file containing transform overrides on prims that do not exist: an empty set, no error. (Section 13.1)
+**No Layer Break here.** The stage starts empty and the references *are* Ina's contribution — placing those props is the entire job of set dressing. A Layer Break below the references would discard them and publish a file containing transform overrides on prims that do not exist: an empty set, no error. (Section 11.1)
 
 Publishes:
 
@@ -2156,9 +2176,9 @@ LOP network:
 [USD ROP → kilo-0010_layout.usda]
 ```
 
-The break placement is the thing to get right, and it is the opposite of what it looks like at first glance. The **set** is below the break: Ina is not republishing the living room. The **robot reference and the camera** are above it: those are her deliverables, and a break placed below them would silently strip the character and camera out of the published shot. The test is Section 13.1's — *if this vanished from my file, would my work be missing?*
+The break placement is the thing to get right, and it is the opposite of what it looks like at first glance. The **set** is below the break: Ina is not republishing the living room. The **robot reference and the camera** are above it: those are her deliverables, and a break placed below them would silently strip the character and camera out of the published shot. The test is Section 11.1's — *if this vanished from my file, would my work be missing?*
 
-Layout also owns the shot's frame range (Section 10.6), because layout is where the shot's timing is first established.
+Layout also owns the shot's frame range (Section 12.6), because layout is where the shot's timing is first established.
 
 Publishes:
 
@@ -2176,7 +2196,7 @@ SVN updates — which brings him both the layout block and any rig HDA changes.
 
 His animation HIP, in `$WORK/shots/kilo/0010/anim/`, does two things. For **context**, it subLayers the shot's stack so far, in shot root order: the set, then layout. This matters — the layout block on its own is sparse. It contains a camera and a reference to the robot, and nothing else; the living room only appears when the set is subLayered beneath it. Loading just the previous block gives an almost-empty stage, which is the most common confusion when people first work this way.
 
-For **authoring**, it contains the `char-robot_rig` HDA from the tab menu, giving Erik live controls. He animates on those controls, then bakes: this is a Lane 1 asset (Section 12.2), so the bake extracts per-part transforms and a SOP Import LOP brings them onto the stage as time-sampled overrides on the prims layout already established.
+For **authoring**, it contains the `char-robot_rig` HDA from the tab menu, giving Erik live controls. He animates on those controls, then bakes: this is a Lane 1 asset (Section 14.2), so the bake extracts per-part transforms and a SOP Import LOP brings them onto the stage as time-sampled overrides on the prims layout already established.
 
 LOP network:
 
@@ -2244,7 +2264,7 @@ $SHOTS/kilo/0010/kilo-0010_lighting.usda
 $SHOTS/kilo/0010/kilo-0010.usda
 ```
 
-Renders from the shot root — interactively via the USD Render ROP, or on the farm with Husk (Section 13.6).
+Renders from the shot root — interactively via the USD Render ROP, or on the farm with Husk (Section 11.6).
 
 ---
 
@@ -2258,7 +2278,7 @@ If prim paths *did* change, this is a breaking change and must be flagged explic
 
 **If the rig updates:**
 
-Alex republishes `char-robot_rig.hda`. Erik runs `svn update` and the definition refreshes in his open scene. If Alex only changed rig internals, Erik's animation is untouched and he simply re-bakes. If Alex renamed or removed a control Erik has keys on, that is a breaking change and needed coordinating before it happened (Section 12.1).
+Alex republishes `char-robot_rig.hda`. Erik runs `svn update` and the definition refreshes in his open scene. If Alex only changed rig internals, Erik's animation is untouched and he simply re-bakes. If Alex renamed or removed a control Erik has keys on, that is a breaking change and needed coordinating before it happened (Section 14.1).
 
 **If the set dressing changes:**
 
@@ -2300,15 +2320,15 @@ Authoritative references for going deeper. The OpenUSD links cover the standard 
 - [Solaris / LOPs documentation](https://www.sidefx.com/docs/houdini/solaris/) — the LOPs context this whole guide is built on.
 - [LOPs & USD Glossary](https://www.sidefx.com/docs/houdini/solaris/glossary.html) — USD terms mapped to Houdini's wording; useful where the two differ.
 - [Karma documentation](https://www.sidefx.com/docs/houdini/karma/) — the renderer, CPU and XPU.
-- [husk command-line renderer](https://www.sidefx.com/docs/houdini/ref/utils/husk.html) — the full, version-specific flag reference for farm rendering (Section 13.6).
-- [Digital assets (HDAs)](https://www.sidefx.com/docs/houdini/assets/) — how rigs are packaged and published (Section 12.1).
+- [husk command-line renderer](https://www.sidefx.com/docs/houdini/ref/utils/husk.html) — the full, version-specific flag reference for farm rendering (Section 11.6).
+- [Digital assets (HDAs)](https://www.sidefx.com/docs/houdini/assets/) — how rigs are packaged and published (Section 14.1).
 - [USD Render ROP](https://www.sidefx.com/docs/houdini/nodes/out/usdrender.html) — rendering the stage from inside Houdini.
 - [Colour management (OCIO) in Houdini](https://www.sidefx.com/docs/houdini/solaris/ocio.html) — the authoritative version of Section 19.
 
 **Shading and colour**
 
-- [MaterialX](https://materialx.org/) — the shading standard used for lookdev (Section 11.3).
-- [UsdSkel schema](https://openusd.org/release/api/usd_skel_page_front.html) — the skeletal animation schema, if you reach Lane 3 in Section 12.2.
+- [MaterialX](https://materialx.org/) — the shading standard used for lookdev (Section 13.3).
+- [UsdSkel schema](https://openusd.org/release/api/usd_skel_page_front.html) — the skeletal animation schema, if you reach Lane 3 in Section 14.2.
 - [Houdini packages](https://www.sidefx.com/docs/houdini/ref/plugins.html) — how the project environment reaches each artist (Section 18.3).
 - [OpenColorIO](https://opencolorio.org/) — the colour-management system behind the OCIO config (Section 19).
 
