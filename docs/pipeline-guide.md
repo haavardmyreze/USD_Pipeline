@@ -69,7 +69,7 @@ On a traditional production — Maya, Cinema 4D, Blender — a scene lives in on
 - It is hard to know what changed, when, or why
 - The file grows heavier and more fragile as production continues
 
-Those tools all have partial answers — references, XRefs, linked files — and they work, up to a point. Where they run out is worth naming precisely, because it is exactly what USD fixes: they let you *split* a scene, but they give you no shared rules for how the pieces recombine. Every studio invents its own, informally, and the conventions end up living in people's heads rather than in the format. Changing upstream data from downstream — adjusting something someone else already finished, without going back to them — is possible in some of them and fragile in all of them.
+Those tools all have partial answers — references, XRefs, linked files — and they work, up to a point. Where they run out is worth naming precisely, because it is exactly what USD fixes: they let you *split* a scene, but they give you no shared rules for how the pieces recombine. Every studio invents its own, informally, and the conventions end up living in people's heads rather than in the format. Changing upstream data from downstream — adjusting something someone else already finished, without going back to them and without duplicating their work — is possible in some of them and fragile in all of them.
 
 **USD is that missing set of rules.** It defines a consistent way for many separate files to combine into one scene. No single file owns the scene: everyone contributes their own, and the scene is assembled from those contributions automatically — including, and this is the part that changes how a team works, contributions that change what someone upstream did without touching their file.
 
@@ -101,7 +101,7 @@ USD was built for productions far larger than ours, and much of what it can do w
 
 - **Parallel work on the same shot.** Layout, animation, FX, and lighting proceed at once, without waiting, locking, or merging.
 - **A clean line between the work and the production data.** Your Houdini files are yours to break, restructure, and version however you like — nothing reaches anyone until you publish. The production data holds only finished contributions, so it can be handed to the farm, a vendor, or whoever picks up your task next without explanation.
-- **Overrides that survive.** Any stage can override what came before it without editing anyone's file. If a shot needs a lamp brighter than the set has it, you say so in your own file — the set is untouched, other shots are unaffected, and it holds when the set changes.
+- **Overrides that survive.** Any stage can override what came before it without editing anyone's file. If a shot needs a lamp brighter than the set has it, that is declared as an override in the shot's own file — the set is untouched, other shots are unaffected, and it holds when the set changes.
 - **Sets built once, used everywhere.** A room is dressed and lit one time. Every shot in that location inherits it, and fixing the room fixes every shot at once.
 - **One file to render, with links that hold.** The farm is handed a single shot file that pulls in everything else — nothing to put together by hand, no exports to keep in sync. And because the links between those files are part of the published data rather than something rebuilt at submission time, they resolve the same on a farm machine as on the one they were made on. Missing textures and broken references on submission — the classic farm failure — largely stop happening. (Section 16)
 - **A history that means something.** Every change is a commit by a named person with a reason attached, and any state can be recovered.
@@ -167,8 +167,6 @@ A few words you will see throughout. These four are USD's own, and mean the same
 - A **layer** is a single USD file — one `.usda` or `.usdc` on disk — and everything it contributes to the scene. Layers are the unit of collaboration: each artist authors their own layer, and each published file in this pipeline is one.
 - A **prim** (primitive) is a node in the scene hierarchy — a mesh, a light, a camera, a transform, a material.
 - An **opinion** is a single statement of a value on a prim — the intensity of a light, the position of an asset, the roughness of a material. Many layers can hold opinions about the same value; composition decides which one wins.
-
-This is what makes the pipeline work: a downstream artist can override a value an upstream artist authored **without modifying the upstream file**. The lighter can move a prop the layout artist placed, and if layout later republishes, the lighter's override still applies on top. Because of that, "the scene" is not a file anyone owns — it is assembled at runtime from everyone's layers.
 
 Two words we use constantly are **not** USD's. In this pipeline every published USD file is one or the other, and nothing else:
 
@@ -236,7 +234,7 @@ Two rules make this work, and they are worth separating because they are differe
 
 So layout's file stays exactly as it was, and if layout later re-blocks the shot and republishes, the nudge still applies on top. Nobody merged anything, nobody overwrote anyone, and four people worked the same shot in parallel.
 
-That is what USD buys you. The rest of this guide is how to make it work in practice.
+That is what USD buys you.
 
 ### What this asks of you
 
@@ -368,7 +366,7 @@ The other four letters only come into play when several *different* arc types co
 
 Everything in a USD scene is a **prim** (primitive): meshes, lights, cameras, materials, transforms (Xforms), and organisational groups (Scopes).
 
-Prims live at **prim paths**:
+Prims live at **prim paths**, describing where a prim sits in the scene hierarchy:
 
 ```
 /World/Characters/Hero
@@ -633,7 +631,7 @@ A shot is a specific moment — a particular range of frames with a specific cam
 Set → Layout → Animation → FX → Lighting → Shot Root
 ```
 
-**Composition order is the reverse of the build order.** Earlier-listed sublayers are stronger (Section 4.1), so the shot root lists lighting — the last department to touch the shot — at the top, and the set at the bottom:
+The shot root lists lighting — the last department to touch the shot — at the top, and the set at the bottom, because earlier-listed sublayers are stronger (Section 4.1):
 
 ```
 #usda 1.0
@@ -664,10 +662,6 @@ over "World" {
     }
 }
 ```
-
-**Layout owns the shot's frame range** — `startTimeCode` and `endTimeCode`, because layout is where a shot's timing is first established (Section 10.6).
-
-**Who creates the shot root:** whoever is acting as project lead for the shot — on a small flat team, typically the lighting artist, since they are last in the chain.
 
 ### 7.5 Ownership
 
@@ -733,6 +727,7 @@ project_root/
 │       ├── char-robot_rig.usda                   ← bind-pose skeleton, UsdSkel only (12.2)
 │       ├── char-robot_lookdev.usda
 │       ├── char-robot.usda                       ← assembly: clean name, no block token
+│       ├── char-robot_rig.hda                    ← the rig, for animators (12.1)
 │       ├── tex/
 │       │   ├── char-robot_bc_4k.exr
 │       │   ├── char-robot_n_2k.exr
@@ -772,7 +767,7 @@ project_root/
 │
 ├── houdini/
 │   ├── otls/
-│   │   └── char-robot_rig.hda                    ← published rig HDAs (12.1)
+│   │   └── usd-publish.hda                       ← project-wide tools, on the tab menu
 │   ├── ocio/
 │   │   └── config.ocio                           ← pinned colour config (Section 17)
 │   └── packages/
@@ -788,7 +783,19 @@ Subfolders appear only where an entity needs them. `tex/` holds textures a publi
 
 ### 8.2 The work tree
 
-Every HIP has an **owning folder** holding all of its versions and everything it depends on. Below each tier there is always a **context** folder; where a context holds more than one HIP, each gets a **task** subfolder.
+Three levels, and only the first two are named by the pipeline:
+
+```
+$WORK/
+└── <tier>/          ← assets, sets, or shots
+    └── <context>/   ← what the work is about: one entity, or a named group
+        └── <task>/  ← the owning folder: one HIP, all its versions,
+                        and everything that HIP depends on
+```
+
+The **owning folder** is the unit that matters. Every HIP has one, and it holds all of that HIP's versions alongside its source geometry, reference, and scratch caches. Where a context has only one HIP, the context folder *is* the owning folder and there is no task level.
+
+In full:
 
 ```
 $WORK/
@@ -869,28 +876,28 @@ Sections 9–14: what you author once you are inside a scene — the nodes, the 
 
 These are the nodes everything after this section assumes, which is why they come first. The Layer Break in particular decides whether a publish is correct or quietly wrong, and it is referenced throughout the rest of the guide.
 
+Worth knowing before any of them: **nothing you do in a LOP network changes a file on disk.** Composition only ever reads. What these nodes control is what gets *written* when you publish, which is a separate and deliberate act.
+
 ### 9.1 The Layer Break LOP
 
-First, what a Layer Break does **not** do: nothing you do in a LOP network ever modifies an upstream file on disk. Composition is read-only in that direction, always.
+**A Layer Break marks where your own work starts.** It is a node you place in your LOP network, and it draws a line across the flow: everything *before* it — upstream of it in the graph — is treated as material you loaded to work against, and everything *after* it is treated as yours. When you publish, only what comes after the break is written out.
 
-The real problem it solves is what your *published file* contains. A LOP network's stage includes everything you loaded for context. Without a Layer Break, the USD ROP writes all of it — so your sparse block would come out containing a full restatement of the set, the assets, and every upstream block. You would be re-publishing data you do not own, in a stronger layer than the artist who does own it, and their future changes would stop reaching the shot.
-
-A Layer Break discards everything below it from what gets written and starts a fresh layer above. Everything authored above the break — and only that — ends up in your published file.
+You need that line because of how a LOP network is built. To do your job you load other people's published work first — the set, the assets, the blocks that came before yours — so you can see what you are working against. All of that becomes part of the stage in your network, indistinguishable from the parts you authored yourself. Without a Layer Break, the USD ROP writes the whole lot: your sparse block comes out containing a full copy of the set, the assets, and every upstream block. You would be republishing data you do not own, in a stronger layer than the artist who does own it, and their future changes would stop reaching the shot.
 
 ```
-[Sublayer LOP]       ← upstream context you are loading to work against
-[Layer Break]        ← everything below this is context, not your output
-[Edit/Override LOPs] ← your opinions
-[USD ROP]            ← writes only your layer
+[Sublayer LOP]       ← before the break: context you loaded to work against
+[Layer Break]        ← the line
+[Edit/Override LOPs] ← after the break: your contribution
+[USD ROP]            ← writes only what came after the break
 ```
 
 **Where the break goes: after context, before contribution.** The rule is not "after all references" — it is that the break separates what you *loaded to look at* from what you are *publishing*. Those are different things, and confusing them is the most common way to publish an empty layer.
 
-- A **Sublayer LOP bringing in upstream published work** for context goes *below* the break. You are not republishing the set.
-- A **Reference LOP placing an asset that is your own deliverable** goes *above* the break. When layout places the hero character, or the set dresser places a sofa, that reference **is** the contribution — put it below the break and it vanishes from the published file.
-- Anything that authors new prims you own — cameras, lights, imported caches — goes *above* the break.
+- A **Sublayer LOP bringing in upstream published work** for context goes *before* the break. You are not republishing the set.
+- A **Reference LOP placing an asset that is your own deliverable** goes *after* the break. When layout places the hero character, or the set dresser places a sofa, that reference **is** the contribution — put it before the break and it vanishes from the published file.
+- Anything that authors new prims you own — cameras, lights, imported caches — goes *after* the break.
 
-The test to apply: *if this disappeared from my published file, would my work be missing?* If yes, it belongs above the break.
+The test to apply: *if this disappeared from my published file, would my work be missing?* If yes, it belongs after the break.
 
 A network whose stage starts empty — a set dressing HIP that references props into a blank stage — needs no Layer Break at all. There is no upstream context to discard. (References to files on disk remain composition arcs in the written file; they are not flattened into it.)
 
@@ -987,7 +994,23 @@ It matters anyway, and arguably more than the parts USD does enforce: every over
 
 The one exception is 10.6, stage metrics — those are real USD metadata with real defaults, and are called out as such.
 
-### 10.1 Shot scene graph structure
+### 10.1 Prim naming conventions
+
+Prim names follow **PascalCase** — capitalised words, no underscores, no spaces. This distinguishes them visually from filenames (which are lowercase, hyphen-and-underscore) and makes the scene graph easier to read.
+
+| Context | Convention | Examples |
+| --- | --- | --- |
+| Asset root prim | PascalCase, no underscores | `CharRobot`, `PropCrate`, `EnvWarehouse` |
+| Asset instance in shot | PascalCase, unique within its scope | `Hero`, `CrateA`, `CrateB` |
+| Lights | PascalCase, descriptive | `KeyLight`, `FillLight`, `SkyDome` |
+| Cameras | PascalCase | `Main`, `Witness` |
+| Internal asset structure | PascalCase | `Geo`, `Mtl`, `Rig`, `Body`, `Head` |
+
+Multiple instances of the same asset get a letter suffix: `CrateA`, `CrateB`, `CrateC`. Never `Crate1`, `Crate2` — letters sort more predictably and avoid confusion with shot numbering.
+
+The asset root prim name is derived directly from the asset name token, with hyphens removed and each word capitalised: `char-robot` → `CharRobot`, `prop-crate` → `PropCrate`. This makes the relationship between filename and prim path unambiguous.
+
+### 10.2 Shot scene graph structure
 
 Every shot uses this fixed root structure:
 
@@ -1005,7 +1028,7 @@ Every shot uses this fixed root structure:
 
 Scopes are organisational — they have no transform. Use Xforms when you need a transform.
 
-### 10.2 Asset instances in shots
+### 10.3 Asset instances in shots
 
 Assets placed into a shot live under the appropriate scope with a unique PascalCase instance name:
 
@@ -1016,7 +1039,7 @@ Assets placed into a shot live under the appropriate scope with a unique PascalC
 /World/Environment/Ground     ← env-ground.usda
 ```
 
-### 10.3 Asset internal structure
+### 10.4 Asset internal structure
 
 Inside a published asset USD, the root prim is PascalCase with no underscores:
 
@@ -1034,7 +1057,7 @@ Inside a published asset USD, the root prim is PascalCase with no underscores:
 
 Geometry always under `/Geo`. Materials always under `/Mtl`. Skeleton always under `/Rig`. These paths must be consistent across all assets — downstream references depend on them.
 
-### 10.4 Cameras and lights
+### 10.5 Cameras and lights
 
 Cameras (owned by Layout):
 
@@ -1052,22 +1075,6 @@ Lights (owned by Lighting), named with descriptive PascalCase:
 ```
 
 Never name lights `Light1`, `Light2`. Names should communicate intent.
-
-### 10.5 Prim naming conventions
-
-Prim names follow **PascalCase** — capitalised words, no underscores, no spaces. This distinguishes them visually from filenames (which are lowercase, hyphen-and-underscore) and makes the scene graph easier to read.
-
-| Context | Convention | Examples |
-| --- | --- | --- |
-| Asset root prim | PascalCase, no underscores | `CharRobot`, `PropCrate`, `EnvWarehouse` |
-| Asset instance in shot | PascalCase, unique within its scope | `Hero`, `CrateA`, `CrateB` |
-| Lights | PascalCase, descriptive | `KeyLight`, `FillLight`, `SkyDome` |
-| Cameras | PascalCase | `Main`, `Witness` |
-| Internal asset structure | PascalCase | `Geo`, `Mtl`, `Rig`, `Body`, `Head` |
-
-Multiple instances of the same asset get a letter suffix: `CrateA`, `CrateB`, `CrateC`. Never `Crate1`, `Crate2` — letters sort more predictably and avoid confusion with shot numbering.
-
-The asset root prim name is derived directly from the asset name token, with hyphens removed and each word capitalised: `char-robot` → `CharRobot`, `prop-crate` → `PropCrate`. This makes the relationship between filename and prim path unambiguous.
 
 ### 10.6 Stage metrics and time
 
@@ -1141,7 +1148,7 @@ Author all shading in **MaterialX**. It is the USD-native shading standard, it i
 
 Use `mtlxstandard_surface` as the default surface. Build the network inside a **Material Library LOP** (a MaterialX subnet); Karma CPU and XPU both render it natively.
 
-Materials live under the asset's `/Mtl` scope (Section 10.3) and are attached with a `material:binding`. Keeping every asset's materials under `/Mtl` is what lets lookdev publish a consistent, predictable structure that downstream layers can find.
+Materials live under the asset's `/Mtl` scope (Section 10.4) and are attached with a `material:binding`. Keeping every asset's materials under `/Mtl` is what lets lookdev publish a consistent, predictable structure that downstream layers can find.
 
 **`UsdPreviewSurface` is optional here.** Because lookdev and final render are always Karma, you do not need a separate preview surface for rendering. Author one only if you want assets to preview correctly in `usdview`, the Storm/GL viewport, or another DCC — it is a lightweight, portable fallback, not part of the Karma path.
 
@@ -1166,21 +1173,23 @@ Solve them separately and rigging stops being an exception. Each half becomes an
 
 Do **not** hand the rig HIP to the animator to copy from. A copied rig network is a one-time snapshot: every later rig fix has to be manually re-merged into the animator's scene, and nothing tracks whether what the animator has is current. That is the same failure this pipeline exists to prevent, just in HIP-land instead of USD-land.
 
-Package the rig as a **digital asset (HDA)** instead, saved to `$PROJECT/houdini/otls/`. That directory is already on `HOUDINI_OTLSCAN_PATH` (Section 16), so the rig simply appears in every artist's tab menu after an SVN update. The animator drops one node and has controls.
+Package the rig as a **digital asset (HDA)** instead, published into the asset's own folder beside its USD layers — `$ASSETS/char-robot/char-robot_rig.hda`. The animator installs that library once in their animation HIP (**File ▸ Import ▸ Houdini Digital Asset**, or the Asset Manager), drops one node, and has controls.
+
+**Rig HDAs are not on the tab-menu scan path, and that is deliberate.** Only the handful of HIPs that animate a given character ever need it, so installing it per file is a small cost — and the alternative would put every rig in the project into every artist's tab menu, whether or not they will ever touch that character. Generic project-wide tools do go on the scan path, in `houdini/otls/` (Section 16.3); rigs belong with the asset they rig.
 
 The structure mirrors the HIP/USD split exactly:
 
 | | Rig HIP | Rig HDA |
 | --- | --- | --- |
 | Example | `char-robot_rig_alex_v003.hip` | `char-robot_rig.hda` |
-| Where it lives | The work tree (`$WORK`) | The project tree, `houdini/otls/` |
+| Where it lives | The work tree (`$WORK`) | The project tree, in the asset's folder |
 | Who owns it | The rigger, individually | The Rigging role, shared with the team |
 | Versioning | Filename increments freely | Filename stable — SVN tracks history |
 | Is it a deliverable? | No — never handed over | Yes — this is the handoff |
 
-The HDA is the one thing in this pipeline that is a deliverable without being a USD layer. Nothing resolves it by path the way a layer resolves its sublayers, but artists depend on it by name through the tab menu — so it lives in the project tree with the published data, not in the work tree with the HIP that built it (Section 8.3).
+The HDA is the one thing in this pipeline that is a deliverable without being a USD layer. No layer resolves it, but an animator's HIP does, by path — so it lives in the project tree with the published data, not in the work tree with the HIP that built it (Section 8.3).
 
-When the rig changes, the rigger republishes the HDA and commits. The animator runs `svn update`, and the definition refreshes in place inside their existing scene — animation authored on the rig's parameters survives. No merging, no re-copying.
+That path reference is what makes updates work. When the rig changes, the rigger republishes the HDA to the same filename and commits. The animator runs `svn update`, and because their scene points at the library rather than holding a copy of it, the definition refreshes in place — animation authored on the rig's parameters survives. No merging, no re-copying.
 
 **The HDA's interface is a contract.** Control names and parameter names are to rigging what prim paths are to everything else: rename or remove a control the animator has already animated on and their work breaks. Treat an interface change as a breaking change — coordinate before making it, exactly as Section 7.6 requires for prim paths.
 
@@ -1720,7 +1729,7 @@ Use a **package** instead. Houdini reads JSON package files from `packages/` dir
 }
 ```
 
-Each artist sets two things — `PROJECT_ROOT`, wherever the SVN checkout lives on their machine, and `PROJECT_WORK_ROOT`, wherever the work drive is mounted — and everything else derives from those. `HOUDINI_OTLSCAN_PATH` is covered by the `path` entry, which is how the rig HDAs in `houdini/otls/` (Section 12.1) reach everyone.
+Each artist sets two things — `PROJECT_ROOT`, wherever the SVN checkout lives on their machine, and `PROJECT_WORK_ROOT`, wherever the work drive is mounted — and everything else derives from those. `HOUDINI_OTLSCAN_PATH` is covered by the `path` entry, which is how project-wide tools in `houdini/otls/` reach everyone's tab menu. Rig HDAs are deliberately not there — they live with their asset and are installed per HIP (Section 12.1).
 
 The advantages over `houdini.env`: the configuration is versioned in the repo with everything else, multiple projects can coexist, and the farm gets the identical environment by pointing at the same file. When the project's environment changes, it changes for everyone on the next SVN update instead of requiring an email telling four people to edit a file in their home directory.
 
@@ -1772,7 +1781,7 @@ A file on disk that is not committed to SVN is not published — it exists only 
 6. Check the Houdini console for warnings
 7. Commit to SVN
 
-Step 5 cuts both ways. A layer with less in it than you expected usually means the Layer Break is too low or a default prim is missing. A layer with *more* in it than you expected — the whole set, the assets — means the Layer Break is too high or missing, and you are about to republish someone else's work on top of them.
+Step 5 cuts both ways. A layer with less in it than you expected usually means the Layer Break is too late or a default prim is missing. A layer with *more* in it than you expected — the whole set, the assets — means the Layer Break is too early or missing, and you are about to republish someone else's work on top of them.
 
 ### 18.2 Versioned archives
 
@@ -1851,9 +1860,9 @@ Work through this in order. Most problems are a file path issue, a prim path iss
 
 ### Layer and composition
 
-- [ ]  Is your Layer Break placed correctly — context below it, your contribution above it? (Section 9.1)
-- [ ]  Is your published layer **empty of your own work**? The break is probably too low — your own references or cameras fell below it.
-- [ ]  Is your published layer **full of upstream data**? The break is too high, or missing.
+- [ ]  Is your Layer Break placed correctly — context before it, your contribution after it? (Section 9.1)
+- [ ]  Is your published layer **empty of your own work**? The break is probably too late — your own references or cameras fell before it.
+- [ ]  Is your published layer **full of upstream data**? The break is too early, or missing.
 - [ ]  Are all expected layers in the shot root? (Open `kilo-0010.usda` in a text editor)
 - [ ]  Is layer order in the shot root correct? (Earlier listed = stronger)
 - [ ]  Is a stronger layer overriding your value unexpectedly? (Use the composition arc inspector)
@@ -1974,10 +1983,10 @@ Works in `$WORK/assets/char-robot/rig/` — a separate task, so a separate ownin
 What it publishes is the **rig HDA**:
 
 ```
-$PROJECT/houdini/otls/char-robot_rig.hda
+$ASSETS/char-robot/char-robot_rig.hda
 ```
 
-Commits. Notifies Erik: *“Rig published as `char-robot_rig` — SVN update and it will be in your tab menu. Controls are `ctrl_root`, `ctrl_spine`, `ctrl_arm_l/r`. Shout before you key anything if you want names changed; once you have animation on them they are frozen.”*
+Commits. Notifies Erik: *“Rig published as `char-robot_rig.hda`, in the asset folder — SVN update and install it in your anim scene. Controls are `ctrl_root`, `ctrl_spine`, `ctrl_arm_l/r`. Shout before you key anything if you want names changed; once you have animation on them they are frozen.”*
 
 Note what did *not* happen: Erik was not sent a HIP file to copy from. When Alex fixes the rig next week, he republishes the HDA, Erik runs `svn update`, and the definition refreshes inside Erik's existing scene with his animation intact.
 
@@ -1989,7 +1998,7 @@ SVN updates. Works in `$WORK/assets/char-robot/lookdev/`, with her turntable ren
 
 ```
 [Reference: char-robot_model.usdc]   ← context: the geometry to shade
-[Layer Break]                        ← everything above is Maria's contribution
+[Layer Break]                        ← after this: Maria's contribution
 [Material Library: MaterialX networks]
 [Assign Material: bindings]
 [Configure Layer: metrics]
@@ -2060,7 +2069,7 @@ LOP network:
 [USD ROP → set-living-room_dressing.usda]
 ```
 
-**No Layer Break here.** The stage starts empty and the references *are* Ina's contribution — placing those props is the entire job of set dressing. A Layer Break below the references would discard them and publish a file containing transform overrides on prims that do not exist: an empty set, no error. (Section 9.1)
+**No Layer Break here.** The stage starts empty and the references *are* Ina's contribution — placing those props is the entire job of set dressing. A Layer Break placed after the references would discard them and publish a file containing transform overrides on prims that do not exist: an empty set, no error. (Section 9.1)
 
 Publishes:
 
@@ -2080,7 +2089,7 @@ LOP network:
 
 ```
 [Sublayer: set-living-room_dressing.usda]   ← context
-[Layer Break]                               ← above this: Maria's lights only
+[Layer Break]                               ← after this: Maria's lights only
 [Sphere Light → /World/Lighting/FloorLampPractical]
 [Rect Light → /World/Lighting/CeilingFixture]
 [Configure Layer: metrics]
@@ -2099,7 +2108,7 @@ Checks the published file: two lights, no furniture.
 
 **Maria: Set Lookdev** (optional — as needed)
 
-If the location needs surface overrides that aren't part of any individual asset — worn paint on the specific walls of this room, staining on the particular floor — Maria adds those in the set lookdev layer, with the same context-below-break structure.
+If the location needs surface overrides that aren't part of any individual asset — worn paint on the specific walls of this room, staining on the particular floor — Maria adds those in the set lookdev layer, with the same context-before-break structure.
 
 Publishes (if needed):
 
@@ -2146,7 +2155,7 @@ LOP network:
 
 ```
 [Sublayer: set-living-room.usda]        ← context: the shared space
-[Layer Break]                           ← above this: Ina's shot contribution
+[Layer Break]                           ← after this: Ina's shot contribution
 [Reference: char-robot.usda → /World/Characters/Hero]
 [Camera LOP → /World/Cameras/Main]
 [Transform edits, shot-specific set overrides if needed]
@@ -2154,7 +2163,7 @@ LOP network:
 [USD ROP → kilo-0010_layout.usda]
 ```
 
-The break placement is the thing to get right, and it is the opposite of what it looks like at first glance. The **set** is below the break: Ina is not republishing the living room. The **robot reference and the camera** are above it: those are her deliverables, and a break placed below them would silently strip the character and camera out of the published shot. The test is Section 9.1's — *if this vanished from my file, would my work be missing?*
+The break placement is the thing to get right, and it is the opposite of what it looks like at first glance. The **set** comes before the break: Ina is not republishing the living room. The **robot reference and the camera** come after it: those are her deliverables, and a break placed after them would silently strip the character and camera out of the published shot. The test is Section 9.1's — *if this vanished from my file, would my work be missing?*
 
 Layout also owns the shot's frame range (Section 10.6), because layout is where the shot's timing is first established.
 
@@ -2174,14 +2183,14 @@ SVN updates — which brings him both the layout block and any rig HDA changes.
 
 His animation HIP, in `$WORK/shots/kilo/0010/anim/`, does two things. For **context**, it subLayers the shot's stack so far, in shot root order: the set, then layout. This matters — the layout block on its own is sparse. It contains a camera and a reference to the robot, and nothing else; the living room only appears when the set is subLayered beneath it. Loading just the previous block gives an almost-empty stage, which is the most common confusion when people first work this way.
 
-For **authoring**, it contains the `char-robot_rig` HDA from the tab menu, giving Erik live controls. He animates on those controls, then bakes: this is a Lane 1 asset (Section 12.2), so the bake extracts per-part transforms and a SOP Import LOP brings them onto the stage as time-sampled overrides on the prims layout already established.
+For **authoring**, it has `char-robot_rig.hda` installed as an asset library, giving Erik live controls. He animates on those controls, then bakes: this is a Lane 1 asset (Section 12.2), so the bake extracts per-part transforms and a SOP Import LOP brings them onto the stage as time-sampled overrides on the prims layout already established.
 
 LOP network:
 
 ```
 [Sublayer: set-living-room.usda]        ← context (weakest)
 [Sublayer: kilo-0010_layout.usda]       ← context
-[Layer Break]                           ← above this: Erik's animation only
+[Layer Break]                           ← after this: Erik's animation only
 [SOP Import: baked transforms → /World/Characters/Hero/Geo/...]
 [Configure Layer: metrics]
 [USD ROP → kilo-0010_anim.usdc]
@@ -2209,7 +2218,7 @@ LOP network:
 [Sublayer: set-living-room.usda]        ← context (weakest)
 [Sublayer: kilo-0010_layout.usda]       ← context
 [Sublayer: kilo-0010_anim.usdc]         ← context
-[Layer Break]                           ← above this: Maria's lighting only
+[Layer Break]                           ← after this: Maria's lighting only
 [Sphere Light → /World/Lighting/KeyLight]
 [Sphere Light → /World/Lighting/RimLight]
 [Karma Render Settings → /Render]
