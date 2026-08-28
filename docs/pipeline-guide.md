@@ -51,8 +51,6 @@
 
 This is our production guide for building work in Houdini, using Solaris and USD. It covers how we name things, where they live, who owns what, and how work moves between us.
 
-It applies to every project we take on, not to any one of them. That is the point of having a standard: the next project looks like the last one, so what you learn once keeps paying off, and anyone can move onto a job already knowing the ground rules.
-
 It is written for everyone who touches a shot — modelling, lookdev, rigging, layout, animation, FX, lighting. On a small team one person covers several of those. That changes nothing about the rules; it just means one person owns more of the work.
 
 ### 1.1 Why we work this way
@@ -112,9 +110,9 @@ If a rule in this guide ever seems arbitrary, the right question to ask is which
 
 It would be dishonest to present this as free. There are three real costs, and knowing them in advance makes them much easier to live with.
 
-**More files, and a publishing step.** A shot that used to be one scene file is now several. You cannot simply save and tell someone it is ready — you publish, check it, and commit. For the first while that will feel like extra process for no reason. It is the price of the parallelism, and it stops feeling like overhead at about the point two people first work the same shot on the same afternoon.
+**More files, and a publishing step.** A shot that used to be one scene file is now several. You cannot simply save and tell someone it is ready — you publish, check it, and commit.
 
-**Failures are silent.** This is the important one. A broken scene file usually tells you so. USD's characteristic failure is *nothing happening*: a file pointing at something that is no longer there produces an empty result and no error at all. Much of this guide — checking a publish in a fresh session, the rules about what every published file must declare, the whole debugging checklist in Section 20 — exists because of this one property. Build the habit of checking what you published rather than assuming it worked.
+**Failures are silent.** A broken scene file usually tells you so. USD's characteristic failure is *nothing happening*: a file pointing at something that is no longer there produces an empty result and no error at all. Much of this guide — checking a publish in a fresh session, the rules about what every published file must declare, the whole debugging checklist in Section 20 — exists because of this one property. Build the habit of checking what you published rather than assuming it worked.
 
 **Discipline is load-bearing.** In a single-file pipeline, naming things consistently is tidiness. Here, a name or a location is a contract that other people's files depend on. Break one and you quietly break their work, often with no visible error. The naming rules in this guide are not aesthetics.
 
@@ -130,7 +128,7 @@ What changes is the **handoff**: where your work goes when you are finished with
 
 It is not a USD reference and not a Houdini tutorial. Where you want the underlying standard or the Houdini implementation in full, Section 24 points at the authoritative sources.
 
-Which means a fair amount of what follows is **ours, not USD’s** — decided here rather than inherited from the standard. What we call the three tiers, the words we use for the files that make them up, the whole naming grammar, the fixed scene structure, and the ownership rules are all conventions we chose; another studio would choose differently and be equally correct. USD itself only supplies the machinery underneath.
+Which means a fair amount of what follows is **ours, not USD’s** — decided here rather than inherited from the standard. What we call the three tiers, the words we use for the files that make them up, the whole naming grammar, and the fixed scene structure are all conventions we chose; another studio would choose differently and be equally correct. USD itself only supplies the machinery underneath.
 
 That distinction matters when you go looking for help, because searching the OpenUSD documentation for our house words will not get you far. Where a convention is ours rather than USD’s, this guide says so — Section 2 covers the two terms most likely to trip you up, and Sections 7, 10, and 17 mark the areas that are entirely our own.
 
@@ -177,9 +175,6 @@ The reason for the split is that it gives downstream work a **single stable addr
 
 Both words collide with something USD already means, so they are worth flagging early. USD uses "blocking" for suppressing a value, and Houdini's Layer Break is about blocking layers — "block" has three unrelated senses across this pipeline. USD also has its own `assembly`, a model kind, which is a different idea from our assembly file entirely.
 
-> 👉 If you remember one thing: USD is a composition engine. Files contribute opinions; USD composes them into a stage. Section 4 covers the mechanics — layers, prims, composition arcs, and the strength order that decides which opinion wins.
-> 
-
 ### A concrete example
 
 Take one shot: a robot walking through a warehouse, and four artists who all need to work on it at once — one placing the robot and camera, one animating the walk, one adding smoke and sparks, one lighting the scene.
@@ -207,7 +202,7 @@ kilo-0010_lighting.usda    ← block: key light, mood, render settings
 kilo-0010.usda             ← shot root (the shot's assembly): gathers the set and the blocks
 ```
 
-The four shot artists each own one block and never work in the same file. Each block holds only its author’s opinions — the lighting block does not contain the robot or the warehouse, only the lights, the render settings, and any overrides the lighter needs. When USD opens the shot root, it reads every shot block, follows the arcs out to the asset and set assemblies — which pull in their own blocks in turn — and resolves the whole thing into a single stage.
+Each block has one owner, and no two people ever work in the same file. An artist may own several blocks — on a small team, often all four — but a block never has two authors. Each block holds only its author’s opinions — the lighting block does not contain the robot or the warehouse, only the lights, the render settings, and any overrides the lighter needs. When USD opens the shot root, it reads every shot block, follows the arcs out to the asset and set assemblies — which pull in their own blocks in turn — and resolves the whole thing into a single stage.
 
 So much for how the files are arranged. The part that makes USD click is what happens when two of them describe the same thing.
 
@@ -235,30 +230,6 @@ Two rules make this work, and they are worth separating because they are differe
 So layout's file stays exactly as it was, and if layout later re-blocks the shot and republishes, the nudge still applies on top. Nobody merged anything, nobody overwrote anyone, and four people worked the same shot in parallel.
 
 That is what USD buys you.
-
-### What this asks of you
-
-The example above is a change in how you think about a scene, and until it clicks the rest of this guide feels backwards.
-
-> **Traditional thinking:**
-*“I am editing the scene.”*
-> 
-
-> **USD thinking:**
-*“I am contributing my layer to a composed scene.”*
-> 
-
-In a traditional pipeline you open the scene and work in it. Here the scene does not exist as a single thing you open — it is assembled at runtime from layers, and your job is to author your layer and only your layer.
-
-The practical consequence: **you do not touch a layer you do not currently own.** If you need something changed in a layer someone else owns, you talk to them. And because USD lets you override anything from your own layer, you almost never need to — which is the point. The mechanism that makes the parallel work possible is the same one that makes editing someone else's file unnecessary.
-
-> 👉 **“Own” means assigned to, not belongs to.** Ownership is a production assignment and it moves. If someone is off sick, rolls off the project, or simply hands a task over, their layer and their working files are reassigned and the new owner picks up where they left off — same HIP, same published path, same everything. Nothing here is anyone’s personal property, and no work is stranded because one person is unavailable. The rule is that a layer has **one owner at a time**, so that two people never author it in parallel. It is not that a layer is welded to a person for the life of the project.
-> 
-
-Sections 3 and 7.5 cover what this means in practice; Section 23 shows it running end to end.
-
-> 👉 The hardest part of USD is not the technology. It is consistently thinking of yourself as a contributor to a shared composition, not an editor of a shared scene.
->
 
 ---
 
@@ -418,7 +389,7 @@ We spell the extension out rather than using bare `.usd`, so that a filename say
 
 **Setting it in Solaris.** There is no format parameter. The extension you type into the USD ROP's **Output File** decides it — end the path in `.usda` and Houdini writes text, end it in `.usdc` and it writes crate.
 
-**Changing a published file's format is a breaking change.** The extension is part of the filename, and downstream layers reference that filename by path. Switching a block from `.usda` to `.usdc` breaks every layer pointing at it, silently, exactly as a rename would — coordinate it like any other path change (Section 7.6).
+**Changing a published file's format is a breaking change.** The extension is part of the filename, and downstream layers reference that filename by path. Switching a block from `.usda` to `.usdc` breaks every layer pointing at it, silently, exactly as a rename would — coordinate it like any other path change (Section 7.5).
 
 **Reading a `.usdc`.** You cannot open one in an editor, so use `usdview`, the Houdini scene graph tree, or convert it — `usdcat char-robot_model.usdc` prints the same layer as text, which is often the quickest way to check what actually got published. Never guess at binary contents.
 
@@ -510,7 +481,7 @@ Everything this pipeline produces falls into one of three tiers:
 
 **All three are built identically.** There is no structural difference between an asset, a set, and a shot — only a difference in what they contain and who works on them. 7.1 defines the structure once. 7.2, 7.3, and 7.4 then cover only what is specific to each tier, which is why they are short.
 
-This three-tier structure also shapes the folder layout (Section 8), the naming conventions (Section 15), and the ownership rules (7.5).
+This three-tier structure also shapes the folder layout (Section 8), and the naming conventions (Section 15).
 
 ### 7.1 Blocks and assemblies
 
@@ -663,30 +634,7 @@ over "World" {
 }
 ```
 
-### 7.5 Ownership
-
-The role names below describe responsibilities, not job titles. On a small team one person covers several of them, which is expected and normal — the rules do not change with team size, it just means one person owns more layers.
-
-Every USD layer has one responsible role at a time, and one person filling that role at a time. "At a time" is the load-bearing phrase: ownership is an assignment, reassigned freely when people change tasks, hand over, or leave a project (Section 3). What must never happen is two people authoring the same layer at once.
-
-| Role | Owns | Does NOT own |
-| --- | --- | --- |
-| Modeling | Geometry, prim hierarchy, VariantSet definitions | Materials, shot data |
-| Lookdev | Materials, shading, material bindings on assets | Shot lighting, set surfaces |
-| Rigging | The rig HDA and its control interface, rig HIP | Geometry, materials, animation |
-| Assembly | Final asset package | Sets, shots |
-| Set Dressing | Prop placement and furniture in the set | Set lighting, set surface overrides |
-| Set Lighting | Practical lights and environment lighting in the set | Shot lighting, hero lights |
-| Set Lookdev | Location-specific surface overrides in the set | Asset materials, shot lighting |
-| Layout | Camera, character blocking, shot-specific set overrides | Permanent set dressing, asset geometry |
-| Animation | Motion data, baked skeletal animation | Layout, asset look |
-| FX | Simulations, FX USD layers | Animation timing (unless agreed) |
-| Lighting | Shot hero lights, mood, render settings | Permanent set lighting |
-
-**The boundary between Lookdev and Lighting:**
-Lookdev owns what an asset looks like as an asset. Lighting owns what a shot looks like as a shot. A lighter can override a material parameter in the shot’s lighting layer for a creative reason — but that override lives in the lighting layer, not in the asset file. If the override reveals a problem with the base material, the fix goes back to Lookdev.
-
-### 7.6 Dependency and change communication
+### 7.5 Dependency and change communication
 
 USD is a dependency chain. When something upstream changes, everything downstream may be affected.
 
@@ -844,7 +792,7 @@ $WORK/
                 └── kilo-0010_lighting_maria_v007.hip
 ```
 
-**Nothing sits loose at tier level or above.** Every HIP is inside a context folder — that is what keeps one batch of background props and the next from silting up into the same directory.
+**Nothing sits loose at tier level or above.** Every HIP is inside a context folder.
 
 **The context is the narrowest subject covering everything the HIP produces.** Where that is a single asset, set, or shot, the context folder mirrors that entity's folder path in the project tree — `assets/char-robot/`, `sets/living-room/`, `shots/kilo/0010/`. Where it is not — one HIP building eight background props — the context is a descriptive group name following the same token rules, and it has no counterpart in the project tree. It does not need one: each prop gets its own project folder, and nothing downstream cares how they were made.
 
@@ -860,7 +808,7 @@ One question sorts everything the pipeline produces: **does anything resolve it 
 | Handed to another artist, not referenced by a layer | Project tree | Rig HDAs (12.1) |
 | Referenced by nothing | Work tree | HIPs, source geometry, reference, scratch caches |
 
-Anything in the first two rows has a stable path that other people's work depends on, and moving it is a breaking change (Section 7.6). Anything in the third can be moved, renamed, or reorganised at any time without consequence — which is why artists are free to arrange the inside of an owning folder as the work demands.
+Anything in the first two rows has a stable path that other people's work depends on, and moving it is a breaking change (Section 7.5). Anything in the third can be moved, renamed, or reorganised at any time without consequence — which is why artists are free to arrange the inside of an owning folder as the work demands.
 
 *For texture naming conventions and validation patterns, see Section 15.9.*
 
@@ -893,13 +841,13 @@ You need that line because of how a LOP network is built. To do your job you loa
 
 **Where the break goes: after context, before contribution.** The rule is not "after all references" — it is that the break separates what you *loaded to look at* from what you are *publishing*. Those are different things, and confusing them is the most common way to publish an empty layer.
 
-- A **Sublayer LOP bringing in upstream published work** for context goes *before* the break. You are not republishing the set.
+- A **Sublayer LOP bringing in upstream published work** for context goes *before* the break.
 - A **Reference LOP placing an asset that is your own deliverable** goes *after* the break. When layout places the hero character, or the set dresser places a sofa, that reference **is** the contribution — put it before the break and it vanishes from the published file.
 - Anything that authors new prims you own — cameras, lights, imported caches — goes *after* the break.
 
 The test to apply: *if this disappeared from my published file, would my work be missing?* If yes, it belongs after the break.
 
-A network whose stage starts empty — a set dressing HIP that references props into a blank stage — needs no Layer Break at all. There is no upstream context to discard. (References to files on disk remain composition arcs in the written file; they are not flattened into it.)
+A network whose stage starts empty — a set dressing HIP that references props into a blank stage — needs no Layer Break at all. There is no upstream context to discard.
 
 **Node colours confirm this is working.** Houdini assigns each layer a colour — not meaningful in itself, but the colour is consistent across all nodes writing to the same layer. When the colour changes at your Layer Break, that visually confirms your edits are isolated in a separate layer. If everything in your network is one colour and you expected a break, the Layer Break is missing or in the wrong position.
 
@@ -1152,7 +1100,7 @@ Materials live under the asset's `/Mtl` scope (Section 10.4) and are attached wi
 
 **`UsdPreviewSurface` is optional here.** Because lookdev and final render are always Karma, you do not need a separate preview surface for rendering. Author one only if you want assets to preview correctly in `usdview`, the Storm/GL viewport, or another DCC — it is a lightweight, portable fallback, not part of the Karma path.
 
-**Binding strength is the technical basis for the lookdev/lighting boundary.** A material binding carries a strength (`bindMaterialAs`): the default `weakerThanDescendants` lets a more specific binding deeper in the hierarchy win, while `strongerThanDescendants` forces a binding to override descendants. This is the exact mechanism behind the boundary in Section 7.5 — a lighter can rebind or tweak a material in the shot's lighting block and have it win over the asset's own binding, without editing the asset. The override lives in the lighting layer; the asset is untouched. When an override reveals a real problem with the base material, the fix goes back to lookdev.
+**Binding strength is the technical basis for the lookdev/lighting boundary.** A material binding carries a strength (`bindMaterialAs`): the default `weakerThanDescendants` lets a more specific binding deeper in the hierarchy win, while `strongerThanDescendants` forces a binding to override descendants. This is the exact mechanism behind the lookdev/lighting boundary — a lighter can rebind or tweak a material in the shot's lighting block and have it win over the asset's own binding, without editing the asset. The override lives in the lighting layer; the asset is untouched. When an override reveals a real problem with the base material, the fix goes back to lookdev.
 
 **Texture colour space is set by the channel token.** `bc` is colour-managed; `n`, `aormt`, and `m` are raw data and must not be. Naming a texture correctly (Section 15.9) is what gets its colour space right — see Section 19.
 
@@ -1191,7 +1139,7 @@ The HDA is the one thing in this pipeline that is a deliverable without being a 
 
 That path reference is what makes updates work. When the rig changes, the rigger republishes the HDA to the same filename and commits. The animator runs `svn update`, and because their scene points at the library rather than holding a copy of it, the definition refreshes in place — animation authored on the rig's parameters survives. No merging, no re-copying.
 
-**The HDA's interface is a contract.** Control names and parameter names are to rigging what prim paths are to everything else: rename or remove a control the animator has already animated on and their work breaks. Treat an interface change as a breaking change — coordinate before making it, exactly as Section 7.6 requires for prim paths.
+**The HDA's interface is a contract.** Control names and parameter names are to rigging what prim paths are to everything else: rename or remove a control the animator has already animated on and their work breaks. Treat an interface change as a breaking change — coordinate before making it, exactly as Section 7.5 requires for prim paths.
 
 **The HDA references the published model USD internally**, so the geometry it deforms is always the current published asset. That is plumbing inside the HDA; the animator never sees it.
 
@@ -1223,7 +1171,7 @@ This is the ideal citizen of this pipeline: sparse, small on disk, and readable.
 **Lane 2 — Deformed geometry bake (the default for deforming characters).**
 Publish time-sampled point positions as overrides on the model's existing meshes: SOP Import the deformed character and write it out. Files are heavier — publish as `.usdc` (Section 4.4) — but the renderer sees exactly what the animator saw, nothing is re-evaluated downstream, and material bindings hold because the prim hierarchy is untouched.
 
-The contract this creates is **topology**: point count and point order must match the published model. A model topology change is therefore a breaking change for animation, on the same footing as a prim path rename — flag it under Section 7.6 and re-bake.
+The contract this creates is **topology**: point count and point order must match the published model. A model topology change is therefore a breaking change for animation, on the same footing as a prim path rename — flag it under Section 7.5 and re-bake.
 
 **Lane 3 — UsdSkel (escalation only).**
 Publish the bind-pose skeleton (`char-robot_rig.usda`) with the asset and joint animation from the shot, and let the renderer skin at render time. This earns its complexity when you have crowds, memory pressure from many animated characters, or retargeting needs. It is also the most fragile corner of USD in practice — skinning is re-evaluated by Hydra, and it has more silent-failure modes than either lane above. For a small team's hero shots, you will probably never need it.
@@ -2261,7 +2209,7 @@ Renders from the shot root — interactively via the USD Render ROP, or on the f
 
 Alex republishes `char-robot_model.usdc`. Assuming prim paths and topology are stable, the change propagates automatically through the assembly to everything downstream. Maria checks her lookdev bindings, Alex verifies the assembly and republishes the rig HDA if the rig needs adjusting, Ina and Erik reload and verify their layers. Only republish if something is actually broken.
 
-If prim paths *did* change, this is a breaking change and must be flagged explicitly (Section 7.6) — every downstream override targets those paths by name, and they will fail silently.
+If prim paths *did* change, this is a breaking change and must be flagged explicitly (Section 7.5) — every downstream override targets those paths by name, and they will fail silently.
 
 **If the rig updates:**
 
