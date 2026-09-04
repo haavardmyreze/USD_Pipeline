@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>USD Reference Graph</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0d12'/%3E%3Cg stroke='%2338bdf8' stroke-width='1.8' fill='none'%3E%3Cpath d='M11 16h10'/%3E%3C/g%3E%3Ccircle cx='9' cy='16' r='3.2' fill='%238b7cf6'/%3E%3Ccircle cx='23' cy='10' r='2.6' fill='%2338bdf8'/%3E%3Ccircle cx='23' cy='22' r='2.6' fill='%23f472b6'/%3E%3Cpath d='M11.6 14.6 20.6 10.8M11.6 17.4l9 3.8' stroke='%2338bdf8' stroke-width='1.6'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <!-- ── Top bar ────────────────────────────────────────────────── -->
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M11.6 14.6 20.6 10.8M11.6 17.4l9 3.8" />
+            <circle cx="9" cy="16" r="3.4" class="brand__dot brand__dot--a" />
+            <circle cx="23" cy="10" r="2.8" class="brand__dot brand__dot--b" />
+            <circle cx="23" cy="22" r="2.8" class="brand__dot brand__dot--c" />
+          </svg>
+          <span class="brand__name">Reference Graph</span>
+        </div>
+
+        <button class="filebtn" id="open-file" title="Open a USD file (O)">
+          <span class="filebtn__icon" aria-hidden="true">
+            <svg viewBox="0 0 16 16"><path d="M1.5 4.2A1.7 1.7 0 0 1 3.2 2.5h2.6l1.4 1.6h5.6a1.7 1.7 0 0 1 1.7 1.7v6a1.7 1.7 0 0 1-1.7 1.7H3.2a1.7 1.7 0 0 1-1.7-1.7z"/></svg>
+          </span>
+          <span class="filebtn__text">
+            <span class="filebtn__name" id="root-name">Open a USD file</span>
+            <span class="filebtn__path" id="root-path">Nothing loaded yet</span>
+          </span>
+        </button>
+
+        <div class="topbar__spacer"></div>
+
+        <label class="search" title="Filter nodes (/)">
+          <svg class="search__icon" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.6" /><path d="m10.6 10.6 3 3" />
+          </svg>
+          <input id="search" type="search" placeholder="Filter files" autocomplete="off" spellcheck="false" />
+          <kbd>/</kbd>
+        </label>
+
+        <div class="seg" role="group" aria-label="View options">
+          <button class="seg__btn" id="toggle-assemblies" title="Show only assembly files, collapsing the blocks between them">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/><path d="m1.8 8 6.2 3.2L14.2 8"/><path d="m1.8 11 6.2 3.2L14.2 11"/></svg>
+            Assemblies
+          </button>
+          <button class="seg__btn is-on" id="toggle-textures" title="Show texture and asset files">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.6"/><circle cx="6" cy="6.6" r="1.2"/><path d="m3 11 3.2-3 2.4 2.2L11 8l2 2.4"/></svg>
+            Textures
+          </button>
+          <button class="seg__btn" id="toggle-missing" title="Show only files that are missing">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.6 14.4 13H1.6z"/><path d="M8 6.4v3.1M8 11.2v.1"/></svg>
+            Missing
+          </button>
+        </div>
+
+        <div class="iconbar">
+          <button class="iconbtn" id="btn-fit" title="Fit to view (F)">
+            <svg viewBox="0 0 16 16"><path d="M2 6V2.8h3.2M14 6V2.8h-3.2M2 10v3.2h3.2M14 10v3.2h-3.2"/></svg>
+          </button>
+          <button class="iconbtn" id="btn-rescan" title="Rescan from disk (R)">
+            <svg viewBox="0 0 16 16"><path d="M13.4 7a5.5 5.5 0 1 0-.5 3.4"/><path d="M13.8 3.4V7h-3.5"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- ── Left rail ──────────────────────────────────────────────── -->
+      <aside class="sidebar" id="sidebar">
+        <section class="panel">
+          <h2 class="panel__title">Overview</h2>
+          <div class="stats" id="stats"></div>
+        </section>
+
+        <section class="panel">
+          <h2 class="panel__title">
+            Arcs
+            <span class="panel__hint">click to isolate</span>
+          </h2>
+          <div class="legend" id="legend"></div>
+        </section>
+
+        <section class="panel panel--grow">
+          <h2 class="panel__title">
+            Issues
+            <span class="badge badge--muted" id="warning-count">0</span>
+          </h2>
+          <div class="warnings" id="warnings"></div>
+        </section>
+
+        <section class="panel" id="recent-panel" hidden>
+          <h2 class="panel__title">Recent</h2>
+          <div class="recent" id="recent"></div>
+        </section>
+      </aside>
+
+      <!-- ── Graph ──────────────────────────────────────────────────── -->
+      <main class="stage" id="stage">
+        <div class="stage__grid" id="grid"></div>
+
+        <div class="viewport" id="viewport">
+          <svg class="edges" id="edges" aria-hidden="true">
+            <defs id="edge-defs"></defs>
+            <g id="edge-layer"></g>
+          </svg>
+          <div class="nodes" id="nodes"></div>
+        </div>
+
+        <div class="zoomctl">
+          <button class="iconbtn" id="zoom-out" title="Zoom out">
+            <svg viewBox="0 0 16 16"><path d="M4 8h8"/></svg>
+          </button>
+          <button class="zoomctl__level" id="zoom-level" title="Reset zoom">100%</button>
+          <button class="iconbtn" id="zoom-in" title="Zoom in">
+            <svg viewBox="0 0 16 16"><path d="M8 4v8M4 8h8"/></svg>
+          </button>
+        </div>
+
+        <div class="empty" id="empty">
+          <div class="empty__art" aria-hidden="true">
+            <svg viewBox="0 0 200 120">
+              <path class="empty__edge" d="M56 60C86 60 86 30 116 30" />
+              <path class="empty__edge" d="M56 60C86 60 86 60 116 60" />
+              <path class="empty__edge" d="M56 60C86 60 86 90 116 90" />
+              <rect x="16" y="46" width="40" height="28" rx="7" class="empty__node empty__node--root" />
+              <rect x="116" y="16" width="40" height="28" rx="7" class="empty__node" />
+              <rect x="116" y="46" width="40" height="28" rx="7" class="empty__node" />
+              <rect x="116" y="76" width="40" height="28" rx="7" class="empty__node" />
+            </svg>
+          </div>
+          <h1 class="empty__title">Point at a USD file</h1>
+          <p class="empty__body">
+            Every sublayer, reference, payload, value clip and texture it reaches
+            gets laid out as a graph you can walk.
+          </p>
+          <button class="btn btn--primary" id="empty-open">Choose a file</button>
+          <p class="empty__hint">or drop one anywhere on this window, or paste a path</p>
+        </div>
+
+        <div class="loading" id="loading" hidden>
+          <div class="loading__spinner" aria-hidden="true"></div>
+          <span id="loading-text">Crawling layers…</span>
+        </div>
+      </main>
+
+      <!-- ── Inspector ──────────────────────────────────────────────── -->
+      <aside class="inspector" id="inspector" hidden></aside>
+    </div>
+
+    <!-- ── File picker ──────────────────────────────────────────────── -->
+    <div class="modal" id="picker" hidden>
+      <div class="modal__scrim" id="picker-scrim"></div>
+      <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Open a USD file">
+        <header class="picker__head">
+          <div class="crumbs" id="crumbs"></div>
+          <button class="iconbtn" id="picker-close" title="Close (Esc)">
+            <svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></svg>
+          </button>
+        </header>
+
+        <div class="picker__body">
+          <nav class="picker__roots" id="picker-roots"></nav>
+          <div class="picker__list" id="picker-list" tabindex="0"></div>
+        </div>
+
+        <footer class="picker__foot">
+          <input
+            id="picker-path"
+            class="picker__input"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="…or paste a full path to a .usd / .usda / .usdc / .usdz file"
+          />
+          <button class="btn btn--primary" id="picker-go">Open</button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ── Drop overlay ─────────────────────────────────────────────── -->
+    <div class="dropzone" id="dropzone" hidden>
+      <div class="dropzone__frame">
+        <svg class="dropzone__icon" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M16 21.5V7.5" />
+          <path d="m10 13.5 6-6 6 6" />
+          <path d="M5.5 20v3.5a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V20" />
+        </svg>
+        <span class="dropzone__text" id="dropzone-text">Drop a USD file</span>
+      </div>
+    </div>
+
+    <!-- ── Which one did you mean? ──────────────────────────────────── -->
+    <div class="modal" id="chooser" hidden>
+      <div class="modal__scrim" id="chooser-scrim"></div>
+      <div class="modal__panel modal__panel--slim" role="dialog" aria-modal="true">
+        <header class="picker__head">
+          <div class="chooser__head">
+            <span class="chooser__title" id="chooser-title"></span>
+            <span class="chooser__note" id="chooser-note"></span>
+          </div>
+          <button class="iconbtn" id="chooser-close" title="Close (Esc)">
+            <svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></svg>
+          </button>
+        </header>
+        <div class="chooser__list" id="chooser-list"></div>
+      </div>
+    </div>
+
+    <div class="toasts" id="toasts"></div>
+
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "usd-refgraph",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive reference graph for USD layers.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3"
+  }
+}

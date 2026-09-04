@@ -1,0 +1,2 @@
+# The crawler needs OpenUSD's Python bindings; nothing else.
+usd-core>=25.0

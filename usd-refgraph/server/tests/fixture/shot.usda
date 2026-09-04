@@ -1,0 +1,99 @@
+#usda 1.0
+(
+    doc = """Exercises every arc kind the crawler knows about.
+
+    Deliberately includes a missing sublayer, a missing clip, a missing
+    texture, and two placeholder paths, so the tests can assert on how each
+    is reported."""
+    defaultPrim = "Shot"
+    upAxis = "Y"
+    metersPerUnit = 1
+    startTimeCode = 1
+    endTimeCode = 48
+    framesPerSecond = 24
+    customLayerData = {
+        string pipeline_step = "layout"
+    }
+    subLayers = [
+        @./anim.usda@,
+        @./missing_layer.usda@
+    ]
+)
+
+def Xform "Shot"
+{
+    def "Hero" (
+        prepend references = @./assets/hero.usda@</Hero>
+        prepend payload = @./assets/hero_proxy.usda@
+    )
+    {
+    }
+
+    def "Crowd" (
+        variants = {
+            string lod = "high"
+        }
+        prepend variantSets = "lod"
+    )
+    {
+        variantSet "lod" = {
+            "high" {
+                def "Body" (
+                    prepend references = @./assets/crowd_high.usda@
+                )
+                {
+                }
+            }
+            "low" {
+                def "Body" (
+                    prepend references = @./assets/crowd_low.usda@
+                )
+                {
+                }
+            }
+        }
+    }
+
+    def "Clipped" (
+        clips = {
+            dictionary default = {
+                asset[] assetPaths = [@./clips/sim.0001.usda@, @./clips/sim.0002.usda@]
+                string primPath = "/Clipped"
+            }
+        }
+    )
+    {
+    }
+
+    def "Templated" (
+        clips = {
+            dictionary default = {
+                asset templateAssetPath = @./clips/frame.#.usda@
+                double templateStartTime = 1
+            }
+        }
+    )
+    {
+    }
+
+    def Material "Surface"
+    {
+        def Shader "diffuse"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./tex/basecolor.<UDIM>.exr@
+        }
+
+        def Shader "rough"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./tex/roughness.png@
+        }
+
+        def Shader "missingTex"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./tex/nope.exr@
+        }
+    }
+}
