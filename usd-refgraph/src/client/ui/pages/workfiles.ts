@@ -2,133 +2,288 @@
  * Which HIP file writes which layer.
  *
  * Publishing records the workfile and the ROP that produced each layer, so the
- * provenance is already in the files — this just inverts it: one box per
- * workfile, listing everything it writes and the ROP each came out of.
+ * provenance is already in the files — this just inverts it.
+ *
+ * Artists version their workfiles as they go, so the page groups by the
+ * workfile itself and separates by version inside: one box per workfile, one
+ * section per version, newest first. Treating `_v001` and `_v002` as unrelated
+ * files would scatter one person's history of a shot across the page.
  */
 
-import type { Project, TaskRow } from '@shared/project'
+import type { TaskRow } from '@shared/project'
+import type { WorkfileName } from '@shared/workfile'
 import { allTasks } from '@shared/project'
-import { formatMoment, relativeDay, statusDot, statusPill } from '../../pipeline'
-import { el } from '../../util'
+import { byVersionDesc, parseWorkfile, workfileKey } from '@shared/workfile'
+import {
+  card,
+  countBadge,
+  dataTable,
+  disclosure,
+  emptyState,
+  metrics,
+  namedCell,
+  statusPill,
+  truncated,
+} from '../kit'
+import { ICONS } from '../icons'
+import { el, formatMoment, formatRelative, icon } from '../../util'
+import { pageState, type PageContext } from './context'
 import { pageShell } from './shell'
 
 const UNRECORDED = '— no workfile recorded —'
 
-/** Which workfile is open; null collapses them all. */
-let expanded: string | null = null
+/** One version of one workfile, and everything it wrote. */
+interface Version {
+  name: WorkfileName
+  rows: TaskRow[]
+}
 
-export function renderWorkfiles(host: HTMLElement, project: Project): void {
-  const rerender = (): void => renderWorkfiles(host, project)
+/** Every version of one workfile, newest first. */
+interface Workfile {
+  /** The grouping key: the name without its version token. */
+  key: string
+  /** What to call the family on screen. */
+  label: string
+  /** True for the bucket holding layers that recorded no workfile at all. */
+  unrecorded: boolean
+  versions: Version[]
+  rows: TaskRow[]
+}
 
-  const byHip = new Map<string, TaskRow[]>()
-  for (const task of allTasks(project)) {
-    const hip = task.layer.pipeline.hipFile ?? UNRECORDED
-    const list = byHip.get(hip)
-    if (list) list.push(task)
-    else byHip.set(hip, [task])
-  }
+export function renderWorkfiles(host: HTMLElement, context: PageContext): void {
+  const state = pageState.workfiles
+  const tasks = allTasks(context.project)
+  const workfiles = groupWorkfiles(tasks)
 
-  // Most recently used workfile first; the unrecorded bucket always last.
-  const hips = [...byHip.keys()].sort((a, b) => {
-    if (a === UNRECORDED) return 1
-    if (b === UNRECORDED) return -1
-    return latest(byHip.get(b)!) - latest(byHip.get(a)!)
-  })
+  const versionCount = workfiles.reduce((sum, file) => sum + file.versions.length, 0)
 
   const body = pageShell(host, 'Workfiles', {
     subtitle: 'Which HIP file writes which layer',
-    actions: el(
-      'div',
-      'page__meta',
-      `${hips.length} ${hips.length === 1 ? 'workfile' : 'workfiles'} · ${
-        byHip.size ? allTasks(project).length : 0
-      } layers`,
-    ),
+    meta: `${workfiles.length} ${workfiles.length === 1 ? 'workfile' : 'workfiles'} · ${
+      tasks.length
+    } layers`,
   })
 
-  if (!hips.length) {
-    const card = el('section', 'card')
-    card.appendChild(el('p', 'muted', 'No published layers found.'))
-    body.appendChild(card)
+  if (!workfiles.length) {
+    body.appendChild(
+      emptyState('No published layers found.', {
+        icon: 'hip',
+        body: 'Publishing records `hip_file` in each layer; nothing here has one yet.',
+      }),
+    )
     return
   }
 
+  const untraced = workfiles.find((file) => file.unrecorded)?.rows.length ?? 0
+  body.appendChild(summaryCard(workfiles.length, versionCount, tasks.length, untraced))
+
   // With a single workfile there is nothing to choose between, so open it.
-  if (hips.length === 1 && expanded === null) expanded = hips[0]!
+  if (workfiles.length === 1 && state.expanded === null) state.expanded = workfiles[0]!.key
 
   const stack = el('div', 'stack__list')
-  for (const hip of hips) {
-    stack.appendChild(hipBox(hip, byHip.get(hip)!, rerender))
-  }
+  for (const file of workfiles) stack.appendChild(fileBox(file, context))
   body.appendChild(stack)
+}
+
+// ---------------------------------------------------------------------------
+// Grouping
+// ---------------------------------------------------------------------------
+
+/** Gather layers into workfiles, and each workfile into its versions. */
+function groupWorkfiles(tasks: TaskRow[]): Workfile[] {
+  const files = new Map<string, Workfile>()
+
+  for (const task of tasks) {
+    const recorded = task.layer.pipeline.hipFile
+    const parsed = parseWorkfile(recorded ?? UNRECORDED)
+    const key = recorded ? workfileKey(parsed) : UNRECORDED
+
+    let file = files.get(key)
+    if (!file) {
+      file = {
+        key,
+        label: recorded ? parsed.base || parsed.full : UNRECORDED,
+        unrecorded: !recorded,
+        versions: [],
+        rows: [],
+      }
+      files.set(key, file)
+    }
+    file.rows.push(task)
+
+    // Versions are told apart by the token as authored, so a project that
+    // mixes `v01` and `v001` keeps them as the two things they are.
+    let version = file.versions.find(
+      (candidate) => candidate.name.versionLabel === parsed.versionLabel,
+    )
+    if (!version) {
+      version = { name: parsed, rows: [] }
+      file.versions.push(version)
+    }
+    version.rows.push(task)
+  }
+
+  for (const file of files.values()) {
+    file.versions.sort((a, b) => byVersionDesc(a.name, b.name))
+  }
+
+  // Most recently used workfile first; the unrecorded bucket always last.
+  return [...files.values()].sort((a, b) => {
+    if (a.unrecorded) return 1
+    if (b.unrecorded) return -1
+    return latest(b.rows) - latest(a.rows)
+  })
 }
 
 function latest(rows: TaskRow[]): number {
   return Math.max(0, ...rows.map((row) => row.layer.pipeline.exportedAt ?? 0))
 }
 
-function hipBox(hip: string, rows: TaskRow[], rerender: () => void): HTMLElement {
-  const isOpen = expanded === hip
-  const unrecorded = hip === UNRECORDED
-
-  const box = el('div', 'ebox')
-  if (isOpen) box.classList.add('is-open')
-  if (expanded !== null && !isOpen) box.classList.add('is-dim')
-
-  const row = el('button', 'ebox__row')
-
-  const icon = el('span', 'hip__icon')
-  icon.innerHTML =
-    '<svg viewBox="0 0 16 16"><path d="M9.6 1.8H4.6A1.4 1.4 0 0 0 3.2 3.2v9.6a1.4 1.4 0 0 0 1.4 1.4h6.8a1.4 1.4 0 0 0 1.4-1.4V5.2z"/><path d="M9.6 1.8v3.6h3.2"/><path d="M5.6 9h4.8M5.6 11.2h3"/></svg>'
-  row.appendChild(icon)
-
-  const name = el('span', 'hip__name', hip)
-  if (unrecorded) name.classList.add('hip__name--none')
-  row.appendChild(name)
-
-  const artists = [
-    ...new Set(rows.map((r) => r.layer.pipeline.artist).filter(Boolean)),
-  ] as string[]
-  if (artists.length) {
-    row.appendChild(el('span', 'hip__artist', artists.join(', ')))
-  }
-
-  const right = el('span', 'ebox__right')
-  const when = latest(rows)
-  if (when) {
-    const stamp = el('span', 'ebox__count', relativeDay(when))
-    stamp.title = formatMoment(when)
-    right.appendChild(stamp)
-  }
-  right.appendChild(
-    el('span', 'ebox__count', `${rows.length} ${rows.length === 1 ? 'layer' : 'layers'}`),
-  )
-  right.appendChild(el('span', 'ebox__hint', isOpen ? 'Hide' : 'Expand'))
-  row.appendChild(right)
-
-  row.addEventListener('click', () => {
-    expanded = isOpen ? null : hip
-    rerender()
-  })
-  box.appendChild(row)
-
-  if (isOpen) box.appendChild(outputs(rows, unrecorded))
-  return box
+function artistsOf(rows: TaskRow[]): string[] {
+  return [...new Set(rows.map((row) => row.layer.pipeline.artist).filter(Boolean))] as string[]
 }
 
-function outputs(rows: TaskRow[], unrecorded: boolean): HTMLElement {
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+
+function summaryCard(
+  workfiles: number,
+  versions: number,
+  layers: number,
+  untraced: number,
+): HTMLElement {
+  const { root, body } = card('Provenance')
+  body.appendChild(
+    metrics([
+      { value: workfiles, label: workfiles === 1 ? 'Workfile' : 'Workfiles' },
+      {
+        value: versions,
+        label: versions === 1 ? 'Version' : 'Versions',
+        hint: 'Every version of every workfile, counted separately',
+      },
+      { value: layers, label: 'Layers written' },
+      {
+        value: untraced,
+        label: 'Untraceable',
+        accent: untraced ? 'var(--warn)' : undefined,
+        hint: 'Layers with no hip_file, so what produced them cannot be traced',
+      },
+    ]),
+  )
+  return root
+}
+
+function fileBox(file: Workfile, context: PageContext): HTMLElement {
+  const state = pageState.workfiles
+  const open = state.expanded === file.key
+
+  const glyph = icon(ICONS.hip)
+  glyph.setAttribute('class', 'ebox__icon')
+
+  const name = el('span', 'ebox__name ebox__name--mono', file.label)
+  if (file.unrecorded) name.classList.add('is-absent')
+
+  const lead: Element[] = [glyph, name]
+
+  // The newest version is the one you are most likely to be asked about, so
+  // it rides on the collapsed row rather than hiding inside.
+  const newest = file.versions[0]
+  if (!file.unrecorded && newest?.name.versionLabel) {
+    const tag = el('span', 'ver ver--latest', newest.name.versionLabel)
+    tag.title = `Latest version: ${newest.name.full}`
+    lead.push(tag)
+  }
+
+  const artists = artistsOf(file.rows)
+  if (artists.length) lead.push(el('span', 'ebox__note', artists.join(', ')))
+
+  const trail: Element[] = []
+  if (!file.unrecorded && file.versions.length > 1) {
+    const count = countBadge(`${file.versions.length} versions`)
+    count.title = file.versions.map((version) => version.name.full).join('\n')
+    trail.push(count)
+  }
+  const when = latest(file.rows)
+  if (when) {
+    const stamp = el('span', 'ebox__count', formatRelative(when))
+    stamp.title = formatMoment(when)
+    trail.push(stamp)
+  }
+  trail.push(
+    el(
+      'span',
+      'ebox__count',
+      `${file.rows.length} ${file.rows.length === 1 ? 'layer' : 'layers'}`,
+    ),
+  )
+
+  return disclosure({
+    open,
+    dimmed: state.expanded !== null,
+    lead,
+    trail,
+    onToggle: () => {
+      state.expanded = open ? null : file.key
+      context.refresh()
+    },
+    panel: () => versionsPanel(file),
+  })
+}
+
+function versionsPanel(file: Workfile): HTMLElement {
   const panel = el('div', 'epanel')
 
-  if (unrecorded) {
+  if (file.unrecorded) {
     panel.appendChild(
-      el(
-        'p',
-        'muted',
-        'These layers carry no hip_file, so what produced them cannot be traced.',
-      ),
+      emptyState('These layers carry no hip_file, so what produced them cannot be traced.', {
+        inline: true,
+      }),
     )
   }
 
+  for (const version of file.versions) {
+    panel.appendChild(versionBlock(file, version))
+  }
+  return panel
+}
+
+function versionBlock(file: Workfile, version: Version): HTMLElement {
+  const block = el('div', 'ver-block')
+
+  // An unversioned workfile has exactly one section, and a heading saying
+  // "no version" would be noise, so it goes straight to the table.
+  if (!file.unrecorded && version.name.versionLabel) {
+    const head = el('div', 'ver-block__head')
+    head.appendChild(el('span', 'ver', version.name.versionLabel))
+    head.appendChild(truncated(version.name.full, 'ver-block__file'))
+
+    const meta = el('span', 'ver-block__meta')
+    const artists = artistsOf(version.rows)
+    if (artists.length) meta.appendChild(el('span', undefined, artists.join(', ')))
+
+    const when = latest(version.rows)
+    if (when) {
+      const stamp = el('span', undefined, formatRelative(when))
+      stamp.title = formatMoment(when)
+      meta.appendChild(stamp)
+    }
+    meta.appendChild(
+      el(
+        'span',
+        undefined,
+        `${version.rows.length} ${version.rows.length === 1 ? 'layer' : 'layers'}`,
+      ),
+    )
+    head.appendChild(meta)
+    block.appendChild(head)
+  }
+
+  block.appendChild(outputs(version.rows))
+  return block
+}
+
+function outputs(rows: TaskRow[]): HTMLElement {
   // Sorting by ROP keeps the outputs of one part of the stage together, since
   // ROP paths share a prefix per network.
   const sorted = [...rows].sort(
@@ -137,16 +292,23 @@ function outputs(rows: TaskRow[], unrecorded: boolean): HTMLElement {
       a.entity.name.localeCompare(b.entity.name),
   )
 
-  const head = el('div', 'hiprow hiprow--head')
-  for (const label of ['ROP', 'Writes', 'Status']) {
-    head.appendChild(el('span', undefined, label))
-  }
-  panel.appendChild(head)
-
-  const list = el('div', 'stack__list')
-  for (const row of sorted) list.appendChild(outputRow(row))
-  panel.appendChild(list)
-  return panel
+  return dataTable(
+    [
+      { label: 'ROP', width: 'minmax(0, 1fr)' },
+      { label: 'Writes', width: 'minmax(0, 1.2fr)' },
+      { label: 'Entity', width: 'minmax(0, 0.8fr)' },
+      { label: 'Status', width: '120px', end: true },
+    ],
+    sorted.map((row) => ({
+      title: row.layer.path,
+      cells: [
+        truncated(ropLabel(row.layer.pipeline.ropPath), 'mono dim'),
+        namedCell(row.layer.name, { mono: true, strong: true }),
+        namedCell(row.entity.name, { status: row.entity.status }),
+        statusPill(row.layer.pipeline.status, true),
+      ],
+    })),
+  )
 }
 
 /** `/stage/Bob_Lookdev/mz_usd_rop2` reads better as `Bob_Lookdev / mz_usd_rop2`. */
@@ -155,24 +317,4 @@ function ropLabel(path: string | undefined): string {
   const parts = path.split('/').filter(Boolean)
   if (parts[0] === 'stage') parts.shift()
   return parts.join(' / ') || path
-}
-
-function outputRow(row: TaskRow): HTMLElement {
-  const line = el('div', 'hiprow hiprow--item')
-
-  const rop = el('span', 'hiprow__rop', ropLabel(row.layer.pipeline.ropPath))
-  rop.title = row.layer.pipeline.ropPath ?? 'No rop_path recorded'
-  line.appendChild(rop)
-
-  const target = el('span', 'hiprow__target')
-  target.appendChild(statusDot(row.entity.status))
-  target.appendChild(el('span', undefined, row.layer.name))
-  target.title = row.layer.path
-  line.appendChild(target)
-
-  const status = el('span', 'hiprow__status')
-  status.appendChild(statusPill(row.layer.pipeline.status))
-  line.appendChild(status)
-
-  return line
 }

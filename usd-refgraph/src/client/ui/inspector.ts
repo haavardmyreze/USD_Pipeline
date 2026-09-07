@@ -1,8 +1,43 @@
-/** The right-hand detail panel for whichever file is selected. */
+/**
+ * The right-hand detail panel for whichever file is selected.
+ *
+ * The crawl hands `customLayerData` through raw, so the panel reads it with
+ * the same reader the project scan uses and presents the result the same way
+ * the project pages do — a status pill, a named artist, a formatted publish
+ * time. A layer should not describe itself differently depending on which part
+ * of the app you are looking at it from.
+ */
 
 import type { Graph, GraphEdge, GraphNode } from '@shared/types'
-import { ARC_COLOR, ARC_LABEL, ICONS, MISSING_COLOR, ROOT_COLOR } from '../graph/theme'
-import { clear, copyText, el, formatBytes, formatDate, icon, must } from '../util'
+import { isEmptyRecord, readRecord } from '@shared/pipeline'
+import {
+  ARC_LABEL,
+  ARC_STROKE,
+  MISSING_COLOR,
+  ROOT_COLOR,
+  TIER_TINT,
+  arcSample,
+} from '../graph/theme'
+import { ICONS } from './icons'
+import {
+  Facts,
+  button,
+  countBadge,
+  emptyState,
+  iconButton,
+  statusPill,
+  truncated,
+} from './kit'
+import {
+  clear,
+  copyText,
+  el,
+  formatBytes,
+  formatDate,
+  formatMoment,
+  icon,
+  must,
+} from '../util'
 
 export interface InspectorCallbacks {
   onSelect(id: string): void
@@ -28,8 +63,8 @@ export class Inspector {
       return
     }
 
-    const outgoing = graph.edges.filter((e) => e.from === nodeId)
-    const incoming = graph.edges.filter((e) => e.to === nodeId)
+    const outgoing = graph.edges.filter((edge) => edge.from === nodeId)
+    const incoming = graph.edges.filter((edge) => edge.to === nodeId)
     const isRoot = node.id === graph.rootId
     const missing = !node.exists && !node.template
 
@@ -37,24 +72,28 @@ export class Inspector {
     this.root.hidden = false
     this.root.style.setProperty(
       '--accent',
-      isRoot ? ROOT_COLOR : missing ? MISSING_COLOR : ARC_COLOR[incoming[0]?.kind ?? 'unknown'],
+      isRoot ? ROOT_COLOR : missing ? MISSING_COLOR : TIER_TINT[node.tier ?? ''] ?? 'var(--fg-3)',
     )
 
     this.root.appendChild(this.buildHead(node, isRoot, missing))
-    if (node.meta) this.root.appendChild(this.buildMeta(node))
-    this.root.appendChild(
-      this.buildArcs('References out', outgoing, graph, (e) => e.to),
-    )
-    this.root.appendChild(
-      this.buildArcs('Referenced by', incoming, graph, (e) => e.from),
-    )
+
+    const record = readRecord(node.meta?.customLayerData)
+    if (!isEmptyRecord(record)) this.root.appendChild(this.buildPublish(record))
+    if (node.meta) this.root.appendChild(this.buildLayer(node))
+
+    this.root.appendChild(this.buildArcs('References out', outgoing, graph, (e) => e.to))
+    this.root.appendChild(this.buildArcs('Referenced by', incoming, graph, (e) => e.from))
   }
+
+  // -- head ---------------------------------------------------------------
 
   private buildHead(node: GraphNode, isRoot: boolean, missing: boolean): HTMLElement {
     const head = el('div', 'insp__head')
 
     const top = el('div', 'insp__top')
-    top.appendChild(el('h2', 'insp__title', node.name))
+    const title = el('h2', 'insp__title', node.name)
+    title.title = node.name
+    top.appendChild(title)
     head.appendChild(top)
 
     const tags = el('div', 'insp__tags')
@@ -68,78 +107,112 @@ export class Inspector {
     if (node.exists) tags.appendChild(tag(formatBytes(node.size)))
     head.appendChild(tags)
 
+    // One line, ellipsised from the left so the filename stays visible, with
+    // the full path in the tooltip and on the clipboard.
     const pathRow = el('div', 'insp__path')
-    const code = el('code', undefined, node.path)
-    pathRow.appendChild(code)
+    pathRow.appendChild(truncated(node.path, 'insp__pathText'))
+    pathRow.appendChild(
+      iconButton('copy', 'Copy path', () => void this.copy(node.path)),
+    )
     head.appendChild(pathRow)
 
     if (node.error) {
-      const error = el('div', 'insp__path')
-      error.style.borderColor = 'color-mix(in srgb, var(--danger) 35%, transparent)'
-      const errorCode = el('code', undefined, node.error)
-      errorCode.style.color = 'var(--danger)'
-      error.appendChild(errorCode)
+      const error = el('div', 'insp__error')
+      const glyph = icon(ICONS.alert)
+      glyph.setAttribute('class', 'insp__errorIcon')
+      error.appendChild(glyph)
+      error.appendChild(el('span', undefined, node.error))
       head.appendChild(error)
     }
 
     const actions = el('div', 'insp__actions')
-
-    const copy = el('button', 'btn', 'Copy path')
-    copy.addEventListener('click', async () => {
-      const ok = await copyText(node.path)
-      this.callbacks.onToast(
-        ok ? 'Path copied' : 'Could not copy to the clipboard',
-        ok ? 'ok' : 'error',
-      )
-    })
-    actions.appendChild(copy)
-
     if (node.exists) {
-      const revealBtn = el('button', 'btn', 'Reveal')
-      revealBtn.addEventListener('click', () => this.callbacks.onReveal(node.path))
-      actions.appendChild(revealBtn)
+      actions.appendChild(
+        button('Reveal', {
+          icon: 'external',
+          small: true,
+          title: 'Show this file in the file manager',
+          onClick: () => this.callbacks.onReveal(node.path),
+        }),
+      )
     }
-
     if (!isRoot && node.kind === 'layer' && node.exists) {
-      const rootBtn = el('button', 'btn', 'Set as root')
-      rootBtn.addEventListener('click', () => this.callbacks.onSetRoot(node.id))
-      actions.appendChild(rootBtn)
+      actions.appendChild(
+        button('Set as root', {
+          icon: 'target',
+          small: true,
+          variant: 'primary',
+          title: 'Re-crawl from this file',
+          onClick: () => this.callbacks.onSetRoot(node.id),
+        }),
+      )
     }
-
-    head.appendChild(actions)
+    if (actions.childElementCount) head.appendChild(actions)
     return head
   }
 
-  private buildMeta(node: GraphNode): HTMLElement {
+  private async copy(path: string): Promise<void> {
+    const ok = await copyText(path)
+    this.callbacks.onToast(
+      ok ? 'Path copied' : 'Could not copy to the clipboard',
+      ok ? 'ok' : 'error',
+    )
+  }
+
+  // -- sections -----------------------------------------------------------
+
+  /** The publisher's own record, shown the way the project pages show it. */
+  private buildPublish(record: ReturnType<typeof readRecord>): HTMLElement {
+    const section = el('div', 'insp__section')
+
+    const heading = el('h3', undefined, 'Publish')
+    if (record.status !== 'unknown' || record.statusRaw) {
+      heading.appendChild(statusPill(record.status, true))
+    }
+    section.appendChild(heading)
+
+    const facts = new Facts()
+    facts.add('Artist', record.artist)
+    facts.add('Published', record.exportedAt ? formatMoment(record.exportedAt) : null)
+    facts.add('Workfile', record.hipFile)
+    facts.add('ROP', record.ropPath)
+    if (record.status === 'unknown' && record.statusRaw) {
+      facts.add('Status as written', record.statusRaw)
+    }
+    for (const [key, value] of Object.entries(record.extra ?? {})) facts.add(key, value)
+    if (!facts.isEmpty) section.appendChild(facts.root)
+
+    if (record.comment) {
+      section.appendChild(el('p', 'insp__comment', record.comment))
+    }
+    return section
+  }
+
+  /** What USD itself says about the layer. */
+  private buildLayer(node: GraphNode): HTMLElement {
     const meta = node.meta!
     const section = el('div', 'insp__section')
     section.appendChild(el('h3', undefined, 'Layer'))
 
-    const list = el('dl', 'kv')
-    const row = (key: string, value: string | undefined | null): void => {
-      if (value === undefined || value === null || value === '') return
-      list.appendChild(el('dt', undefined, key))
-      list.appendChild(el('dd', undefined, value))
-    }
-
-    row('Default prim', meta.defaultPrim)
-    row('Up axis', meta.upAxis)
-    row(
+    const facts = new Facts()
+    facts.add('Default prim', meta.defaultPrim)
+    facts.add('Up axis', meta.upAxis)
+    facts.add(
       'Metres/unit',
       meta.metersPerUnit === undefined ? undefined : String(meta.metersPerUnit),
     )
     if (meta.startTimeCode !== undefined || meta.endTimeCode !== undefined) {
       const fps = meta.framesPerSecond ? ` @ ${meta.framesPerSecond}fps` : ''
-      row('Frame range', `${meta.startTimeCode ?? '?'} – ${meta.endTimeCode ?? '?'}${fps}`)
+      facts.add('Frame range', `${meta.startTimeCode ?? '?'} – ${meta.endTimeCode ?? '?'}${fps}`)
     }
-    row('Root prims', meta.primCount === undefined ? undefined : String(meta.primCount))
-    row('Modified', formatDate(node.mtime))
+    facts.add('Root prims', meta.primCount === undefined ? undefined : String(meta.primCount))
+    facts.add('Modified', node.mtime ? formatDate(node.mtime) : null)
 
-    for (const [key, value] of Object.entries(meta.customLayerData ?? {})) {
-      row(key, value)
+    if (facts.isEmpty) {
+      section.appendChild(emptyState('Nothing authored in layer metadata.', { inline: true }))
+    } else {
+      section.appendChild(facts.root)
     }
-
-    section.appendChild(list)
     return section
   }
 
@@ -151,26 +224,25 @@ export class Inspector {
   ): HTMLElement {
     const section = el('div', 'insp__section')
     const heading = el('h3', undefined, title)
-    const count = el('span', 'badge badge--muted', String(edges.length))
-    count.style.marginLeft = 'auto'
-    heading.appendChild(count)
+    heading.appendChild(countBadge(edges.length))
     section.appendChild(heading)
 
     if (!edges.length) {
-      section.appendChild(el('div', 'empty-note', 'Nothing.'))
+      section.appendChild(emptyState('Nothing.', { inline: true }))
       return section
     }
 
     const list = el('div', 'arc-list')
     for (const edge of edges) {
       const otherId = pick(edge)
-      const other = graph.nodes.find((n) => n.id === otherId)
+      const other = graph.nodes.find((node) => node.id === otherId)
       if (!other) continue
       const missing = !other.exists && !other.template
 
       const row = el('button', `arc${missing ? ' arc--missing' : ''}`)
       const pip = el('span', 'arc__pip')
-      pip.style.setProperty('--accent', missing ? MISSING_COLOR : ARC_COLOR[edge.kind])
+      pip.appendChild(arcSample(edge.kind, 26))
+      pip.title = `Drawn ${ARC_STROKE[edge.kind]}`
       row.appendChild(pip)
 
       const main = el('div', 'arc__main')
@@ -186,15 +258,15 @@ export class Inspector {
       if (edge.targetPrim) details.push(`→ ${edge.targetPrim}`)
       if (edge.attribute) details.push(edge.attribute)
       if (edge.variants?.length) {
-        details.push(edge.variants.map((v) => `${v.set}=${v.variant}`).join(' / '))
+        details.push(edge.variants.map((variant) => `${variant.set}=${variant.variant}`).join(' / '))
       }
       if (!details.length) details.push(edge.rawPath)
       main.appendChild(el('div', 'arc__meta', details.join('  ·  ')))
       row.appendChild(main)
 
-      const kind = el('span', 'arc__kind', ARC_LABEL[edge.kind].split(' ')[0] ?? edge.kind)
-      kind.style.setProperty('--accent', missing ? MISSING_COLOR : ARC_COLOR[edge.kind])
-      row.appendChild(kind)
+      row.appendChild(
+        el('span', 'arc__kind', ARC_LABEL[edge.kind].split(' ')[0] ?? edge.kind),
+      )
 
       row.title = edge.rawPath
       row.addEventListener('click', () => this.callbacks.onSelect(otherId))
@@ -206,10 +278,7 @@ export class Inspector {
   }
 }
 
-function tag(
-  text: string,
-  variant?: 'accent' | 'danger' | 'warn' | 'role',
-): HTMLElement {
+function tag(text: string, variant?: 'accent' | 'danger' | 'warn' | 'role'): HTMLElement {
   return el('span', `tag${variant ? ` tag--${variant}` : ''}`, text)
 }
 

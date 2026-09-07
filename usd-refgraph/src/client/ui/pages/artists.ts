@@ -1,31 +1,47 @@
 /**
  * Artist focus: pick a person, see everything they have published, grouped by
  * assets, sets and shots.
+ *
+ * The roster is whoever has actually published — there is no team list in USD
+ * to read one from, so this page is a record of work done, not of who is on
+ * the show.
  */
 
-import type { Project, Status, TaskRow } from '@shared/project'
-import { STATUS_ORDER, allTasks } from '@shared/project'
+import type { TaskRow } from '@shared/project'
+import type { Status } from '@shared/pipeline'
 import type { NodeTier } from '@shared/types'
-import { STATUS_LABEL, formatMoment, relativeDay, statusDot, statusPill } from '../../pipeline'
-import { el } from '../../util'
+import { STATUS_ALL, STATUS_ORDER, allTasks, byRecency } from '@shared/project'
+import {
+  STATUS_LABEL,
+  TIER_COLOR,
+  card,
+  dataTable,
+  emptyState,
+  filterChips,
+  groupHead,
+  metrics,
+  namedCell,
+  select,
+  statusPill,
+  truncated,
+} from '../kit'
+import { el, formatMoment, formatRelative } from '../../util'
+import { pageState, type PageContext } from './context'
 import { pageShell } from './shell'
 
 const UNATTRIBUTED = '— no artist —'
 
 const TIERS: { id: NodeTier; label: string }[] = [
-  { id: 'asset', label: 'assets' },
-  { id: 'set', label: 'sets' },
-  { id: 'shot', label: 'shots' },
+  { id: 'asset', label: 'Assets' },
+  { id: 'set', label: 'Sets' },
+  { id: 'shot', label: 'Shots' },
 ]
 
-let selectedArtist: string | null = null
-let hidden = new Set<Status>()
-
-export function renderArtists(host: HTMLElement, project: Project): void {
-  const rerender = (): void => renderArtists(host, project)
+export function renderArtists(host: HTMLElement, context: PageContext): void {
+  const state = pageState.artists
 
   const byArtist = new Map<string, TaskRow[]>()
-  for (const task of allTasks(project)) {
+  for (const task of allTasks(context.project)) {
     const artist = task.layer.pipeline.artist ?? UNATTRIBUTED
     const list = byArtist.get(artist)
     if (list) list.push(task)
@@ -37,169 +53,138 @@ export function renderArtists(host: HTMLElement, project: Project): void {
     if (b === UNATTRIBUTED) return -1
     return a.localeCompare(b)
   })
-  if (!selectedArtist || !byArtist.has(selectedArtist)) {
-    selectedArtist = artists[0] ?? null
+  if (!state.artist || !byArtist.has(state.artist)) {
+    state.artist = artists[0] ?? null
   }
 
-  const controls = el('div', 'focus-controls')
+  const controls = el('div', 'page__controls')
   if (artists.length) {
-    controls.appendChild(artistSelect(artists, byArtist, rerender))
+    controls.appendChild(
+      select(
+        artists.map((artist) => ({
+          value: artist,
+          label: `${artist}  ·  ${byArtist.get(artist)?.length ?? 0} layers`,
+        })),
+        state.artist,
+        (artist) => {
+          state.artist = artist
+          context.refresh()
+        },
+      ),
+    )
   }
-  controls.appendChild(statusFilter(rerender))
+  controls.appendChild(
+    filterChips<Status>(
+      'Status',
+      STATUS_ALL.map((status) => ({ value: status, label: STATUS_LABEL[status], status })),
+      state.hiddenStatus,
+      (status) => {
+        if (state.hiddenStatus.has(status)) state.hiddenStatus.delete(status)
+        else state.hiddenStatus.add(status)
+        context.refresh()
+      },
+    ),
+  )
 
-  const body = pageShell(host, 'Artist Focus', { controls })
+  const body = pageShell(host, 'Artists', {
+    subtitle: 'Who published what — read from each layer, not from a roster',
+    meta: `${artists.length} ${artists.length === 1 ? 'person' : 'people'}`,
+    controls,
+  })
 
-  if (!artists.length || !selectedArtist) {
-    const card = el('section', 'card')
-    card.appendChild(el('p', 'muted', 'No published layers found.'))
-    body.appendChild(card)
+  if (!artists.length || !state.artist) {
+    body.appendChild(
+      emptyState('No published layers found.', {
+        icon: 'user',
+        body: 'Nothing in this project carries an artist in its layer metadata.',
+      }),
+    )
     return
   }
 
-  const mine = byArtist.get(selectedArtist) ?? []
-  const visible = mine.filter((task) => !hidden.has(task.layer.pipeline.status))
+  const mine = byArtist.get(state.artist) ?? []
+  const visible = mine.filter((task) => !state.hiddenStatus.has(task.layer.pipeline.status))
 
-  body.appendChild(summaryCard(selectedArtist, mine, visible))
+  body.appendChild(summaryCard(state.artist, mine, visible))
 
-  let anyShown = false
+  let shown = 0
   for (const tier of TIERS) {
     const rows = visible.filter((task) => task.entity.tier === tier.id).sort(byRecency)
     if (!rows.length) continue
-    anyShown = true
+    shown++
     body.appendChild(tierBlock(tier.id, tier.label, rows))
   }
 
-  if (!anyShown) {
-    const card = el('section', 'card')
-    card.appendChild(el('p', 'muted', 'Nothing matches the current filters.'))
-    body.appendChild(card)
+  if (!shown) {
+    body.appendChild(
+      emptyState('Nothing matches the current filters.', {
+        icon: 'inbox',
+        body: 'Switch a status back on to see the rest of their work.',
+      }),
+    )
   }
-}
-
-function byRecency(a: TaskRow, b: TaskRow): number {
-  return (b.layer.pipeline.exportedAt ?? 0) - (a.layer.pipeline.exportedAt ?? 0)
-}
-
-function artistSelect(
-  artists: string[],
-  byArtist: Map<string, TaskRow[]>,
-  rerender: () => void,
-): HTMLElement {
-  const select = document.createElement('select')
-  select.className = 'select'
-  for (const artist of artists) {
-    const option = document.createElement('option')
-    option.value = artist
-    option.textContent = `${artist}  ·  ${byArtist.get(artist)?.length ?? 0}`
-    if (artist === selectedArtist) option.selected = true
-    select.appendChild(option)
-  }
-  select.addEventListener('change', () => {
-    selectedArtist = select.value
-    rerender()
-  })
-  return select
-}
-
-function statusFilter(rerender: () => void): HTMLElement {
-  const wrap = el('div', 'filterbar')
-  wrap.appendChild(el('span', 'filterbar__label', 'Status'))
-
-  for (const status of [...STATUS_ORDER, 'unknown'] as Status[]) {
-    const button = el('button', 'filterchip')
-    if (!hidden.has(status)) button.classList.add('is-on')
-    button.appendChild(statusDot(status))
-    button.appendChild(el('span', undefined, STATUS_LABEL[status]))
-    button.addEventListener('click', () => {
-      if (hidden.has(status)) hidden.delete(status)
-      else hidden.add(status)
-      rerender()
-    })
-    wrap.appendChild(button)
-  }
-  return wrap
 }
 
 function summaryCard(artist: string, all: TaskRow[], visible: TaskRow[]): HTMLElement {
-  const card = el('section', 'card')
+  const { root, body } = card(artist, {
+    hint: visible.length === all.length
+      ? `${all.length} ${all.length === 1 ? 'layer' : 'layers'}`
+      : `${visible.length} of ${all.length} layers shown`,
+  })
 
-  const head = el('div', 'summary__head')
-  head.appendChild(el('h2', 'summary__name', artist))
-  head.appendChild(
-    el('span', 'summary__count', `${visible.length} visible / ${all.length} total`),
-  )
-  card.appendChild(head)
-
-  const counts = el('div', 'summary__grid')
-  const add = (label: string, value: number): void => {
-    const cell = el('div', 'summary__cell')
-    cell.appendChild(el('span', 'summary__label', label))
-    cell.appendChild(el('span', 'summary__value', String(value)))
-    counts.appendChild(cell)
-  }
-  for (const status of STATUS_ORDER) {
-    add(STATUS_LABEL[status], all.filter((t) => t.layer.pipeline.status === status).length)
-  }
+  const items = STATUS_ORDER.map((status) => ({
+    value: all.filter((task) => task.layer.pipeline.status === status).length,
+    label: STATUS_LABEL[status],
+    accent: `var(--status-${status === 'production_ready' ? 'ready' : status})`,
+  }))
   for (const tier of TIERS) {
-    add(
-      tier.label[0]!.toUpperCase() + tier.label.slice(1),
-      all.filter((t) => t.entity.tier === tier.id).length,
-    )
+    items.push({
+      value: all.filter((task) => task.entity.tier === tier.id).length,
+      label: tier.label,
+      accent: TIER_COLOR[tier.id]!,
+    })
   }
-  card.appendChild(counts)
-  return card
+  body.appendChild(metrics(items))
+  return root
 }
 
 function tierBlock(tier: NodeTier, label: string, rows: TaskRow[]): HTMLElement {
   const block = el('div', 'stack__group')
-
-  const head = el('div', 'group-head')
-  head.appendChild(el('span', `group-badge group-badge--${tier}`, label))
-  head.appendChild(
-    el('span', 'group-head__count', `${rows.length} ${rows.length === 1 ? 'layer' : 'layers'}`),
+  block.appendChild(
+    groupHead(label, `${rows.length} ${rows.length === 1 ? 'layer' : 'layers'}`, TIER_COLOR[tier]),
   )
-  block.appendChild(head)
 
-  const columns = el('div', 'taskrow taskrow--head')
-  for (const name of ['Entity', 'Step', 'HIP file', 'Status', 'Comment']) {
-    columns.appendChild(el('span', undefined, name))
-  }
-  block.appendChild(columns)
-
-  const list = el('div', 'stack__list')
-  for (const row of rows) list.appendChild(taskRow(row))
-  block.appendChild(list)
+  block.appendChild(
+    dataTable(
+      [
+        { label: 'Entity', width: 'minmax(0, 1fr)' },
+        { label: 'Step', width: 'minmax(0, 0.7fr)' },
+        { label: 'Workfile', width: 'minmax(0, 1.1fr)' },
+        { label: 'Comment', width: 'minmax(0, 1.4fr)' },
+        { label: 'Status', width: '150px', end: true },
+      ],
+      rows.map((row) => ({
+        title: row.layer.path,
+        cells: [
+          namedCell(row.entity.name, { status: row.entity.status, strong: true }),
+          truncated(row.step, 'mono dim'),
+          truncated(row.layer.pipeline.hipFile ?? '—', 'mono dim'),
+          truncated(row.layer.pipeline.comment || '—', 'dim'),
+          statusCell(row),
+        ],
+      })),
+    ),
+  )
   return block
 }
 
-function taskRow(row: TaskRow): HTMLElement {
-  const line = el('div', 'taskrow taskrow--item')
-
-  const entity = el('span', 'taskrow__entity')
-  entity.appendChild(statusDot(row.entity.status))
-  entity.appendChild(el('span', undefined, row.entity.name))
-  line.appendChild(entity)
-
-  const step = el('span', 'taskrow__step', row.step)
-  step.title = row.layer.path
-  line.appendChild(step)
-
-  const hip = el('span', 'taskrow__hip', row.layer.pipeline.hipFile ?? '—')
-  hip.title = row.layer.pipeline.hipFile ?? ''
-  line.appendChild(hip)
-
-  const status = el('span', 'taskrow__status')
-  status.appendChild(statusPill(row.layer.pipeline.status))
+function statusCell(row: TaskRow): HTMLElement {
+  const wrap = el('span', 'cell-status')
+  wrap.appendChild(statusPill(row.layer.pipeline.status, true))
   if (row.layer.pipeline.exportedAt) {
-    const when = el('span', 'taskrow__when', relativeDay(row.layer.pipeline.exportedAt))
+    const when = el('span', 'cell-status__when', formatRelative(row.layer.pipeline.exportedAt))
     when.title = formatMoment(row.layer.pipeline.exportedAt)
-    status.appendChild(when)
+    wrap.appendChild(when)
   }
-  line.appendChild(status)
-
-  const comment = el('span', 'taskrow__comment', row.layer.pipeline.comment || '—')
-  comment.title = row.layer.pipeline.comment ?? ''
-  line.appendChild(comment)
-
-  return line
+  return wrap
 }

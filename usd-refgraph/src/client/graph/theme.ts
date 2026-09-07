@@ -1,14 +1,23 @@
 import type { ArcKind } from '@shared/types'
 
-/** Arc hues, matching the CSS custom properties in `styles.css`. */
-export const ARC_COLOR: Record<ArcKind, string> = {
-  sublayer: 'var(--arc-sublayer)',
-  reference: 'var(--arc-reference)',
-  payload: 'var(--arc-payload)',
-  clip: 'var(--arc-clip)',
-  asset: 'var(--arc-asset)',
-  unknown: 'var(--arc-unknown)',
-}
+/**
+ * How the graph encodes its two dimensions.
+ *
+ * They deliberately use different visual channels, because a picture that says
+ * two things in colour says neither clearly:
+ *
+ * - **Nodes carry colour.** A card's tint is the tier the file belongs to —
+ *   asset, set or shot. Areas hold colour well, and a tint still reads when
+ *   the whole graph is zoomed out to fit.
+ * - **Arcs carry line style.** Every wire is drawn in the same neutral grey
+ *   and told apart by the rhythm of its stroke. Only the sublayer is solid;
+ *   the rest are dash patterns spaced far enough apart to stay distinct. Lines
+ *   are thin, so pattern survives on them where a hue would just fight the
+ *   cards behind it.
+ *
+ * The patterns themselves live in `styles.css` as `.edge--<kind>`, so the
+ * legend can draw a real sample with the same class rather than a copy of it.
+ */
 
 export const ARC_LABEL: Record<ArcKind, string> = {
   sublayer: 'sublayer',
@@ -29,6 +38,16 @@ export const ARC_HINT: Record<ArcKind, string> = {
   unknown: 'Dependency USD reports that we could not attribute to an arc',
 }
 
+/** How each kind is drawn, in words, for the legend's tooltip. */
+export const ARC_STROKE: Record<ArcKind, string> = {
+  sublayer: 'as the one solid line',
+  reference: 'as long dashes',
+  payload: 'as short dashes',
+  clip: 'as dash-dot',
+  asset: 'as a fine faint stipple',
+  unknown: 'as tight ticks',
+}
+
 export const ARC_ORDER: ArcKind[] = [
   'sublayer',
   'reference',
@@ -42,18 +61,30 @@ export const ARC_ORDER: ArcKind[] = [
 export const ROOT_COLOR = 'var(--root)'
 export const MISSING_COLOR = 'var(--danger)'
 
-export const ICONS = {
-  /** Stacked layers — the same glyph as the Assemblies toggle. */
-  assembly:
-    '<path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/><path d="m1.8 8 6.2 3.2L14.2 8"/><path d="m1.8 11 6.2 3.2L14.2 11"/>',
-  missing: '<path d="M8 2.6 14.4 13H1.6z"/><path d="M8 6.4v3.1M8 11.3v.1"/>',
-  template: '<path d="M6.2 2.6 4.4 13.4M11.6 2.6 9.8 13.4M2.8 5.8h10.4M2.2 10.2h10.4"/>',
-  folder: '<path d="M1.6 4.2A1.6 1.6 0 0 1 3.2 2.6h2.4l1.4 1.6h5.8a1.6 1.6 0 0 1 1.6 1.6v6a1.6 1.6 0 0 1-1.6 1.6H3.2a1.6 1.6 0 0 1-1.6-1.6z"/>',
-  file: '<path d="M9 1.8H4.4A1.4 1.4 0 0 0 3 3.2v9.6a1.4 1.4 0 0 0 1.4 1.4h7.2a1.4 1.4 0 0 0 1.4-1.4V5.8z"/><path d="M9 1.8v4h4"/>',
-  drive: '<rect x="1.8" y="3" width="12.4" height="10" rx="1.8"/><path d="M1.8 8.4h12.4"/><circle cx="4.6" cy="10.7" r=".7"/>',
-  check: '<path d="m3.4 8.4 3 3 6.2-6.6"/>',
-  alert: '<circle cx="8" cy="8" r="6.2"/><path d="M8 5v3.6M8 10.7v.1"/>',
-  copy: '<rect x="5.4" y="5.4" width="8" height="8" rx="1.5"/><path d="M10.6 5.4V4A1.4 1.4 0 0 0 9.2 2.6H4A1.4 1.4 0 0 0 2.6 4v5.2A1.4 1.4 0 0 0 4 10.6h1.4"/>',
-  target: '<circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="8" r="1.6"/><path d="M8 .8v2.4M8 12.8v2.4M.8 8h2.4M12.8 8h2.4"/>',
-  external: '<path d="M9 2.6h4.4V7"/><path d="m13.4 2.6-6 6"/><path d="M11.6 9.4v3a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4V5.8a1.4 1.4 0 0 1 1.4-1.4h3"/>',
-} as const
+/** The tier tint a card carries, and the accent the inspector echoes. */
+export const TIER_TINT: Record<string, string> = {
+  asset: 'var(--tier-asset)',
+  set: 'var(--tier-set)',
+  shot: 'var(--tier-shot)',
+}
+
+/**
+ * A short sample of one arc kind's line, for the legend and the detail panel.
+ *
+ * It is drawn with the very same `.edge .edge--<kind>` classes the graph uses,
+ * so a sample cannot fall out of step with the wire it stands for. The default
+ * width is long enough to show a full cycle and a bit of the next one, which
+ * is what makes a long dash read as different from a short one.
+ */
+export function arcSample(kind: ArcKind, width = 34): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('class', 'arcsample')
+  svg.setAttribute('viewBox', `0 0 ${width} 6`)
+  svg.setAttribute('aria-hidden', 'true')
+
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  line.setAttribute('class', `edge edge--${kind}`)
+  line.setAttribute('d', `M0.5 3 H${width - 0.5}`)
+  svg.appendChild(line)
+  return svg
+}

@@ -1,24 +1,41 @@
 import './styles.css'
 
 import type { ArcKind, Capabilities, Graph } from '@shared/types'
-import type { Project, ProjectEntity, ProjectLayer } from '@shared/project'
+import type { Project, ProjectLayer } from '@shared/project'
 import { ApiFailure, getCapabilities, getGraph, getProject, reveal } from './api'
 import { renderArtists } from './ui/pages/artists'
 import { renderCalendar } from './ui/pages/calendar'
 import { renderOverview } from './ui/pages/overview'
 import { renderWorkfiles } from './ui/pages/workfiles'
 import { renderWorkspace } from './ui/pages/workspace'
+import {
+  resetPageState,
+  type PageContext,
+  type PageName,
+} from './ui/pages/context'
 import { ProjectTree } from './ui/tree'
 import { DropZone } from './ui/dropzone'
 import { collapseToAssemblies } from './graph/collapse'
 import { GraphView } from './graph/view'
 import { Inspector, toast } from './ui/inspector'
 import { FilePicker } from './ui/picker'
+import { ShortcutSheet } from './ui/shortcuts'
 import { Sidebar } from './ui/sidebar'
-import { debounce, matches, must, truncateStart } from './util'
+import { button, emptyState } from './ui/kit'
+import { copyText, debounce, matches, must, truncateStart } from './util'
 
 const RECENT_KEY = 'usd-refgraph:recent'
 const MAX_RECENT = 6
+
+/** Which page each number key selects, in the order the nav lists them. */
+const PAGE_KEYS: PageName[] = [
+  'overview',
+  'workspace',
+  'artists',
+  'calendar',
+  'workfiles',
+  'graph',
+]
 
 /** A place the user has opened before, kept so the picker can start there. */
 interface RecentFile {
@@ -26,14 +43,6 @@ interface RecentFile {
   name: string
   dir: string
 }
-
-type PageName =
-  | 'overview'
-  | 'workspace'
-  | 'artists'
-  | 'calendar'
-  | 'workfiles'
-  | 'graph'
 
 class App {
   private graph: Graph | null = null
@@ -59,6 +68,7 @@ class App {
   private readonly picker: FilePicker
   private readonly dropzone: DropZone
   private readonly tree: ProjectTree
+  private readonly shortcuts: ShortcutSheet
 
   private readonly els = {
     stage: must<HTMLElement>('#stage'),
@@ -74,10 +84,13 @@ class App {
     missing: must<HTMLButtonElement>('#toggle-missing'),
     assemblies: must<HTMLButtonElement>('#toggle-assemblies'),
     projectName: must<HTMLElement>('#project-name'),
+    projectPath: must<HTMLElement>('#project-path'),
+    caps: must<HTMLElement>('#caps-line'),
   }
 
   constructor(capabilities: Capabilities) {
     this.picker = new FilePicker(capabilities)
+    this.shortcuts = new ShortcutSheet()
 
     this.view = new GraphView(
       this.els.stage,
@@ -105,9 +118,7 @@ class App {
         this.view.focusNode(id)
       },
       onSetRoot: (id) => this.setRootFromNode(id),
-      onReveal: (path) => {
-        void reveal(path).catch(() => toast('Could not open the file manager', 'error'))
-      },
+      onReveal: (path) => this.reveal(path),
       onToast: (message, kind) => toast(message, kind),
     })
 
@@ -122,6 +133,7 @@ class App {
       onBrowse: (name) => void this.browseFor(name),
     })
 
+    this.showCapabilities(capabilities)
     this.bindChrome()
     this.sidebar.update(null, this.hiddenArcs)
     this.showPage('overview')
@@ -147,9 +159,10 @@ class App {
       this.selectedId = null
       this.inspector.hide()
 
-      const rootNode = graph.nodes.find((n) => n.id === graph.rootId)
+      const rootNode = graph.nodes.find((node) => node.id === graph.rootId)
       this.els.rootName.textContent = rootNode?.name ?? path
-      this.els.rootPath.textContent = truncateStart(rootNode?.dir ?? path, 60)
+      this.els.rootPath.textContent = truncateStart(rootNode?.dir ?? path, 52)
+      this.els.rootPath.title = rootNode?.dir ?? path
       this.els.empty.hidden = true
 
       this.rememberRecent(path, rootNode?.name ?? path, rootNode?.dir ?? '')
@@ -166,8 +179,7 @@ class App {
         )
       }
     } catch (error) {
-      const failure = error instanceof ApiFailure ? error : null
-      toast(failure?.detail ?? failure?.message ?? 'Could not read that file', 'error')
+      toast(describeFailure(error, 'Could not read that file'), 'error')
     } finally {
       this.busy = false
       this.els.loading.hidden = true
@@ -187,6 +199,7 @@ class App {
     } catch {
       this.project = null
     }
+    resetPageState()
     this.tree.setProject(this.project)
     this.showProjectName()
     this.renderPage()
@@ -198,18 +211,34 @@ class App {
     this.els.projectName.textContent = name
       ? name.replace(/_/g, ' ').toUpperCase()
       : 'No project'
-    this.els.projectName.title = this.project?.root ?? ''
+    this.els.projectPath.textContent = this.project
+      ? truncateStart(this.project.root, 52)
+      : 'Open a project folder'
+    this.els.projectPath.title = this.project?.root ?? ''
+  }
+
+  private showCapabilities(capabilities: Capabilities): void {
+    const parts = [
+      capabilities.usdVersion ? `USD ${capabilities.usdVersion}` : null,
+      `Python ${capabilities.pythonVersion.split(' ')[0] ?? ''}`.trim(),
+    ].filter(Boolean)
+    this.els.caps.textContent = parts.join('  ·  ')
   }
 
   /** Open a whole project folder: scan it, then graph a sensible first layer. */
-  async openProject(dir: string): Promise<void> {
+  async openProject(dir: string, keepLayer?: string): Promise<void> {
     if (this.busy) return
     this.busy = true
     this.els.loading.hidden = false
-    this.els.loadingText.textContent = `Scanning ${dir.split(/[\\/]/).filter(Boolean).pop() ?? dir}…`
+    this.els.loadingText.textContent = `Scanning ${
+      dir.split(/[\\/]/).filter(Boolean).pop() ?? dir
+    }…`
 
     try {
+      const previous = this.project?.root
       this.project = await getProject(dir)
+      // A different project means the old page state describes nothing.
+      if (previous !== this.project.root) resetPageState()
       this.tree.setProject(this.project)
       this.showProjectName()
       this.renderPage()
@@ -219,19 +248,31 @@ class App {
       this.tree.setProject(null)
       this.showProjectName()
       this.renderPage()
-      const failure = error instanceof ApiFailure ? error : null
-      toast(failure?.detail ?? failure?.message ?? 'Could not scan that folder', 'error')
+      toast(describeFailure(error, 'Could not scan that folder'), 'error')
       return
     } finally {
       this.busy = false
       this.els.loading.hidden = true
     }
 
-    // Land on something rather than an empty graph: a shot root if there is
-    // one, since that is the widest view of the project.
-    const first = this.defaultLayer()
-    if (first) void this.load(first.path)
-    else this.updateRootLabel(this.project.name, this.project.root)
+    // Land on something rather than an empty graph: whatever was already
+    // open on a rescan, otherwise a shot root, since that is the widest view.
+    const next = keepLayer ?? this.defaultLayer()?.path
+    if (next) void this.load(next)
+  }
+
+  /**
+   * Re-read everything from disk. The project is scanned again when there is
+   * one, but the graph stays on the layer you were looking at — a rescan is
+   * "show me what changed", not "start again".
+   */
+  private rescan(): void {
+    const current = this.rootPath
+    if (this.project) {
+      void this.openProject(this.project.root, current ?? undefined)
+    } else if (current) {
+      void this.load(current)
+    }
   }
 
   private defaultLayer(): ProjectLayer | null {
@@ -243,11 +284,6 @@ class App {
     return entities.flatMap((entity) => entity.blocks)[0] ?? null
   }
 
-  private updateRootLabel(name: string, dir: string): void {
-    this.els.rootName.textContent = name
-    this.els.rootPath.textContent = truncateStart(dir, 60)
-  }
-
   // -- pages --------------------------------------------------------------
 
   private showPage(page: PageName): void {
@@ -256,7 +292,9 @@ class App {
       section.hidden = section.dataset.page !== page
     }
     for (const item of document.querySelectorAll<HTMLElement>('.nav__item')) {
-      item.classList.toggle('is-on', item.dataset.page === page)
+      const on = item.dataset.page === page
+      item.classList.toggle('is-on', on)
+      item.setAttribute('aria-selected', String(on))
     }
     // The graph's own controls have no meaning on the project pages.
     for (const control of document.querySelectorAll<HTMLElement>('.graph-only')) {
@@ -264,6 +302,21 @@ class App {
     }
     this.renderPage()
     if (page === 'graph' && this.graph) this.view.fit(false)
+  }
+
+  /** What every project page is handed. */
+  private pageContext(project: Project): PageContext {
+    return {
+      project,
+      openLayer: (path) => {
+        this.showPage('graph')
+        void this.load(path)
+      },
+      reveal: (path) => this.reveal(path),
+      copyPath: (path) => void this.copyPath(path),
+      goTo: (page) => this.showPage(page),
+      refresh: () => this.renderPage(),
+    }
   }
 
   private renderPage(): void {
@@ -275,36 +328,33 @@ class App {
       return
     }
 
-    if (this.page === 'overview') renderOverview(host, this.project)
-    else if (this.page === 'workspace') renderWorkspace(host, this.project)
-    else if (this.page === 'artists') renderArtists(host, this.project)
-    else if (this.page === 'calendar') renderCalendar(host, this.project)
-    else if (this.page === 'workfiles') renderWorkfiles(host, this.project)
+    const context = this.pageContext(this.project)
+    if (this.page === 'overview') renderOverview(host, context)
+    else if (this.page === 'workspace') renderWorkspace(host, context)
+    else if (this.page === 'artists') renderArtists(host, context)
+    else if (this.page === 'calendar') renderCalendar(host, context)
+    else if (this.page === 'workfiles') renderWorkfiles(host, context)
   }
 
   private noProjectNotice(): HTMLElement {
-    const card = document.createElement('div')
-    card.className = 'notice'
-    const title = document.createElement('h2')
-    title.textContent = this.rootPath ? 'Not inside a project tree' : 'No project open'
-    card.appendChild(title)
-    const body = document.createElement('p')
-    body.textContent = this.rootPath
-      ? 'These pages read a project tree — a folder containing assets, sets or shots. ' +
-        'The open file is not inside one, so there is nothing to summarise.'
-      : 'Open the folder that holds your assets, sets and shots, and everything published ' +
-        'in it will be summarised here.'
-    card.appendChild(body)
-    const button = document.createElement('button')
-    button.className = 'btn btn--primary'
-    button.textContent = 'Open a project folder'
-    button.addEventListener('click', () => void this.openPicker())
-    card.appendChild(button)
-    return card
+    const inTree = Boolean(this.rootPath)
+    return emptyState(inTree ? 'Not inside a project tree' : 'No project open', {
+      icon: 'folder',
+      body: inTree
+        ? 'These pages read a project tree — a folder containing assets, sets or shots. ' +
+          'The open file is not inside one, so there is nothing to summarise.'
+        : 'Open the folder that holds your assets, sets and shots, and everything ' +
+          'published in it will be summarised here.',
+      action: button('Open a project folder', {
+        variant: 'primary',
+        icon: 'folder',
+        onClick: () => void this.openPicker(),
+      }),
+    })
   }
 
   private setRootFromNode(id: string): void {
-    const node = this.graph?.nodes.find((n) => n.id === id)
+    const node = this.graph?.nodes.find((candidate) => candidate.id === id)
     if (!node) return
     if (node.kind !== 'layer') {
       toast(`${node.name} is not a USD layer`, 'error')
@@ -325,7 +375,7 @@ class App {
    * file that was only reachable through one.
    */
   private computeVisible(graph: Graph): Set<string> {
-    const allowed = graph.edges.filter((e) => !this.hiddenArcs.has(e.kind))
+    const allowed = graph.edges.filter((edge) => !this.hiddenArcs.has(edge.kind))
 
     const forward = new Map<string, string[]>()
     for (const edge of allowed) {
@@ -350,7 +400,9 @@ class App {
     // Keep only broken files and whatever points at them, so the graph
     // collapses to just the problem.
     const broken = new Set(
-      graph.nodes.filter((n) => visible.has(n.id) && !n.exists && !n.template).map((n) => n.id),
+      graph.nodes
+        .filter((node) => visible.has(node.id) && !node.exists && !node.template)
+        .map((node) => node.id),
     )
     const kept = new Set<string>([graph.rootId, ...broken])
     for (const edge of allowed) {
@@ -363,9 +415,7 @@ class App {
     if (!this.graph) return
     // The sidebar keeps reporting the whole crawl: filters change the view,
     // not what is on disk, and a hidden missing file is still missing.
-    const display = this.assembliesOnly
-      ? collapseToAssemblies(this.graph)
-      : this.graph
+    const display = this.assembliesOnly ? collapseToAssemblies(this.graph) : this.graph
     this.displayed = display
     const visible = this.computeVisible(display)
     this.view.render(display, visible)
@@ -382,12 +432,12 @@ class App {
     const hits = new Set(
       this.graph.nodes
         .filter(
-          (n) =>
-            matches(n.name, this.query) ||
-            matches(n.relDir, this.query) ||
-            matches(n.path, this.query),
+          (node) =>
+            matches(node.name, this.query) ||
+            matches(node.relDir, this.query) ||
+            matches(node.path, this.query),
         )
-        .map((n) => n.id),
+        .map((node) => node.id),
     )
     this.view.setHighlight(hits)
   }
@@ -395,7 +445,7 @@ class App {
   private toggleArc(kind: ArcKind): void {
     if (this.hiddenArcs.has(kind)) this.hiddenArcs.delete(kind)
     else this.hiddenArcs.add(kind)
-    this.els.textures.classList.toggle('is-on', !this.hiddenArcs.has('asset'))
+    setToggle(this.els.textures, !this.hiddenArcs.has('asset'))
     this.redraw()
   }
 
@@ -409,6 +459,15 @@ class App {
   }
 
   // -- chrome -------------------------------------------------------------
+
+  private reveal(path: string): void {
+    void reveal(path).catch(() => toast('Could not open the file manager', 'error'))
+  }
+
+  private async copyPath(path: string): Promise<void> {
+    const ok = await copyText(path)
+    toast(ok ? 'Path copied' : 'Could not copy to the clipboard', ok ? 'ok' : 'error')
+  }
 
   /** Directories a dropped file is most likely to live in or under. */
   private searchRoots(): string[] {
@@ -439,19 +498,30 @@ class App {
     await this.openPicker(undefined, name)
   }
 
+  /** True while any modal owns the keyboard. */
+  private get modalOpen(): boolean {
+    return (
+      !must<HTMLElement>('#picker').hidden ||
+      !must<HTMLElement>('#chooser').hidden ||
+      this.shortcuts.isOpen
+    )
+  }
+
   private bindChrome(): void {
     const openPicker = (): void => void this.openPicker()
 
+    must<HTMLButtonElement>('#open-project').addEventListener('click', openPicker)
     must<HTMLButtonElement>('#open-file').addEventListener('click', openPicker)
     must<HTMLButtonElement>('#empty-open').addEventListener('click', openPicker)
+    must<HTMLButtonElement>('#btn-help').addEventListener('click', () =>
+      this.shortcuts.toggle(),
+    )
 
     for (const item of document.querySelectorAll<HTMLElement>('.nav__item')) {
       item.addEventListener('click', () => this.showPage(item.dataset.page as PageName))
     }
 
-    this.els.rescan.addEventListener('click', () => {
-      if (this.rootPath) void this.load(this.rootPath)
-    })
+    this.els.rescan.addEventListener('click', () => this.rescan())
 
     must<HTMLButtonElement>('#btn-fit').addEventListener('click', () => this.view.fit())
     must<HTMLButtonElement>('#zoom-in').addEventListener('click', () => this.view.zoomBy(1.25))
@@ -462,14 +532,14 @@ class App {
 
     this.els.assemblies.addEventListener('click', () => {
       this.assembliesOnly = !this.assembliesOnly
-      this.els.assemblies.classList.toggle('is-on', this.assembliesOnly)
+      setToggle(this.els.assemblies, this.assembliesOnly)
       this.redraw()
       this.view.fit()
     })
 
     this.els.missing.addEventListener('click', () => {
       this.missingOnly = !this.missingOnly
-      this.els.missing.classList.toggle('is-on', this.missingOnly)
+      setToggle(this.els.missing, this.missingOnly)
       this.redraw()
       this.view.fit()
     })
@@ -486,51 +556,87 @@ class App {
       debounce(() => this.tree.setQuery(treeFilter.value), 110),
     )
 
-    document.addEventListener('keydown', (event) => {
-      const inField =
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement
-      // Modals own their own keys while they are up.
-      if (!must<HTMLElement>('#picker').hidden) return
-      if (!must<HTMLElement>('#chooser').hidden) return
+    document.addEventListener('keydown', (event) => this.onKey(event))
 
-      if (event.key === '/' && !inField) {
-        event.preventDefault()
-        this.els.search.focus()
-        this.els.search.select()
-        return
-      }
-      if (event.key === 'Escape') {
-        if (inField) {
-          this.els.search.value = ''
-          this.query = ''
-          this.applyQuery()
-          this.els.search.blur()
-        } else {
-          this.select(null)
-        }
-        return
-      }
-      if (inField) return
+    window.addEventListener(
+      'resize',
+      debounce(() => {
+        if (this.graph && this.page === 'graph') this.view.fit(false)
+      }, 180),
+    )
+  }
 
-      if (event.key === 'o') {
-        openPicker()
-        return
-      }
-      if (event.key === 'r' && this.rootPath) {
-        void this.load(this.rootPath)
-        return
-      }
-      // The rest only mean anything while the graph is on screen.
-      if (this.page !== 'graph') return
-      if (event.key === 'f') this.view.fit()
-      else if (event.key === '=' || event.key === '+') this.view.zoomBy(1.25)
-      else if (event.key === '-') this.view.zoomBy(0.8)
-    })
+  private onKey(event: KeyboardEvent): void {
+    const inField =
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement ||
+      event.target instanceof HTMLSelectElement
 
-    window.addEventListener('resize', debounce(() => {
-      if (this.graph) this.view.fit(false)
-    }, 180))
+    // Escape is the one key a modal does not own: it closes the sheet.
+    if (event.key === 'Escape' && this.shortcuts.isOpen) {
+      event.preventDefault()
+      this.shortcuts.close()
+      return
+    }
+    // The picker and the chooser bind their own keys while they are up.
+    if (this.modalOpen) return
+
+    if (event.key === 'Escape') {
+      // Whichever field you are actually in is the one that clears.
+      const field = event.target
+      if (field instanceof HTMLInputElement) {
+        field.value = ''
+        field.dispatchEvent(new Event('input', { bubbles: true }))
+        field.blur()
+      } else if (inField) {
+        ;(field as HTMLElement).blur()
+      } else {
+        this.select(null)
+      }
+      return
+    }
+
+    if (event.key === '/' && !inField) {
+      event.preventDefault()
+      this.showPage('graph')
+      this.els.search.focus()
+      this.els.search.select()
+      return
+    }
+    if (event.key === '?' && !inField) {
+      event.preventDefault()
+      this.shortcuts.toggle()
+      return
+    }
+
+    // Everything below is a bare letter or digit. A modifier means the key
+    // belongs to the browser or the OS — Ctrl+R is a reload, not a rescan.
+    if (inField || event.ctrlKey || event.metaKey || event.altKey) return
+
+    const pageIndex = Number(event.key) - 1
+    if (Number.isInteger(pageIndex) && pageIndex >= 0 && pageIndex < PAGE_KEYS.length) {
+      event.preventDefault()
+      this.showPage(PAGE_KEYS[pageIndex]!)
+      return
+    }
+
+    const key = event.key.toLowerCase()
+    if (key === 'o') {
+      event.preventDefault()
+      void this.openPicker()
+      return
+    }
+    if (key === 'r') {
+      event.preventDefault()
+      this.rescan()
+      return
+    }
+
+    // The rest only mean anything while the graph is on screen.
+    if (this.page !== 'graph') return
+    if (key === 'f') this.view.fit()
+    else if (event.key === '=' || event.key === '+') this.view.zoomBy(1.25)
+    else if (event.key === '-') this.view.zoomBy(0.8)
   }
 
   // -- recent files -------------------------------------------------------
@@ -545,15 +651,26 @@ class App {
   }
 
   private rememberRecent(path: string, name: string, dir: string): void {
-    const entries = this.readRecent().filter((f) => f.path !== path)
+    const entries = this.readRecent().filter((file) => file.path !== path)
     entries.unshift({ path, name, dir })
-    const trimmed = entries.slice(0, MAX_RECENT)
     try {
-      localStorage.setItem(RECENT_KEY, JSON.stringify(trimmed))
+      localStorage.setItem(RECENT_KEY, JSON.stringify(entries.slice(0, MAX_RECENT)))
     } catch {
       /* private mode, or storage disabled — the list is a convenience only */
     }
   }
+}
+
+/** Keep a toggle button's class and its announced state in step. */
+function setToggle(node: HTMLElement, on: boolean): void {
+  node.classList.toggle('is-on', on)
+  node.setAttribute('aria-pressed', String(on))
+}
+
+/** The most useful sentence we have about a failed request. */
+function describeFailure(error: unknown, fallback: string): string {
+  const failure = error instanceof ApiFailure ? error : null
+  return failure?.detail ?? failure?.message ?? fallback
 }
 
 /** The directory part of a path, in either slash style. */
@@ -569,9 +686,7 @@ async function boot(): Promise<void> {
     // Allow `?path=…` so the launcher, the right-click menu or a shelf tool can
     // deep-link a file. Those all mean "show me this file", so open the graph.
     const wanted = new URLSearchParams(location.search).get('path')
-    if (wanted) {
-      app.openFile(wanted, 'graph')
-    }
+    if (wanted) app.openFile(wanted, 'graph')
   } catch {
     toast('The crawler is not responding. Is the Python backend running?', 'error')
   }

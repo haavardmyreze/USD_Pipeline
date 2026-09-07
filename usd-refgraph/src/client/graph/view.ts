@@ -8,8 +8,11 @@
  */
 
 import type { Graph, GraphNode } from '@shared/types'
+import { readRecord } from '@shared/pipeline'
+import { statusDot } from '../ui/kit'
 import { icon } from '../util'
-import { ARC_COLOR, ICONS, MISSING_COLOR, ROOT_COLOR } from './theme'
+import { MISSING_COLOR, ROOT_COLOR, TIER_TINT } from './theme'
+import { ICONS } from '../ui/icons'
 import {
   layoutGraph,
   pipePath,
@@ -96,22 +99,16 @@ export class GraphView {
           (missing ? ' edge--missing' : '') +
           (routed.tree ? '' : ' edge--cross'),
       )
-      path.style.stroke = missing ? MISSING_COLOR : ARC_COLOR[routed.edge.kind]
       path.dataset.from = routed.edge.from
       path.dataset.to = routed.edge.to
       this.edgeLayer.appendChild(path)
       this.edgeEls.push({ path, from: routed.edge.from, to: routed.edge.to })
     }
 
-    const incoming = new Map<string, string>()
-    for (const routed of this.layout.edges) {
-      if (!incoming.has(routed.edge.to)) incoming.set(routed.edge.to, routed.edge.kind)
-    }
-
     for (const [id, placed] of this.layout.nodes) {
       const node = graph.nodes.find((n) => n.id === id)
       if (!node) continue
-      const element = this.buildNode(node, placed, graph.rootId, incoming.get(id))
+      const element = this.buildNode(node, placed, graph.rootId)
       this.nodeLayer.appendChild(element)
       this.nodeEls.set(id, element)
     }
@@ -119,12 +116,7 @@ export class GraphView {
     this.applyEmphasis()
   }
 
-  private buildNode(
-    node: GraphNode,
-    placed: Placed,
-    rootId: string,
-    incomingKind: string | undefined,
-  ): HTMLElement {
+  private buildNode(node: GraphNode, placed: Placed, rootId: string): HTMLElement {
     const isRoot = node.id === rootId
     const missing = !node.exists && !node.template
 
@@ -138,19 +130,16 @@ export class GraphView {
     if (node.tier) card.classList.add(`node--tier-${node.tier}`)
     card.dataset.id = node.id
     card.style.transform = `translate(${placed.x}px, ${placed.y}px)`
+    // What the card is highlighted with when selected or lit: its own tier,
+    // so the emphasis never implies an arc kind.
     card.style.setProperty(
       '--accent',
       isRoot
         ? ROOT_COLOR
         : missing
           ? MISSING_COLOR
-          : ARC_COLOR[(incomingKind as keyof typeof ARC_COLOR) ?? 'unknown'] ??
-            'var(--arc-unknown)',
+          : TIER_TINT[node.tier ?? ''] ?? 'var(--fg-3)',
     )
-
-    const accent = document.createElement('div')
-    accent.className = 'node__accent'
-    card.appendChild(accent)
 
     const body = document.createElement('div')
     body.className = 'node__body'
@@ -183,18 +172,22 @@ export class GraphView {
 
     body.appendChild(head)
 
-    // Who published the layer, straight from its own `customLayerData`. The
-    // path, size and format live in the detail panel; the card carries only
-    // what you need to tell one node from another at a glance.
-    const artist = node.meta?.customLayerData?.['artist']
-    if (artist) {
+    // The publisher's own record, read the same way the project pages read it,
+    // so a layer's state reads identically wherever you meet it. The path,
+    // size and format live in the detail panel; the card carries only what you
+    // need to tell one node from another at a glance.
+    const record = readRecord(node.meta?.customLayerData)
+    if (record.status !== 'unknown' || record.artist) {
       const sub = document.createElement('div')
       sub.className = 'node__sub'
-      const badge = document.createElement('span')
-      badge.className = 'node__artist'
-      badge.textContent = artist
-      badge.title = `Published by ${artist}`
-      sub.appendChild(badge)
+      if (record.status !== 'unknown') sub.appendChild(statusDot(record.status))
+      if (record.artist) {
+        const badge = document.createElement('span')
+        badge.className = 'node__artist'
+        badge.textContent = record.artist
+        badge.title = `Published by ${record.artist}`
+        sub.appendChild(badge)
+      }
       body.appendChild(sub)
     }
 

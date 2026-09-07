@@ -8,27 +8,18 @@
  */
 
 import type { NodeRole, NodeTier } from './types'
+import type { PipelineRecord, Status } from './pipeline'
 
-/** The publisher's status vocabulary, weakest to strongest. */
-export type Status = 'placeholder' | 'production_ready' | 'locked' | 'unknown'
-
-export const STATUS_ORDER: Status[] = ['placeholder', 'production_ready', 'locked']
-
-/** One published layer's bookkeeping, from `customLayerData`. */
-export interface PipelineRecord {
-  status: Status
-  /** The status exactly as authored, when it did not match the vocabulary. */
-  statusRaw?: string
-  artist?: string
-  comment?: string
-  hipFile?: string
-  /** The Houdini ROP that wrote the layer, e.g. `/stage/Bob_Lookdev/rop2`. */
-  ropPath?: string
-  /** Publish time, epoch milliseconds. */
-  exportedAt?: number
-  /** Any `customLayerData` keys we did not recognise. */
-  extra?: Record<string, string>
-}
+export type { PipelineRecord, Status }
+export {
+  STATUS_ALL,
+  STATUS_ORDER,
+  isEmptyRecord,
+  normaliseStatus,
+  readRecord,
+  rollupStatus,
+  statusRank,
+} from './pipeline'
 
 /** A texture a layer references through an asset-valued attribute. */
 export interface TextureRef {
@@ -132,4 +123,29 @@ export function entityTasks(entity: ProjectEntity): TaskRow[] {
 
 export function allTasks(project: Project): TaskRow[] {
   return project.entities.flatMap(entityTasks)
+}
+
+/**
+ * The layer to draw when someone asks for an entity's graph: its assembly,
+ * which is what downstream work points at, or its only block when there is no
+ * assembly yet.
+ */
+export function entityTarget(entity: ProjectEntity): ProjectLayer | null {
+  return entity.assembly ?? entity.blocks[0] ?? null
+}
+
+/** Shots read best in sequence-and-number order, everything else by name. */
+export function entitySort(a: ProjectEntity, b: ProjectEntity): number {
+  if (a.sequence && b.sequence && a.sequence !== b.sequence) {
+    return a.sequence.localeCompare(b.sequence)
+  }
+  if (a.shotNumber !== undefined && b.shotNumber !== undefined) {
+    return a.shotNumber - b.shotNumber
+  }
+  return a.name.localeCompare(b.name)
+}
+
+/** Most recently published first; anything undated sorts last. */
+export function byRecency(a: TaskRow, b: TaskRow): number {
+  return (b.layer.pipeline.exportedAt ?? 0) - (a.layer.pipeline.exportedAt ?? 0)
 }

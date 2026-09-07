@@ -1,15 +1,25 @@
 /**
  * Publish history.
  *
- * This is a record of what was published and when, drawn from
- * `export_datetime_unix`. It is deliberately not a schedule: nothing in the USD
- * metadata carries a due date, so there is nothing to plan against here.
+ * A record of what was published and when, drawn from `export_datetime_unix`.
+ * It is deliberately not a schedule: nothing in the USD metadata carries a due
+ * date, so there is nothing to plan against here.
  */
 
-import type { Project, TaskRow } from '@shared/project'
-import { allTasks } from '@shared/project'
-import { STATUS_COLOR, formatMoment, statusDot, statusPill } from '../../pipeline'
-import { el } from '../../util'
+import type { TaskRow } from '@shared/project'
+import { allTasks, byRecency } from '@shared/project'
+import {
+  STATUS_COLOR,
+  button,
+  card,
+  emptyState,
+  iconButton,
+  namedCell,
+  statusPill,
+  truncated,
+} from '../kit'
+import { dayKey, el, formatMoment } from '../../util'
+import { pageState, type PageContext } from './context'
 import { pageShell } from './shell'
 
 const MONTHS = [
@@ -18,85 +28,73 @@ const MONTHS = [
 ]
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-let cursor: { year: number; month: number } | null = null
-let selectedDay: string | null = null
+export function renderCalendar(host: HTMLElement, context: PageContext): void {
+  const state = pageState.calendar
 
-export function renderCalendar(host: HTMLElement, project: Project): void {
-  const rerender = (): void => renderCalendar(host, project)
-
-  const published = allTasks(project)
+  const published = allTasks(context.project)
     .filter((task) => task.layer.pipeline.exportedAt)
-    .sort((a, b) => (b.layer.pipeline.exportedAt ?? 0) - (a.layer.pipeline.exportedAt ?? 0))
+    .sort(byRecency)
 
   const body = pageShell(host, 'Publishes', {
     subtitle: 'When each layer was published — history, not a schedule',
+    meta: `${published.length} ${published.length === 1 ? 'publish' : 'publishes'}`,
   })
 
   if (!published.length) {
-    const card = el('section', 'card')
-    card.appendChild(el('p', 'muted', 'No layer carries a publish time yet.'))
-    body.appendChild(card)
+    body.appendChild(
+      emptyState('No layer carries a publish time yet.', {
+        icon: 'clock',
+        body: 'Publishing writes `export_datetime_unix` into the layer; nothing here has one.',
+      }),
+    )
     return
   }
 
   // Start on the month of the most recent publish, not today's month, or the
   // calendar opens empty on a project that has been quiet for a while.
-  if (!cursor) {
+  if (!state.cursor) {
     const latest = new Date(published[0]!.layer.pipeline.exportedAt!)
-    cursor = { year: latest.getFullYear(), month: latest.getMonth() }
+    state.cursor = { year: latest.getFullYear(), month: latest.getMonth() }
   }
 
   const byDay = new Map<string, TaskRow[]>()
   for (const task of published) {
-    const key = localDayKey(task.layer.pipeline.exportedAt!)
+    const key = dayKey(task.layer.pipeline.exportedAt!)
     const list = byDay.get(key)
     if (list) list.push(task)
     else byDay.set(key, [task])
   }
 
   const split = el('div', 'grid grid--calendar')
-  split.appendChild(monthCard(byDay, rerender))
-  split.appendChild(listCard(published, byDay, rerender))
+  split.appendChild(monthCard(byDay, context))
+  split.appendChild(listCard(published, byDay, context))
   body.appendChild(split)
 }
 
-function localDayKey(ms: number): string {
-  const date = new Date(ms)
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
-}
+function monthCard(byDay: Map<string, TaskRow[]>, context: PageContext): HTMLElement {
+  const state = pageState.calendar
+  const { year, month } = state.cursor!
 
-function monthCard(byDay: Map<string, TaskRow[]>, rerender: () => void): HTMLElement {
-  const card = el('section', 'card')
-  const { year, month } = cursor!
+  const step = (delta: number): void => {
+    const next = month + delta
+    state.cursor = {
+      year: year + Math.floor(next / 12),
+      month: ((next % 12) + 12) % 12,
+    }
+    context.refresh()
+  }
 
-  const head = el('div', 'cal__head')
-  const back = el('button', 'iconbtn')
-  back.innerHTML = '<svg viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>'
-  back.title = 'Previous month'
-  back.addEventListener('click', () => {
-    cursor = month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 }
-    rerender()
-  })
-  head.appendChild(back)
+  const nav = el('div', 'cal__nav')
+  nav.appendChild(iconButton('chevronLeft', 'Previous month', () => step(-1)))
+  nav.appendChild(iconButton('chevronRight', 'Next month', () => step(1)))
 
-  head.appendChild(el('h2', 'cal__title', `${MONTHS[month]} ${year}`))
-
-  const forward = el('button', 'iconbtn')
-  forward.innerHTML = '<svg viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5"/></svg>'
-  forward.title = 'Next month'
-  forward.addEventListener('click', () => {
-    cursor = month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 }
-    rerender()
-  })
-  head.appendChild(forward)
-  card.appendChild(head)
+  const { root, body } = card(`${MONTHS[month]} ${year}`, { actions: nav })
 
   const grid = el('div', 'cal')
   for (const day of WEEKDAYS) grid.appendChild(el('div', 'cal__weekday', day))
 
   // Monday-first offset.
-  const first = new Date(year, month, 1)
-  const offset = (first.getDay() + 6) % 7
+  const offset = (new Date(year, month, 1).getDay() + 6) % 7
   for (let i = 0; i < offset; i++) grid.appendChild(el('div', 'cal__day cal__day--blank'))
 
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -105,7 +103,7 @@ function monthCard(byDay: Map<string, TaskRow[]>, rerender: () => void): HTMLEle
     const tasks = byDay.get(key) ?? []
     const cell = el('button', 'cal__day')
     if (!tasks.length) cell.classList.add('cal__day--quiet')
-    if (selectedDay === key) cell.classList.add('is-on')
+    if (state.selectedDay === key) cell.classList.add('is-on')
 
     cell.appendChild(el('span', 'cal__num', String(day)))
 
@@ -119,8 +117,8 @@ function monthCard(byDay: Map<string, TaskRow[]>, rerender: () => void): HTMLEle
       cell.appendChild(dots)
       cell.title = `${tasks.length} publish${tasks.length === 1 ? '' : 'es'}`
       cell.addEventListener('click', () => {
-        selectedDay = selectedDay === key ? null : key
-        rerender()
+        state.selectedDay = state.selectedDay === key ? null : key
+        context.refresh()
       })
     } else {
       cell.disabled = true
@@ -128,35 +126,32 @@ function monthCard(byDay: Map<string, TaskRow[]>, rerender: () => void): HTMLEle
     grid.appendChild(cell)
   }
 
-  card.appendChild(grid)
-  return card
+  body.appendChild(grid)
+  return root
 }
 
 function listCard(
   published: TaskRow[],
   byDay: Map<string, TaskRow[]>,
-  rerender: () => void,
+  context: PageContext,
 ): HTMLElement {
-  const card = el('section', 'card card--flush')
+  const state = pageState.calendar
+  const showing = state.selectedDay ? byDay.get(state.selectedDay) ?? [] : published
 
-  const head = el('div', 'card__bar')
-  const showing = selectedDay ? byDay.get(selectedDay) ?? [] : published
-  head.appendChild(
-    el(
-      'h2',
-      'card__title',
-      selectedDay ? 'That day' : 'Everything, most recent first',
-    ),
-  )
-  if (selectedDay) {
-    const clearBtn = el('button', 'btn btn--small', 'Show all')
-    clearBtn.addEventListener('click', () => {
-      selectedDay = null
-      rerender()
-    })
-    head.appendChild(clearBtn)
-  }
-  card.appendChild(head)
+  const { root, body } = card(state.selectedDay ? 'That day' : 'Most recent first', {
+    hint: `${showing.length} ${showing.length === 1 ? 'layer' : 'layers'}`,
+    flush: true,
+    actions: state.selectedDay
+      ? button('Show all', {
+          variant: 'ghost',
+          small: true,
+          onClick: () => {
+            state.selectedDay = null
+            context.refresh()
+          },
+        })
+      : undefined,
+  })
 
   const list = el('div', 'timeline')
   let lastDay = ''
@@ -183,25 +178,23 @@ function listCard(
     )
 
     const main = el('span', 'timeline__main')
-    const title = el('span', 'timeline__name')
-    title.appendChild(statusDot(task.layer.pipeline.status))
-    title.appendChild(el('span', undefined, `${task.entity.name} · ${task.step}`))
-    main.appendChild(title)
-    main.appendChild(el('span', 'timeline__sub', task.layer.pipeline.artist ?? ''))
+    main.appendChild(
+      namedCell(`${task.entity.name} · ${task.step}`, {
+        status: task.layer.pipeline.status,
+        strong: true,
+      }),
+    )
+    main.appendChild(el('span', 'timeline__sub', task.layer.pipeline.artist ?? '—'))
     row.appendChild(main)
 
-    // The comment gets the space between the name and the status.
-    if (task.layer.pipeline.comment) {
-      const comment = el('span', 'timeline__comment', task.layer.pipeline.comment)
-      comment.title = task.layer.pipeline.comment
-      row.appendChild(comment)
-    }
-
+    row.appendChild(
+      truncated(task.layer.pipeline.comment || '', 'timeline__comment'),
+    )
     row.appendChild(statusPill(task.layer.pipeline.status, true))
     row.title = `${task.layer.name}\n${formatMoment(at)}`
     list.appendChild(row)
   }
 
-  card.appendChild(list)
-  return card
+  body.appendChild(list)
+  return root
 }

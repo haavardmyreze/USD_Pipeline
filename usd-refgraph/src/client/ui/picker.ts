@@ -8,8 +8,9 @@
 
 import { browse } from '../api'
 import type { Capabilities, DirEntry, DirListing } from '@shared/types'
+import { emptyState } from './kit'
 import { clear, el, formatBytes, icon, must } from '../util'
-import { ICONS } from '../graph/theme'
+import { ICONS } from './icons'
 
 export class FilePicker {
   private readonly modal = must<HTMLElement>('#picker')
@@ -105,7 +106,9 @@ export class FilePicker {
       clear(this.listEl)
       const message =
         error instanceof Error ? error.message : 'Could not open that folder'
-      this.listEl.appendChild(el('div', 'picker__empty', message))
+      this.listEl.appendChild(
+        emptyState('Could not open that folder', { icon: 'alert', body: message }),
+      )
     }
   }
 
@@ -127,14 +130,14 @@ export class FilePicker {
 
     if (listing.parent) {
       const up = el('button', 'entry entry--dir')
-      up.appendChild(iconEl('<path d="M8 12.6V3.4M3.6 7.8 8 3.4l4.4 4.4"/>'))
+      up.appendChild(iconEl(ICONS.arrowUp))
       up.appendChild(el('span', 'entry__name', '..'))
       up.addEventListener('click', () => void this.navigate(listing.parent!))
       this.listEl.appendChild(up)
     }
 
     if (!listing.entries.length) {
-      this.listEl.appendChild(el('div', 'picker__empty', 'This folder is empty.'))
+      this.listEl.appendChild(emptyState('This folder is empty.', { icon: 'folder' }))
       return
     }
 
@@ -144,7 +147,9 @@ export class FilePicker {
 
     if (listing.truncated) {
       this.listEl.appendChild(
-        el('div', 'picker__empty', 'Folder is very large — only the first entries are shown.'),
+        emptyState('Folder is very large — only the first entries are shown.', {
+          inline: true,
+        }),
       )
     }
   }

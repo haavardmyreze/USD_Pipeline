@@ -2,68 +2,116 @@
  * Entities as a stack of boxes, grouped by category or sequence.
  *
  * One entity opens at a time and the rest dim back, so the thing you are
- * looking at is unambiguous. Each entity's row carries enough to scan without
- * opening it — its rolled-up state and how many layers it has — and opening it
- * shows every published layer with its full record.
+ * looking at is unambiguous. Each row carries enough to scan without opening
+ * it — its rolled-up state and how many layers it has — and opening it shows
+ * every published layer with its full record.
  */
 
-import type { Project, ProjectEntity, ProjectLayer } from '@shared/project'
+import type { ProjectEntity, ProjectLayer } from '@shared/project'
+import type { Status } from '@shared/pipeline'
 import type { NodeTier } from '@shared/types'
+import { STATUS_ALL, entitySort, entityTarget } from '@shared/project'
 import {
   CATEGORY_COLOR,
-  formatMoment,
+  STATUS_LABEL,
+  button,
+  chip,
+  chipRow,
+  disclosure,
+  emptyState,
+  filterChips,
+  Facts,
+  groupHead,
+  hashHue,
+  namedCell,
+  searchField,
   statusDot,
   statusPill,
-} from '../../pipeline'
-import { el, formatBytes } from '../../util'
-import { entitySort } from './overview'
+  tabs,
+  truncated,
+} from '../kit'
+import { debounce, el, formatBytes, formatMoment, matches } from '../../util'
+import { pageState, type PageContext } from './context'
 import { pageShell } from './shell'
 
-const TIERS: { id: NodeTier; label: string }[] = [
-  { id: 'asset', label: 'Assets' },
-  { id: 'set', label: 'Sets' },
-  { id: 'shot', label: 'Shots' },
+const TIERS: { value: NodeTier; label: string }[] = [
+  { value: 'asset', label: 'Assets' },
+  { value: 'set', label: 'Sets' },
+  { value: 'shot', label: 'Shots' },
 ]
 
-let activeTier: NodeTier = 'asset'
-let expanded: string | null = null
+export function renderWorkspace(host: HTMLElement, context: PageContext): void {
+  const state = pageState.workspace
+  const { project } = context
 
-export function renderWorkspace(host: HTMLElement, project: Project): void {
-  const rerender = (): void => renderWorkspace(host, project)
+  const tierTabs = tabs(
+    TIERS.map((tier) => ({
+      ...tier,
+      count: project.entities.filter((entity) => entity.tier === tier.value).length,
+    })),
+    state.tier,
+    (tier) => {
+      state.tier = tier
+      state.expanded = null
+      context.refresh()
+    },
+  )
 
-  // Folder-style tabs sitting on the header strip, as the manager had them.
-  const tabs = el('div', 'ptabs')
-  for (const tier of TIERS) {
-    const count = project.entities.filter((e) => e.tier === tier.id).length
-    const button = el('button', 'ptab')
-    if (tier.id === activeTier) button.classList.add('is-on')
-    button.appendChild(el('span', undefined, tier.label))
-    button.appendChild(el('span', 'ptab__count', String(count)))
-    button.addEventListener('click', () => {
-      activeTier = tier.id
-      expanded = null
-      rerender()
-    })
-    tabs.appendChild(button)
-  }
+  const controls = el('div', 'page__controls')
+  controls.appendChild(
+    searchField({
+      placeholder: 'Filter by name',
+      value: state.query,
+      variant: 'inline',
+      onInput: debounce((value: string) => {
+        state.query = value.trim()
+        context.refresh()
+        focusSearch()
+      }, 140),
+    }),
+  )
+  controls.appendChild(
+    filterChips<Status>(
+      'Status',
+      STATUS_ALL.map((status) => ({ value: status, label: STATUS_LABEL[status], status })),
+      state.hiddenStatus,
+      (status) => {
+        if (state.hiddenStatus.has(status)) state.hiddenStatus.delete(status)
+        else state.hiddenStatus.add(status)
+        context.refresh()
+      },
+    ),
+  )
 
-  // Keep `host` pointing at the page: `rerender` closes over it.
-  const body = pageShell(host, 'Pipeline Workspace', { tabs })
+  const body = pageShell(host, 'Workspace', { tabs: tierTabs, controls })
 
   const entities = project.entities
-    .filter((entity) => entity.tier === activeTier)
+    .filter((entity) => entity.tier === state.tier)
+    .filter((entity) => !state.hiddenStatus.has(entity.status))
+    .filter((entity) => !state.query || matches(entity.name, state.query))
     .sort(entitySort)
 
   if (!entities.length) {
-    const card = el('section', 'card')
-    card.appendChild(el('p', 'muted', `No ${activeTier}s found in this project.`))
-    body.appendChild(card)
+    body.appendChild(
+      emptyState(
+        state.query || state.hiddenStatus.size
+          ? 'Nothing matches the current filters.'
+          : `No ${state.tier}s found in this project.`,
+        {
+          icon: 'inbox',
+          body:
+            state.query || state.hiddenStatus.size
+              ? 'Clear the filter box or switch a status back on.'
+              : 'The scan looks for assets, sets and shots directly under the project root.',
+        },
+      ),
+    )
     return
   }
 
   const stack = el('div', 'stack')
-  for (const [group, members] of groupEntities(entities, activeTier)) {
-    stack.appendChild(groupBlock(group, members, rerender))
+  for (const [group, members] of groupEntities(entities, state.tier)) {
+    stack.appendChild(groupBlock(group, members, context))
   }
   body.appendChild(stack)
 }
@@ -77,8 +125,7 @@ function groupEntities(
 
   const groups = new Map<string, ProjectEntity[]>()
   for (const entity of entities) {
-    const key =
-      tier === 'shot' ? entity.sequence ?? 'misc' : entity.category ?? 'other'
+    const key = tier === 'shot' ? entity.sequence ?? 'misc' : entity.category ?? 'other'
     const list = groups.get(key)
     if (list) list.push(entity)
     else groups.set(key, [entity])
@@ -89,95 +136,117 @@ function groupEntities(
 function groupBlock(
   group: string | null,
   entities: ProjectEntity[],
-  rerender: () => void,
+  context: PageContext,
 ): HTMLElement {
   const block = el('div', 'stack__group')
 
   if (group) {
-    const head = el('div', 'group-head')
-    const badge = el('span', 'group-badge', group)
-    badge.style.setProperty('--chip-accent', CATEGORY_COLOR[group] ?? groupHue(group))
-    head.appendChild(badge)
-    head.appendChild(
-      el('span', 'group-head__count', `${entities.length} ${entities.length === 1 ? 'entry' : 'entries'}`),
+    block.appendChild(
+      groupHead(
+        group,
+        `${entities.length} ${entities.length === 1 ? 'entry' : 'entries'}`,
+        CATEGORY_COLOR[group] ?? hashHue(group),
+      ),
     )
-    block.appendChild(head)
   }
 
   const list = el('div', 'stack__list')
-  for (const entity of entities) {
-    list.appendChild(entityBox(entity, rerender))
-  }
+  for (const entity of entities) list.appendChild(entityBox(entity, context))
   block.appendChild(list)
   return block
 }
 
-/** A stable colour for sequence badges, which have no fixed palette. */
-function groupHue(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
-  return `hsl(${hash % 360} 70% 62%)`
-}
-
-function entityBox(entity: ProjectEntity, rerender: () => void): HTMLElement {
-  const isOpen = expanded === entity.name
-  const dimmed = expanded !== null && !isOpen
-
-  const box = el('div', 'ebox')
-  if (isOpen) box.classList.add('is-open')
-  if (dimmed) box.classList.add('is-dim')
-
+function entityBox(entity: ProjectEntity, context: PageContext): HTMLElement {
+  const state = pageState.workspace
+  const open = state.expanded === entity.name
   const layerCount = entity.blocks.length + (entity.assembly ? 1 : 0)
 
-  const row = el('button', 'ebox__row')
-  row.appendChild(statusDot(entity.status))
-
-  const name = el('span', 'ebox__name', entity.name)
-  row.appendChild(name)
-
+  const lead: HTMLElement[] = [
+    statusDot(entity.status),
+    el('span', 'ebox__name', entity.name),
+  ]
   if (entity.dependsOn.length) {
-    const uses = el('span', 'ebox__uses', `uses ${entity.dependsOn.length}`)
+    const uses = el('span', 'ebox__note', `uses ${entity.dependsOn.length}`)
     uses.title = `Uses ${entity.dependsOn.join(', ')}`
-    row.appendChild(uses)
+    lead.push(uses)
   }
 
-  const right = el('span', 'ebox__right')
-  right.appendChild(statusPill(entity.status, true))
-  right.appendChild(
-    el('span', 'ebox__count', `${layerCount} ${layerCount === 1 ? 'layer' : 'layers'}`),
-  )
-  right.appendChild(el('span', 'ebox__hint', isOpen ? 'Hide' : 'Expand'))
-  row.appendChild(right)
-
-  row.addEventListener('click', () => {
-    expanded = isOpen ? null : entity.name
-    rerender()
+  return disclosure({
+    open,
+    dimmed: state.expanded !== null,
+    lead,
+    trail: [
+      statusPill(entity.status, true),
+      el('span', 'ebox__count', `${layerCount} ${layerCount === 1 ? 'layer' : 'layers'}`),
+    ],
+    onToggle: () => {
+      state.expanded = open ? null : entity.name
+      context.refresh()
+    },
+    panel: () => entityPanel(entity, context),
   })
-  box.appendChild(row)
-
-  if (isOpen) box.appendChild(entityPanel(entity))
-  return box
 }
 
-function entityPanel(entity: ProjectEntity): HTMLElement {
+function entityPanel(entity: ProjectEntity, context: PageContext): HTMLElement {
   const panel = el('div', 'epanel')
 
   const bar = el('div', 'epanel__bar')
-  bar.appendChild(el('span', 'epanel__path', entity.dir))
+  bar.appendChild(truncated(entity.dir, 'epanel__path'))
+
+  const actions = el('div', 'epanel__actions')
+  const target = entityTarget(entity)
+  if (target) {
+    actions.appendChild(
+      button('Graph it', {
+        icon: 'graph',
+        small: true,
+        variant: 'primary',
+        title: `Draw the reference graph for ${target.name}`,
+        onClick: () => context.openLayer(target.path),
+      }),
+    )
+  }
+  actions.appendChild(
+    button('Copy path', {
+      icon: 'copy',
+      small: true,
+      onClick: () => context.copyPath(entity.dir),
+    }),
+  )
+  actions.appendChild(
+    button('Reveal', {
+      icon: 'external',
+      small: true,
+      onClick: () => context.reveal(entity.dir),
+    }),
+  )
+  bar.appendChild(actions)
   panel.appendChild(bar)
 
   if (entity.dependsOn.length) {
-    panel.appendChild(chipRow('Uses', entity.dependsOn))
+    const byName = new Map(context.project.entities.map((e) => [e.name, e]))
+    panel.appendChild(
+      chipRow(
+        entity.dependsOn.map((name) => {
+          const other = byName.get(name)
+          return chip(name, {
+            status: other?.status,
+            accent: other?.category ? CATEGORY_COLOR[other.category] : undefined,
+          })
+        }),
+        'Uses',
+      ),
+    )
   }
 
   const layers: { label: string; layer: ProjectLayer }[] = []
   if (entity.assembly) layers.push({ label: 'assembly', layer: entity.assembly })
   for (const block of entity.blocks) {
-    layers.push({ label: `blocks / ${block.block ?? 'block'}`, layer: block })
+    layers.push({ label: block.block ?? 'block', layer: block })
   }
 
   if (!layers.length) {
-    panel.appendChild(el('p', 'muted', 'Nothing published yet.'))
+    panel.appendChild(emptyState('Nothing published yet.', { inline: true }))
     return panel
   }
 
@@ -190,24 +259,14 @@ function entityPanel(entity: ProjectEntity): HTMLElement {
   if (entity.unusedTextures.length) {
     panel.appendChild(
       chipRow(
+        entity.unusedTextures.map((texture) =>
+          chip(texture.name, { mono: true, muted: true, title: texture.path }),
+        ),
         'Unused',
-        entity.unusedTextures.map((texture) => texture.name),
-        true,
       ),
     )
   }
   return panel
-}
-
-function chipRow(label: string, values: string[], mono = false): HTMLElement {
-  const row = el('div', 'epanel__chips')
-  row.appendChild(el('span', 'epanel__label', label))
-  const chips = el('div', 'chips')
-  for (const value of values) {
-    chips.appendChild(el('span', `chip${mono ? ' chip--mono' : ''}`, value))
-  }
-  row.appendChild(chips)
-  return row
 }
 
 function taskBlock(label: string, layer: ProjectLayer): HTMLElement {
@@ -216,48 +275,46 @@ function taskBlock(label: string, layer: ProjectLayer): HTMLElement {
   const head = el('div', 'task__head')
   head.appendChild(el('span', 'task__label', label))
   head.appendChild(statusPill(layer.pipeline.status))
-
-  const file = el('span', 'task__file', layer.name)
-  file.title = layer.path
-  head.appendChild(file)
+  head.appendChild(el('span', 'task__spacer'))
+  head.appendChild(namedCell(layer.name, { mono: true, title: layer.path }))
   block.appendChild(head)
 
-  const facts = el('dl', 'facts facts--wide')
-  const add = (key: string, value: string | null | undefined): void => {
-    if (!value) return
-    facts.appendChild(el('dt', undefined, key))
-    facts.appendChild(el('dd', undefined, value))
-  }
-  add('Artist', layer.pipeline.artist)
-  add('Published', layer.pipeline.exportedAt ? formatMoment(layer.pipeline.exportedAt) : null)
-  add('HIP file', layer.pipeline.hipFile)
-  add('ROP', layer.pipeline.ropPath)
-  add('Size', layer.size !== null ? formatBytes(layer.size) : null)
+  const facts = new Facts({ columns: true })
+  facts.add('Artist', layer.pipeline.artist)
+  facts.add(
+    'Published',
+    layer.pipeline.exportedAt ? formatMoment(layer.pipeline.exportedAt) : null,
+  )
+  facts.add('Workfile', layer.pipeline.hipFile)
+  facts.add('ROP', layer.pipeline.ropPath)
+  facts.add('Size', layer.size !== null ? formatBytes(layer.size) : null)
   if (layer.pipeline.status === 'unknown' && layer.pipeline.statusRaw) {
-    add('Status as written', layer.pipeline.statusRaw)
+    facts.add('Status as written', layer.pipeline.statusRaw)
   }
-  for (const [key, value] of Object.entries(layer.pipeline.extra ?? {})) add(key, value)
-  block.appendChild(facts)
+  for (const [key, value] of Object.entries(layer.pipeline.extra ?? {})) {
+    facts.add(key, value)
+  }
+  if (!facts.isEmpty) block.appendChild(facts.root)
 
   if (layer.textures?.length) {
-    const row = el('div', 'task__textures')
-    row.appendChild(el('span', 'epanel__label', 'Textures'))
-    const chips = el('div', 'chips')
-    for (const texture of layer.textures) {
-      const chip = el('span', 'chip chip--mono')
-      if (!texture.exists) chip.classList.add('chip--missing')
-      chip.appendChild(el('span', undefined, texture.name))
-      chip.title = [
-        texture.rawPath,
-        texture.attribute ?? '',
-        texture.exists ? '' : 'Not found on disk',
-      ]
-        .filter(Boolean)
-        .join('\n')
-      chips.appendChild(chip)
-    }
-    row.appendChild(chips)
-    block.appendChild(row)
+    block.appendChild(
+      chipRow(
+        layer.textures.map((texture) =>
+          chip(texture.name, {
+            mono: true,
+            muted: !texture.exists,
+            title: [
+              texture.rawPath,
+              texture.attribute ?? '',
+              texture.exists ? '' : 'Not found on disk',
+            ]
+              .filter(Boolean)
+              .join('\n'),
+          }),
+        ),
+        'Textures',
+      ),
+    )
   }
 
   if (layer.pipeline.comment) {
@@ -267,4 +324,15 @@ function taskBlock(label: string, layer: ProjectLayer): HTMLElement {
     block.appendChild(el('p', 'task__error', layer.error))
   }
   return block
+}
+
+/**
+ * Re-rendering replaces the filter field, so put the caret back afterwards —
+ * otherwise typing a second character would go nowhere.
+ */
+function focusSearch(): void {
+  const field = document.querySelector<HTMLInputElement>('.search--inline input')
+  if (!field) return
+  field.focus()
+  field.setSelectionRange(field.value.length, field.value.length)
 }

@@ -16,7 +16,7 @@
 
 import { locate } from '../api'
 import { clear, el, formatBytes, formatDate, icon, must } from '../util'
-import { ICONS } from '../graph/theme'
+import { ICONS } from './icons'
 import type { LocateMatch } from '@shared/types'
 
 const USD_EXTENSIONS = ['.usd', '.usda', '.usdc', '.usdz']

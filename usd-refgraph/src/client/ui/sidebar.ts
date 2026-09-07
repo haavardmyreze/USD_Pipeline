@@ -1,7 +1,8 @@
 /** The graph rail's arc legend. */
 
 import type { ArcKind, Graph } from '@shared/types'
-import { ARC_COLOR, ARC_HINT, ARC_LABEL, ARC_ORDER } from '../graph/theme'
+import { ARC_HINT, ARC_LABEL, ARC_ORDER, ARC_STROKE, arcSample } from '../graph/theme'
+import { emptyState } from './kit'
 import { clear, el, must } from '../util'
 
 export interface SidebarCallbacks {
@@ -22,10 +23,13 @@ export class Sidebar {
 
       const row = el('button', 'legend__row')
       if (hiddenArcs.has(kind)) row.classList.add('is-off')
-      row.title = ARC_HINT[kind]
+      // Say how it is drawn as well as what it means: the line style is the
+      // only thing telling one arc from another on the graph.
+      row.title = `${ARC_HINT[kind]}\nDrawn ${ARC_STROKE[kind]}`
+      row.setAttribute('aria-pressed', String(!hiddenArcs.has(kind)))
 
       const swatch = el('span', 'legend__swatch')
-      swatch.style.setProperty('--swatch', ARC_COLOR[kind])
+      swatch.appendChild(arcSample(kind))
       row.appendChild(swatch)
       row.appendChild(el('span', 'legend__name', ARC_LABEL[kind]))
       row.appendChild(el('span', 'legend__count', String(count)))
@@ -35,7 +39,7 @@ export class Sidebar {
     }
 
     if (!this.legendEl.childElementCount) {
-      this.legendEl.appendChild(el('div', 'empty-note', 'No arcs yet.'))
+      this.legendEl.appendChild(emptyState('No arcs yet.', { inline: true }))
     }
   }
 }

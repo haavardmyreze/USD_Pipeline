@@ -1,8 +1,15 @@
 # usd-refgraph
 
 Point it at a USD file and it reads the project around it: what is published,
-who published it, what state it is in, and what depends on what. Five tabs —
-**Overview**, **Workspace**, **Artists**, **Publishes** and **Graph**.
+who published it, what state it is in, and what depends on what. Six sections —
+**Overview**, **Workspace**, **Artists**, **Publishes**, **Workfiles** and
+**Graph**.
+
+The first five read the project; the **Graph** is where you go to walk it.
+They are deliberately not wired together everywhere — the tables are for
+reading, not for clicking through. The one crossing is the **Graph it** button
+on an expanded entity in the Workspace, which is an explicit action rather than
+a link hiding under a row.
 
 ## The files are the database
 
@@ -25,6 +32,18 @@ the tree. Nothing is stored twice, so nothing can drift from what is on disk.
 Older `wip` / `ready` / `final` spellings are still understood and mapped onto
 the current three.
 
+`hip_file` is a free string, so the **Workfiles** tab is the only place that
+reads any structure out of it. A trailing version token — `_v001`, `-v12`,
+`.v3` — marks a file as one version of a workfile rather than a workfile of its
+own, so every version groups under one box and separates by version inside it,
+newest first. A separator before the `v` is required, so a name like
+`shot_rev2.hip` is left alone.
+
+Versions are told apart by the token exactly as authored: a project that has
+written both `v01` and `v001` has two files on disk, and the tab shows two
+versions rather than quietly merging them. `.hip` and `.hipnc` with the same
+stem stay separate for the same reason.
+
 **What has no home in USD, and so is not shown:** project name and code,
 software versions, a team roster (the Artists tab shows who has actually
 published), and anything schedule-related. Publishes is a history, not a plan.
@@ -42,6 +61,27 @@ The crawler has to be Python because OpenUSD's own bindings are the only
 practical way to read `.usdc` crate files and to resolve asset paths the way USD
 itself does. The viewer is TypeScript because that is where the interaction
 lives. They talk over a small localhost JSON API.
+
+### One vocabulary, both sides
+
+Two files carry the shapes that must agree across the language boundary:
+
+| | |
+| --- | --- |
+| `server/usd_refgraph/pipeline.py` | Reads `customLayerData` into a record |
+| `src/shared/pipeline.ts` | The same reader, for layers the graph crawl hands through raw |
+
+The project scan parses the record server-side, but the graph crawl returns
+`customLayerData` untouched — so the viewer needs its own reader to describe a
+node the way it describes a scanned layer. The two are deliberate mirrors,
+including the older `wip` / `ready` / `final` spellings; change one and change
+the other.
+
+Inside the viewer, `src/client/ui/kit.ts` is the only thing that builds a card,
+a table, a chip, a pill, an empty state or an expanding row, and
+`src/client/ui/icons.ts` is the only place an icon is drawn. A page that styles
+its own version of one of those is a page that will drift, so the kit is where
+a new variant belongs.
 
 ## Quick start (Windows)
 
@@ -142,10 +182,16 @@ already have the path on the clipboard.
 | Hover a node | Light up everything it reaches, and everything that reaches it |
 | `/` | Filter box |
 | `F` | Fit to view |
+| `1`–`6` | Jump to a section |
 | `R` | Rescan from disk |
-| `O` | Open a file |
+| `O` | Open a file or project folder |
 | `Ctrl`+`V` | Open the path on the clipboard |
-| `Esc` | Clear the selection |
+| `?` | Show the shortcut sheet |
+| `Esc` | Close, or clear the selection |
+
+The same sheet is on the **Shortcuts** button at the foot of the navigation,
+and it is generated from the list the keys are bound against, so it cannot
+drift out of date.
 
 ## Reading the graph
 
@@ -189,13 +235,55 @@ stacked-layers glyph and a brighter name, and the blocks between them sit a step
 back. The full classification — *shot root*, *asset assembly*, *set block* — is
 in each file's detail panel.
 
-Each node also carries the **artist** who published that layer, read from its
-own `customLayerData`.
+Each node also carries the **artist** who published that layer and a **status
+dot**, both read from its own `customLayerData` by the same reader the project
+pages use — so a layer that is a placeholder in the Workspace is a placeholder
+on the graph, in the same amber.
 
-Colour on a card means one thing only: the arc that reached the file. That is
-the accent bar down its left edge, matching the wire that arrives there. The
-extension chip and the artist badge are facts about the file rather than about
-the arc, so they stay neutral.
+## Colour means one thing, and lines mean the other
+
+The graph shows two things at once — what a file *is*, and how it was *reached*
+— and they use different visual channels on purpose. A picture that says two
+things in colour says neither quickly.
+
+**Cards carry colour.** A card's tint is the tier the file belongs to: violet
+for an asset, cyan for a set, orange for a shot. Areas hold colour well, and a
+tint still reads when the whole graph is zoomed out to fit, which is exactly
+when you want to see how a scene divides. A file outside the three tiers keeps
+the plain card surface. The rail carries a key under **Tiers**.
+
+**Wires carry line style.** Every arc is drawn in the same neutral grey and
+told apart by its stroke:
+
+| | | |
+| --- | --- | --- |
+| Sublayer | the one solid line | the structural spine that holds a stage together |
+| Reference | long dashes | |
+| Payload | short dashes | half the reference's dash, twice its cadence |
+| Value clip | dash-dot | the only pattern with two different marks in it |
+| Texture / asset | fine faint stipple | hangs off the composition rather than forming it |
+| Other | tight ticks | the catch-all, matching nothing else |
+
+They are told apart by *rhythm*, not by thickness — two solid lines of
+different weight are nearly the same line. Only the sublayer is left solid,
+which makes the spine of a stage findable at a glance.
+
+The **Arcs** panel draws a real sample of each, using the same CSS class as the
+wires themselves, so the key cannot drift from the picture.
+
+Dash patterns are drawn in graph space, so they shrink with the view. Zoomed
+right out the kinds converge — which is the point at which you are reading tier
+colour and the shape of the tree anyway, not individual arcs.
+
+Two marks are notes *about* an arc rather than kinds of arc, so each keeps
+whatever pattern its kind gave it and changes only colour or weight: a
+**missing** target turns the line red, and a **cross link** — a second arc into
+a file already drawn elsewhere — fades it back.
+
+The **status dot** on a card is the publisher's own state: amber placeholder,
+blue production ready, green locked. It is the same dot the tree, the tables
+and the detail panel use. The extension chip and the artist name are facts
+about the file rather than about any of this, so they stay neutral.
 
 Assemblies rarely point at each other directly — a shot root subLayers its
 layout block, and *that* block references the asset assembly — so hiding the

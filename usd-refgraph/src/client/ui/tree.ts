@@ -8,7 +8,8 @@
 
 import type { Project, ProjectEntity, ProjectLayer } from '@shared/project'
 import type { NodeTier } from '@shared/types'
-import { statusDot } from '../pipeline'
+import { entitySort, entityTarget } from '@shared/project'
+import { emptyState, statusDot } from './kit'
 import { clear, el, matches } from '../util'
 
 const TIER_LABEL: Record<NodeTier, string> = {
@@ -54,7 +55,10 @@ export class ProjectTree {
 
     if (!this.project) {
       this.host.appendChild(
-        el('div', 'empty-note', 'Open a project folder to list its entities here.'),
+        emptyState('No project open.', {
+          inline: true,
+          body: 'Open a project folder to list its entities here.',
+        }),
       )
       return
     }
@@ -64,6 +68,7 @@ export class ProjectTree {
       const entities = this.project.entities
         .filter((entity) => entity.tier === tier)
         .filter((entity) => !this.query || matches(entity.name, this.query))
+        .sort(entitySort)
 
       if (!entities.length) continue
 
@@ -76,26 +81,20 @@ export class ProjectTree {
 
     if (!shown) {
       this.host.appendChild(
-        el(
-          'div',
-          'empty-note',
-          this.query ? 'Nothing matches the filter.' : 'No entities found.',
-        ),
+        emptyState(this.query ? 'Nothing matches the filter.' : 'No entities found.', {
+          inline: true,
+        }),
       )
     }
   }
 
-  /** The layer to graph for an entity: its assembly, or its only block. */
-  private target(entity: ProjectEntity): ProjectLayer | null {
-    return entity.assembly ?? entity.blocks[0] ?? null
-  }
-
   private entityRow(entity: ProjectEntity): HTMLElement {
-    const layer = this.target(entity)
+    const layer = entityTarget(entity)
     const row = el('button', 'tree__row')
 
     if (layer && this.current && layer.path.toLowerCase() === this.current) {
       row.classList.add('is-on')
+      row.setAttribute('aria-current', 'true')
     }
 
     row.appendChild(statusDot(entity.status))

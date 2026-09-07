@@ -21,46 +21,72 @@
           <span class="brand__name">USD Pipeline</span>
         </div>
 
-        <nav class="nav__list" role="tablist">
-          <button class="nav__item is-on" data-page="overview" role="tab">
+        <nav class="nav__list" role="tablist" aria-label="Sections">
+          <button class="nav__item is-on" data-page="overview" role="tab" aria-selected="true">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8.4 10 3l7 5.4V16a1.4 1.4 0 0 1-1.4 1.4H4.4A1.4 1.4 0 0 1 3 16z"/><path d="M8 17.4v-5.6h4v5.6"/></svg>
             <span>Overview</span>
+            <kbd class="nav__key">1</kbd>
           </button>
-          <button class="nav__item" data-page="workspace" role="tab">
+          <button class="nav__item" data-page="workspace" role="tab" aria-selected="false">
             <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.8" y="2.8" width="5.6" height="5.6" rx="1"/><rect x="11.6" y="2.8" width="5.6" height="5.6" rx="1"/><rect x="2.8" y="11.6" width="5.6" height="5.6" rx="1"/><rect x="11.6" y="11.6" width="5.6" height="5.6" rx="1"/></svg>
             <span>Workspace</span>
+            <kbd class="nav__key">2</kbd>
           </button>
-          <button class="nav__item" data-page="artists" role="tab">
+          <button class="nav__item" data-page="artists" role="tab" aria-selected="false">
             <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7.6" cy="6.6" r="2.9"/><path d="M2.6 16.6a5 5 0 0 1 10 0"/><path d="M13.4 4.1a2.9 2.9 0 0 1 0 5.4M14.6 12.2a5 5 0 0 1 2.8 4.4"/></svg>
             <span>Artists</span>
+            <kbd class="nav__key">3</kbd>
           </button>
-          <button class="nav__item" data-page="calendar" role="tab">
+          <button class="nav__item" data-page="calendar" role="tab" aria-selected="false">
             <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.8" y="4.2" width="14.4" height="13" rx="1.4"/><path d="M2.8 8.2h14.4M6.6 2.6v3.2M13.4 2.6v3.2"/></svg>
             <span>Publishes</span>
+            <kbd class="nav__key">4</kbd>
           </button>
-          <button class="nav__item" data-page="workfiles" role="tab">
+          <button class="nav__item" data-page="workfiles" role="tab" aria-selected="false">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12 2.6H5.8A1.6 1.6 0 0 0 4.2 4.2v11.6a1.6 1.6 0 0 0 1.6 1.6h8.4a1.6 1.6 0 0 0 1.6-1.6V6.4z"/><path d="M12 2.6v4.4h4.2"/><path d="M7 11h6M7 13.6h4"/></svg>
             <span>Workfiles</span>
+            <kbd class="nav__key">5</kbd>
           </button>
-          <button class="nav__item" data-page="graph" role="tab">
+          <button class="nav__item" data-page="graph" role="tab" aria-selected="false">
             <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.4" cy="10" r="2.2"/><circle cx="15.6" cy="5.4" r="2.2"/><circle cx="15.6" cy="14.6" r="2.2"/><path d="m6.4 9.1 7.2-3M6.4 10.9l7.2 3"/></svg>
             <span>Graph</span>
+            <kbd class="nav__key">6</kbd>
           </button>
         </nav>
+
+        <div class="nav__foot">
+          <button class="nav__help" id="btn-help" title="Keyboard shortcuts (?)">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.4" y="3.6" width="13.2" height="8.8" rx="1.6"/><path d="M4 6.4h.01M6.6 6.4h.01M9.4 6.4h.01M12 6.4h.01M4 9h.01M12 9h.01M6.4 9h3.2"/></svg>
+            <span>Shortcuts</span>
+          </button>
+          <div class="nav__version" id="caps-line"></div>
+        </div>
       </aside>
 
       <div class="main">
       <!-- ── Top bar ────────────────────────────────────────────────── -->
       <header class="topbar">
-        <div class="topbar__project" id="project-name">No project</div>
-
-        <button class="filebtn" id="open-file" title="Open a USD file (O)">
-          <span class="filebtn__icon" aria-hidden="true">
+        <!-- What is open. The project is stable across pages; the layer only
+             means anything on the graph. -->
+        <button class="crumb-btn" id="open-project" title="Open a different project folder (O)">
+          <span class="crumb-btn__icon" aria-hidden="true">
             <svg viewBox="0 0 16 16"><path d="M1.5 4.2A1.7 1.7 0 0 1 3.2 2.5h2.6l1.4 1.6h5.6a1.7 1.7 0 0 1 1.7 1.7v6a1.7 1.7 0 0 1-1.7 1.7H3.2a1.7 1.7 0 0 1-1.7-1.7z"/></svg>
           </span>
-          <span class="filebtn__text">
-            <span class="filebtn__name" id="root-name">Open a USD file</span>
-            <span class="filebtn__path" id="root-path">Nothing loaded yet</span>
+          <span class="crumb-btn__text">
+            <span class="crumb-btn__name" id="project-name">No project</span>
+            <span class="crumb-btn__sub" id="project-path">Open a project folder</span>
+          </span>
+        </button>
+
+        <span class="topbar__sep graph-only" aria-hidden="true"></span>
+
+        <button class="crumb-btn crumb-btn--layer graph-only" id="open-file" title="Open a different USD file">
+          <span class="crumb-btn__icon" aria-hidden="true">
+            <svg viewBox="0 0 16 16"><path d="M9 1.8H4.4A1.4 1.4 0 0 0 3 3.2v9.6a1.4 1.4 0 0 0 1.4 1.4h7.2a1.4 1.4 0 0 0 1.4-1.4V5.8z"/><path d="M9 1.8v4h4"/></svg>
+          </span>
+          <span class="crumb-btn__text">
+            <span class="crumb-btn__name" id="root-name">No layer</span>
+            <span class="crumb-btn__sub" id="root-path">Nothing loaded yet</span>
           </span>
         </button>
 
@@ -75,25 +101,25 @@
         </label>
 
         <div class="seg graph-only" role="group" aria-label="View options">
-          <button class="seg__btn" id="toggle-assemblies" title="Show only assembly files, collapsing the blocks between them">
+          <button class="seg__btn" id="toggle-assemblies" aria-pressed="false" title="Show only assembly files, collapsing the blocks between them">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/><path d="m1.8 8 6.2 3.2L14.2 8"/><path d="m1.8 11 6.2 3.2L14.2 11"/></svg>
             Assemblies
           </button>
-          <button class="seg__btn is-on" id="toggle-textures" title="Show texture and asset files">
+          <button class="seg__btn is-on" id="toggle-textures" aria-pressed="true" title="Show texture and asset files">
             <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.6"/><circle cx="6" cy="6.6" r="1.2"/><path d="m3 11 3.2-3 2.4 2.2L11 8l2 2.4"/></svg>
             Textures
           </button>
-          <button class="seg__btn" id="toggle-missing" title="Show only files that are missing">
+          <button class="seg__btn" id="toggle-missing" aria-pressed="false" title="Show only files that are missing">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.6 14.4 13H1.6z"/><path d="M8 6.4v3.1M8 11.2v.1"/></svg>
             Missing
           </button>
         </div>
 
         <div class="iconbar">
-          <button class="iconbtn graph-only" id="btn-fit" title="Fit to view (F)">
+          <button class="iconbtn graph-only" id="btn-fit" title="Fit to view (F)" aria-label="Fit to view">
             <svg viewBox="0 0 16 16"><path d="M2 6V2.8h3.2M14 6V2.8h-3.2M2 10v3.2h3.2M14 10v3.2h-3.2"/></svg>
           </button>
-          <button class="iconbtn" id="btn-rescan" title="Rescan from disk (R)">
+          <button class="iconbtn" id="btn-rescan" title="Rescan from disk (R)" aria-label="Rescan from disk">
             <svg viewBox="0 0 16 16"><path d="M13.4 7a5.5 5.5 0 1 0-.5 3.4"/><path d="M13.8 3.4V7h-3.5"/></svg>
           </button>
         </div>
@@ -133,6 +159,24 @@
           <div class="legend" id="legend"></div>
         </section>
 
+        <section class="panel">
+          <h2 class="panel__title">
+            Tiers
+            <span class="panel__hint">card tint</span>
+          </h2>
+          <div class="tierkey">
+            <span class="tierkey__item tierkey__item--asset">
+              <span class="tierkey__swatch" aria-hidden="true"></span>Asset
+            </span>
+            <span class="tierkey__item tierkey__item--set">
+              <span class="tierkey__swatch" aria-hidden="true"></span>Set
+            </span>
+            <span class="tierkey__item tierkey__item--shot">
+              <span class="tierkey__swatch" aria-hidden="true"></span>Shot
+            </span>
+          </div>
+        </section>
+
       </aside>
 
       <!-- ── Graph ──────────────────────────────────────────────────── -->
@@ -148,11 +192,11 @@
         </div>
 
         <div class="zoomctl">
-          <button class="iconbtn" id="zoom-out" title="Zoom out">
+          <button class="iconbtn" id="zoom-out" title="Zoom out" aria-label="Zoom out">
             <svg viewBox="0 0 16 16"><path d="M4 8h8"/></svg>
           </button>
           <button class="zoomctl__level" id="zoom-level" title="Reset zoom">100%</button>
-          <button class="iconbtn" id="zoom-in" title="Zoom in">
+          <button class="iconbtn" id="zoom-in" title="Zoom in" aria-label="Zoom in">
             <svg viewBox="0 0 16 16"><path d="M8 4v8M4 8h8"/></svg>
           </button>
         </div>
@@ -174,7 +218,7 @@
             Every sublayer, reference, payload, value clip and texture it reaches
             gets laid out as a graph you can walk.
           </p>
-          <button class="btn btn--primary" id="empty-open">Open a project</button>
+          <button class="btn btn--primary" id="empty-open"><span>Open a project</span></button>
           <p class="empty__hint">or drop a USD file here, or paste a path</p>
         </div>
 
@@ -197,7 +241,7 @@
       <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Open a USD file">
         <header class="picker__head">
           <div class="crumbs" id="crumbs"></div>
-          <button class="iconbtn" id="picker-close" title="Close (Esc)">
+          <button class="iconbtn" id="picker-close" title="Close (Esc)" aria-label="Close">
             <svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></svg>
           </button>
         </header>
@@ -208,9 +252,7 @@
         </div>
 
         <footer class="picker__foot">
-          <button class="btn" id="picker-folder" title="Scan this folder as a project">
-            Use this folder
-          </button>
+          <button class="btn" id="picker-folder" title="Scan this folder as a project"><span>Use this folder</span></button>
           <input
             id="picker-path"
             class="picker__input"
@@ -219,7 +261,7 @@
             autocomplete="off"
             placeholder="…or paste a full path to a .usd / .usda / .usdc / .usdz file"
           />
-          <button class="btn btn--primary" id="picker-go">Open</button>
+          <button class="btn btn--primary" id="picker-go"><span>Open</span></button>
         </footer>
       </div>
     </div>
@@ -245,11 +287,27 @@
             <span class="chooser__title" id="chooser-title"></span>
             <span class="chooser__note" id="chooser-note"></span>
           </div>
-          <button class="iconbtn" id="chooser-close" title="Close (Esc)">
+          <button class="iconbtn" id="chooser-close" title="Close (Esc)" aria-label="Close">
             <svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></svg>
           </button>
         </header>
         <div class="chooser__list" id="chooser-list"></div>
+      </div>
+    </div>
+
+    <!-- ── Keyboard shortcuts ───────────────────────────────────────── -->
+    <div class="modal" id="shortcuts" hidden>
+      <div class="modal__scrim" id="shortcuts-scrim"></div>
+      <div class="modal__panel modal__panel--slim" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+        <header class="picker__head">
+          <div class="chooser__head">
+            <span class="chooser__title">Keyboard shortcuts</span>
+          </div>
+          <button class="iconbtn" id="shortcuts-close" title="Close (Esc)" aria-label="Close">
+            <svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></svg>
+          </button>
+        </header>
+        <div class="shortcuts" id="shortcuts-body"></div>
       </div>
     </div>
 

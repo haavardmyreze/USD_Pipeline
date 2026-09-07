@@ -44,24 +44,65 @@ export function formatBytes(bytes: number | null): string {
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
 }
 
-export function formatDate(ms: number | null): string {
+/**
+ * A recent moment reads better relative to today: `Today 14:30`,
+ * `Yesterday 09:12`, then `3 Sep, 14:30` once it is older than that.
+ */
+export function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—'
   const date = new Date(ms)
-  const now = Date.now()
-  const days = (now - ms) / 86_400_000
   const time = date.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
   })
-  if (days < 1 && date.getDate() === new Date(now).getDate()) return `Today ${time}`
-  if (days < 2) return `Yesterday ${time}`
+  const days = daysAgo(ms)
+  if (days === 0) return `Today ${time}`
+  if (days === 1) return `Yesterday ${time}`
   return (
     date.toLocaleDateString(undefined, {
       day: 'numeric',
       month: 'short',
       year: days > 300 ? 'numeric' : undefined,
-    }) + ` ${time}`
+    }) + `, ${time}`
   )
+}
+
+/** The unambiguous form, for tooltips and detail panels: `6 Sep 2026, 14:30`. */
+export function formatMoment(ms: number | null | undefined): string {
+  if (!ms) return '—'
+  return new Date(ms).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** How long ago, in words: `today`, `yesterday`, `3 days ago`. */
+export function formatRelative(ms: number | null | undefined): string {
+  if (!ms) return '—'
+  const days = daysAgo(ms)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 30) return `${days} days ago`
+  if (days < 365) return `${Math.round(days / 30)} months ago`
+  return `${Math.round(days / 365)} years ago`
+}
+
+/** Whole calendar days between a moment and now, in local time. */
+function daysAgo(ms: number): number {
+  const then = new Date(ms)
+  const now = new Date()
+  const thenDay = new Date(then.getFullYear(), then.getMonth(), then.getDate())
+  const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((nowDay.getTime() - thenDay.getTime()) / 86_400_000)
+}
+
+/** `2026-9-6`, for grouping publishes by local day without timezone drift. */
+export function dayKey(ms: number): string {
+  const date = new Date(ms)
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
 }
 
 export function formatMs(ms: number): string {
