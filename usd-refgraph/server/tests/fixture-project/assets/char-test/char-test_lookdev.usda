@@ -1,0 +1,21 @@
+#usda 1.0
+(
+    customLayerData = {
+        string artist = "maria"
+        string status = "production_ready"
+        string export_datetime_unix = "1788650000"
+    }
+    defaultPrim = "CharTest"
+)
+
+def Xform "CharTest"
+{
+    def Material "Surface"
+    {
+        def Shader "base"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./tex/char-test_bc_2k.exr@
+        }
+    }
+}

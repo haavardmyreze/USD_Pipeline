@@ -23,7 +23,8 @@ function kindRank(kind: ArcKind): number {
 }
 
 export const NODE_W = 232
-export const NODE_H = 54
+/** Must match `--node-h` in styles.css. */
+export const NODE_H = 46
 export const GAP_X = 128
 export const GAP_Y = 16
 

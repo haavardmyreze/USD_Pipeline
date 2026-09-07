@@ -17,7 +17,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import browse
+from . import browse, project
 from .crawl import DEFAULT_MAX_NODES, Crawler
 
 #: Only browsers pointed at our own dev server may call the API.
@@ -145,6 +145,30 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_error_json(404, "Cannot list directory", str(exc))
             except PermissionError:
                 self._send_error_json(403, "Permission denied", path)
+            return
+
+        if route == "/api/project":
+            path = first("path")
+            if not path:
+                self._send_error_json(400, "Missing `path` parameter")
+                return
+            if not os.path.exists(path):
+                self._send_error_json(404, "No such path", path)
+                return
+
+            root = path if project.looks_like_root(path) else project.find_root(path)
+            if not root:
+                self._send_error_json(
+                    404,
+                    "No project tree found",
+                    "Looked upwards for a folder containing assets, sets or shots.",
+                )
+                return
+
+            scanner = project.ProjectScanner(
+                root, read_dependencies=first("deps", "1") not in ("0", "false")
+            )
+            self._send_json(scanner.run())
             return
 
         if route == "/api/locate":

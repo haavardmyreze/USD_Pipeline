@@ -5,6 +5,7 @@ import type {
   Graph,
   LocateResult,
 } from '@shared/types'
+import type { Project } from '@shared/project'
 
 export class ApiFailure extends Error {
   constructor(
@@ -81,6 +82,15 @@ export function locate(
   if (size !== null) params.set('size', String(size))
   for (const root of roots) params.append('root', root)
   return request<LocateResult>(`/api/locate?${params}`)
+}
+
+/**
+ * Scan the project tree that contains `path`. The backend walks up from the
+ * file to find the folder holding assets/sets/shots, then reads every
+ * published layer's metadata.
+ */
+export function getProject(path: string): Promise<Project> {
+  return request<Project>(`/api/project?path=${encodeURIComponent(path)}`)
 }
 
 export function reveal(path: string): Promise<{ ok: boolean }> {

@@ -20,6 +20,7 @@ export class FilePicker {
   private readonly listEl = must<HTMLElement>('#picker-list')
   private readonly input = must<HTMLInputElement>('#picker-path')
   private readonly goBtn = must<HTMLButtonElement>('#picker-go')
+  private readonly folderBtn = must<HTMLButtonElement>('#picker-folder')
 
   private resolve: ((path: string | null) => void) | null = null
   private entries: DirEntry[] = []
@@ -32,6 +33,10 @@ export class FilePicker {
     this.scrim.addEventListener('click', () => this.close(null))
     this.closeBtn.addEventListener('click', () => this.close(null))
     this.goBtn.addEventListener('click', () => this.submitTyped())
+    // Choosing the folder you are standing in is how you open a project.
+    this.folderBtn.addEventListener('click', () => {
+      if (this.currentDir) this.close(this.currentDir)
+    })
 
     this.input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
@@ -107,6 +112,8 @@ export class FilePicker {
   private renderListing(listing: DirListing): void {
     this.entries = listing.entries
     this.activeIndex = -1
+
+    this.folderBtn.title = `Scan ${listing.path} as a project`
 
     clear(this.crumbs)
     listing.crumbs.forEach((crumb, index) => {

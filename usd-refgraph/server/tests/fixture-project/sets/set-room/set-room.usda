@@ -1,0 +1,18 @@
+#usda 1.0
+(
+    customLayerData = {
+        string artist = "ina"
+        string status = "placeholder"
+        string comment = "Blocking only."
+        string export_datetime_unix = "1788800000"
+    }
+)
+
+def Xform "Room"
+{
+    def "Hero" (
+        prepend references = @../../assets/char-test/char-test.usda@
+    )
+    {
+    }
+}

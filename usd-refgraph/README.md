@@ -1,8 +1,33 @@
 # usd-refgraph
 
-Point it at a USD file and it draws every file that file reaches — sublayers,
-references, payloads, value clips and textures — as an interactive graph in the
-browser.
+Point it at a USD file and it reads the project around it: what is published,
+who published it, what state it is in, and what depends on what. Five tabs —
+**Overview**, **Workspace**, **Artists**, **Publishes** and **Graph**.
+
+## The files are the database
+
+There is no project file. Publishing writes each layer's bookkeeping into the
+layer itself, in `customLayerData`:
+
+```
+artist                "havard"
+status                "placeholder" | "production_ready" | "locked"
+comment               free text
+hip_file              "workfile_havard_v001.hip"
+rop_path              "/stage/Bob_Lookdev/mz_usd_rop2"
+export_datetime_unix  "1788769845"
+```
+
+Combined with the naming convention — which says the entity and block a file
+belongs to — that is enough to rebuild the whole production picture by walking
+the tree. Nothing is stored twice, so nothing can drift from what is on disk.
+
+Older `wip` / `ready` / `final` spellings are still understood and mapped onto
+the current three.
+
+**What has no home in USD, and so is not shown:** project name and code,
+software versions, a team roster (the Artists tab shows who has actually
+published), and anything schedule-related. Publishes is a history, not a plan.
 
 ![arc kinds: sublayer, reference, payload, value clip, texture](#)
 
@@ -18,9 +43,33 @@ practical way to read `.usdc` crate files and to resolve asset paths the way USD
 itself does. The viewer is TypeScript because that is where the interaction
 lives. They talk over a small localhost JSON API.
 
-## Setup
+## Quick start (Windows)
 
-Once:
+Double-click **`usd-refgraph.bat`**. The first run creates the Python
+environment, installs OpenUSD and builds the viewer; later runs go straight to
+the app. Leave the console window open while you use it — closing it stops the
+server.
+
+You can also **drop a `.usda` file onto the launcher's icon** to open that file
+directly.
+
+For a right-click entry on USD files, run **`install-context-menu.bat`** once.
+It adds *Open in Reference Graph* to `.usd`, `.usda`, `.usdc` and `.usdz`,
+writing only to `HKEY_CURRENT_USER` — no administrator rights, no change to
+which program owns the file type, and `uninstall-context-menu.bat` reverses it.
+On Windows 11 the entry may sit under *Show more options*. Opening a second file
+hands it to the window already running rather than starting another server.
+
+On macOS or Linux use `./usd-refgraph.sh` instead.
+
+> **This is a local tool.** The crawler reads files from your own disk and
+> resolves relative paths against them, so it cannot be usefully deployed to a
+> cloud host — a container there has no access to your project storage. Give
+> people the folder, not a URL.
+
+## Setup by hand
+
+If you would rather not use the launcher:
 
 ```bash
 python -m venv .venv
@@ -51,12 +100,16 @@ The Python server then serves the built viewer itself, on
 
 ## Using it
 
-There are four ways to open a layer:
+**Open the project folder** — the one holding `assets`, `sets` and `shots`.
+Browse to it and press **Use this folder**. Everything published inside is
+scanned, and the graph opens on a shot root so you land on something.
 
-- **Drop it** anywhere on the window
-- **Paste a path** with `Ctrl`+`V`
-- **Browse** with **Open a USD file**
-- **Deep-link** it with `?path=`
+From there the **Graph** tab lists every layer in a tree down the left side;
+click one to draw its graph. Switching layers does not rescan the project.
+
+You can still open a single file — drop it on the window, paste a path with
+`Ctrl`+`V`, type one in the picker, or deep-link it with `?path=`. Opening a
+file from inside a project tree scans that project too.
 
 ### About dropping
 
@@ -125,6 +178,7 @@ only token separator, so **blocks carry a block token and assemblies do not**.
 | `kilo-0010.usda` | shot root |
 | `char-robot_model.usdc` | asset block |
 | `kilo-0010_fx-sparks.usdc` | shot block |
+| `char-robot_body_bc_4k.exr` | texture (§15.9) |
 
 Matching is case-sensitive and rejects a version or artist in a published name,
 so `Char-Robot.usda` and `char-robot_model_v002.usda` are reported as
@@ -135,10 +189,13 @@ stacked-layers glyph and a brighter name, and the blocks between them sit a step
 back. The full classification — *shot root*, *asset assembly*, *set block* — is
 in each file's detail panel.
 
+Each node also carries the **artist** who published that layer, read from its
+own `customLayerData`.
+
 Colour on a card means one thing only: the arc that reached the file. That is
 the accent bar down its left edge, matching the wire that arrives there. The
-extension chip is a fact about the file rather than about the arc, so it stays
-neutral.
+extension chip and the artist badge are facts about the file rather than about
+the arc, so they stay neutral.
 
 Assemblies rarely point at each other directly — a shot root subLayers its
 layout block, and *that* block references the asset assembly — so hiding the
@@ -187,7 +244,11 @@ family of files, so they are shown but never reported as missing.
 
 ```bash
 cd server && ../.venv/Scripts/python tests/test_crawl.py
+cd server && ../.venv/Scripts/python tests/test_project.py
 ```
+
+`test_project.py` covers the metadata reading, the status vocabulary and the
+project scan, against a fixture project in `server/tests/fixture-project/`.
 
 `server/tests/fixture/` is a small scene that exercises every arc kind at once,
 including a missing sublayer, a missing clip, a missing texture and two

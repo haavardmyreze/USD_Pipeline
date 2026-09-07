@@ -88,7 +88,7 @@ class GraphNode:
     #: stand for a family of files rather than one file on disk.
     template: bool = False
     #: What the filename declares under the pipeline naming convention.
-    role: Literal["assembly", "block", "other"] = "other"
+    role: Literal["assembly", "block", "texture", "other"] = "other"
     tier: Literal["asset", "set", "shot"] | None = None
     #: Human label for `role`/`tier`, e.g. "shot root".
     roleLabel: str = ""

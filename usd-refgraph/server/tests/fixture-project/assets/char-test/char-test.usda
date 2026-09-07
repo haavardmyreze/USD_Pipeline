@@ -1,0 +1,16 @@
+#usda 1.0
+(
+    customLayerData = {
+        string artist = "ina"
+        string status = "production_ready"
+        string comment = "Ready for layout."
+        string hip_file = "workfile_ina_v002.hip"
+        string rop_path = "/stage/Assembly/rop1"
+        string export_datetime_unix = "1788700000"
+    }
+    defaultPrim = "CharTest"
+    subLayers = [
+        @./char-test_lookdev.usda@,
+        @./char-test_model.usda@
+    ]
+)

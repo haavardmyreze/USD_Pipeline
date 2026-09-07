@@ -1,22 +1,47 @@
 import './styles.css'
 
 import type { ArcKind, Capabilities, Graph } from '@shared/types'
-import { ApiFailure, getCapabilities, getGraph, reveal } from './api'
+import type { Project, ProjectEntity, ProjectLayer } from '@shared/project'
+import { ApiFailure, getCapabilities, getGraph, getProject, reveal } from './api'
+import { renderArtists } from './ui/pages/artists'
+import { renderCalendar } from './ui/pages/calendar'
+import { renderOverview } from './ui/pages/overview'
+import { renderWorkfiles } from './ui/pages/workfiles'
+import { renderWorkspace } from './ui/pages/workspace'
+import { ProjectTree } from './ui/tree'
 import { DropZone } from './ui/dropzone'
 import { collapseToAssemblies } from './graph/collapse'
 import { GraphView } from './graph/view'
 import { Inspector, toast } from './ui/inspector'
 import { FilePicker } from './ui/picker'
-import { Sidebar, type RecentFile } from './ui/sidebar'
+import { Sidebar } from './ui/sidebar'
 import { debounce, matches, must, truncateStart } from './util'
 
 const RECENT_KEY = 'usd-refgraph:recent'
 const MAX_RECENT = 6
 
+/** A place the user has opened before, kept so the picker can start there. */
+interface RecentFile {
+  path: string
+  name: string
+  dir: string
+}
+
+type PageName =
+  | 'overview'
+  | 'workspace'
+  | 'artists'
+  | 'calendar'
+  | 'workfiles'
+  | 'graph'
+
 class App {
   private graph: Graph | null = null
   /** The graph as drawn: the full crawl, or the collapsed assembly view. */
   private displayed: Graph | null = null
+  /** The scanned project tree, when the open file sits inside one. */
+  private project: Project | null = null
+  private page: PageName = 'overview'
   private rootPath: string | null = null
   private selectedId: string | null = null
 
@@ -33,6 +58,7 @@ class App {
   private readonly inspector: Inspector
   private readonly picker: FilePicker
   private readonly dropzone: DropZone
+  private readonly tree: ProjectTree
 
   private readonly els = {
     stage: must<HTMLElement>('#stage'),
@@ -47,6 +73,7 @@ class App {
     textures: must<HTMLButtonElement>('#toggle-textures'),
     missing: must<HTMLButtonElement>('#toggle-missing'),
     assemblies: must<HTMLButtonElement>('#toggle-assemblies'),
+    projectName: must<HTMLElement>('#project-name'),
   }
 
   constructor(capabilities: Capabilities) {
@@ -70,11 +97,6 @@ class App {
 
     this.sidebar = new Sidebar({
       onToggleArc: (kind) => this.toggleArc(kind),
-      onFocusNode: (id) => {
-        this.select(id)
-        this.view.focusNode(id)
-      },
-      onOpenRecent: (path) => void this.load(path),
     })
 
     this.inspector = new Inspector({
@@ -89,6 +111,10 @@ class App {
       onToast: (message, kind) => toast(message, kind),
     })
 
+    this.tree = new ProjectTree(must<HTMLElement>('#tree'), {
+      onPick: (layer) => void this.load(layer.path),
+    })
+
     this.dropzone = new DropZone({
       searchRoots: () => this.searchRoots(),
       onOpen: (path) => void this.load(path),
@@ -98,7 +124,7 @@ class App {
 
     this.bindChrome()
     this.sidebar.update(null, this.hiddenArcs)
-    this.sidebar.setRecent(this.readRecent())
+    this.showPage('overview')
   }
 
   // -- loading ------------------------------------------------------------
@@ -107,8 +133,12 @@ class App {
     if (this.busy) return
     this.busy = true
     this.els.loading.hidden = false
-    this.els.loadingText.textContent = `Crawling ${path.split(/[\\/]/).pop() ?? path}…`
+    this.els.loadingText.textContent = `Reading ${path.split(/[\\/]/).pop() ?? path}…`
     this.els.rescan.classList.add('is-spinning')
+
+    // Scan only when we do not already have the project this file belongs to —
+    // clicking through the tree should not rescan the tree.
+    if (!this.project) void this.loadProject(path)
 
     try {
       const graph = await getGraph(path, { includeAssets: true })
@@ -123,6 +153,7 @@ class App {
       this.els.empty.hidden = true
 
       this.rememberRecent(path, rootNode?.name ?? path, rootNode?.dir ?? '')
+      this.tree.setCurrent(path)
       this.redraw()
       this.view.fit(false)
 
@@ -142,6 +173,134 @@ class App {
       this.els.loading.hidden = true
       this.els.rescan.classList.remove('is-spinning')
     }
+  }
+
+  /** Open a file and land on a particular page. */
+  openFile(path: string, page: PageName): void {
+    this.showPage(page)
+    void this.load(path)
+  }
+
+  private async loadProject(path: string): Promise<void> {
+    try {
+      this.project = await getProject(path)
+    } catch {
+      this.project = null
+    }
+    this.tree.setProject(this.project)
+    this.showProjectName()
+    this.renderPage()
+  }
+
+  /** The project's name, spaced and upper-cased as the manager showed it. */
+  private showProjectName(): void {
+    const name = this.project?.name
+    this.els.projectName.textContent = name
+      ? name.replace(/_/g, ' ').toUpperCase()
+      : 'No project'
+    this.els.projectName.title = this.project?.root ?? ''
+  }
+
+  /** Open a whole project folder: scan it, then graph a sensible first layer. */
+  async openProject(dir: string): Promise<void> {
+    if (this.busy) return
+    this.busy = true
+    this.els.loading.hidden = false
+    this.els.loadingText.textContent = `Scanning ${dir.split(/[\\/]/).filter(Boolean).pop() ?? dir}…`
+
+    try {
+      this.project = await getProject(dir)
+      this.tree.setProject(this.project)
+      this.showProjectName()
+      this.renderPage()
+      this.rememberRecent(dir, this.project.name, this.project.root)
+    } catch (error) {
+      this.project = null
+      this.tree.setProject(null)
+      this.showProjectName()
+      this.renderPage()
+      const failure = error instanceof ApiFailure ? error : null
+      toast(failure?.detail ?? failure?.message ?? 'Could not scan that folder', 'error')
+      return
+    } finally {
+      this.busy = false
+      this.els.loading.hidden = true
+    }
+
+    // Land on something rather than an empty graph: a shot root if there is
+    // one, since that is the widest view of the project.
+    const first = this.defaultLayer()
+    if (first) void this.load(first.path)
+    else this.updateRootLabel(this.project.name, this.project.root)
+  }
+
+  private defaultLayer(): ProjectLayer | null {
+    const entities = this.project?.entities ?? []
+    for (const tier of ['shot', 'set', 'asset'] as const) {
+      const match = entities.find((entity) => entity.tier === tier && entity.assembly)
+      if (match?.assembly) return match.assembly
+    }
+    return entities.flatMap((entity) => entity.blocks)[0] ?? null
+  }
+
+  private updateRootLabel(name: string, dir: string): void {
+    this.els.rootName.textContent = name
+    this.els.rootPath.textContent = truncateStart(dir, 60)
+  }
+
+  // -- pages --------------------------------------------------------------
+
+  private showPage(page: PageName): void {
+    this.page = page
+    for (const section of document.querySelectorAll<HTMLElement>('.page')) {
+      section.hidden = section.dataset.page !== page
+    }
+    for (const item of document.querySelectorAll<HTMLElement>('.nav__item')) {
+      item.classList.toggle('is-on', item.dataset.page === page)
+    }
+    // The graph's own controls have no meaning on the project pages.
+    for (const control of document.querySelectorAll<HTMLElement>('.graph-only')) {
+      control.hidden = page !== 'graph'
+    }
+    this.renderPage()
+    if (page === 'graph' && this.graph) this.view.fit(false)
+  }
+
+  private renderPage(): void {
+    if (this.page === 'graph') return
+
+    const host = must<HTMLElement>(`#page-${this.page}`)
+    if (!this.project) {
+      host.replaceChildren(this.noProjectNotice())
+      return
+    }
+
+    if (this.page === 'overview') renderOverview(host, this.project)
+    else if (this.page === 'workspace') renderWorkspace(host, this.project)
+    else if (this.page === 'artists') renderArtists(host, this.project)
+    else if (this.page === 'calendar') renderCalendar(host, this.project)
+    else if (this.page === 'workfiles') renderWorkfiles(host, this.project)
+  }
+
+  private noProjectNotice(): HTMLElement {
+    const card = document.createElement('div')
+    card.className = 'notice'
+    const title = document.createElement('h2')
+    title.textContent = this.rootPath ? 'Not inside a project tree' : 'No project open'
+    card.appendChild(title)
+    const body = document.createElement('p')
+    body.textContent = this.rootPath
+      ? 'These pages read a project tree — a folder containing assets, sets or shots. ' +
+        'The open file is not inside one, so there is nothing to summarise.'
+      : 'Open the folder that holds your assets, sets and shots, and everything published ' +
+        'in it will be summarised here.'
+    card.appendChild(body)
+    const button = document.createElement('button')
+    button.className = 'btn btn--primary'
+    button.textContent = 'Open a project folder'
+    button.addEventListener('click', () => void this.openPicker())
+    card.appendChild(button)
+    return card
   }
 
   private setRootFromNode(id: string): void {
@@ -264,9 +423,15 @@ class App {
 
   private async openPicker(startDir?: string, prefill?: string): Promise<void> {
     const start =
-      startDir ?? (this.rootPath ? dirOf(this.rootPath) : undefined)
+      startDir ?? this.project?.root ?? (this.rootPath ? dirOf(this.rootPath) : undefined)
     const chosen = await this.picker.open(start, prefill)
-    if (chosen) void this.load(chosen)
+    if (chosen) this.open(chosen)
+  }
+
+  /** A USD file opens its graph; anything else is treated as a project folder. */
+  open(path: string): void {
+    if (/\.(usd|usda|usdc|usdz)$/i.test(path)) void this.load(path)
+    else void this.openProject(path)
   }
 
   /** Fall back to browsing when a dropped file could not be found on disk. */
@@ -279,6 +444,10 @@ class App {
 
     must<HTMLButtonElement>('#open-file').addEventListener('click', openPicker)
     must<HTMLButtonElement>('#empty-open').addEventListener('click', openPicker)
+
+    for (const item of document.querySelectorAll<HTMLElement>('.nav__item')) {
+      item.addEventListener('click', () => this.showPage(item.dataset.page as PageName))
+    }
 
     this.els.rescan.addEventListener('click', () => {
       if (this.rootPath) void this.load(this.rootPath)
@@ -311,6 +480,12 @@ class App {
     }, 110)
     this.els.search.addEventListener('input', onSearch)
 
+    const treeFilter = must<HTMLInputElement>('#tree-filter')
+    treeFilter.addEventListener(
+      'input',
+      debounce(() => this.tree.setQuery(treeFilter.value), 110),
+    )
+
     document.addEventListener('keydown', (event) => {
       const inField =
         event.target instanceof HTMLInputElement ||
@@ -338,9 +513,17 @@ class App {
       }
       if (inField) return
 
+      if (event.key === 'o') {
+        openPicker()
+        return
+      }
+      if (event.key === 'r' && this.rootPath) {
+        void this.load(this.rootPath)
+        return
+      }
+      // The rest only mean anything while the graph is on screen.
+      if (this.page !== 'graph') return
       if (event.key === 'f') this.view.fit()
-      else if (event.key === 'r' && this.rootPath) void this.load(this.rootPath)
-      else if (event.key === 'o') openPicker()
       else if (event.key === '=' || event.key === '+') this.view.zoomBy(1.25)
       else if (event.key === '-') this.view.zoomBy(0.8)
     })
@@ -370,7 +553,6 @@ class App {
     } catch {
       /* private mode, or storage disabled — the list is a convenience only */
     }
-    this.sidebar.setRecent(trimmed)
   }
 }
 
@@ -384,9 +566,12 @@ async function boot(): Promise<void> {
     const capabilities = await getCapabilities()
     const app = new App(capabilities)
 
-    // Allow `?path=…` so a shell alias or shelf tool can deep-link a file.
+    // Allow `?path=…` so the launcher, the right-click menu or a shelf tool can
+    // deep-link a file. Those all mean "show me this file", so open the graph.
     const wanted = new URLSearchParams(location.search).get('path')
-    if (wanted) void app.load(wanted)
+    if (wanted) {
+      app.openFile(wanted, 'graph')
+    }
   } catch {
     toast('The crawler is not responding. Is the Python backend running?', 'error')
   }

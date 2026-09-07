@@ -32,7 +32,7 @@ export type NodeKind = 'layer' | 'asset'
  * (guide §15.5): blocks carry a block token after an underscore, assemblies do
  * not. `other` is anything outside the convention.
  */
-export type NodeRole = 'assembly' | 'block' | 'other'
+export type NodeRole = 'assembly' | 'block' | 'texture' | 'other'
 
 export type NodeTier = 'asset' | 'set' | 'shot'
 

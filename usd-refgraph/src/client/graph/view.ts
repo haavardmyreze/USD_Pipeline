@@ -8,7 +8,7 @@
  */
 
 import type { Graph, GraphNode } from '@shared/types'
-import { icon, truncateStart } from '../util'
+import { icon } from '../util'
 import { ARC_COLOR, ICONS, MISSING_COLOR, ROOT_COLOR } from './theme'
 import {
   layoutGraph,
@@ -18,7 +18,6 @@ import {
   type Layout,
   type Placed,
 } from './layout'
-import { formatBytes } from '../util'
 
 const MIN_ZOOM = 0.12
 const MAX_ZOOM = 2.6
@@ -135,6 +134,8 @@ export class GraphView {
     if (missing) card.classList.add('node--missing')
     if (node.role === 'assembly') card.classList.add('node--assembly')
     else if (node.role === 'block') card.classList.add('node--block')
+    // A faint wash of the tier's colour: asset, set or shot.
+    if (node.tier) card.classList.add(`node--tier-${node.tier}`)
     card.dataset.id = node.id
     card.style.transform = `translate(${placed.x}px, ${placed.y}px)`
     card.style.setProperty(
@@ -174,43 +175,28 @@ export class GraphView {
     name.title = node.roleLabel ? `${node.path}\n${node.roleLabel}` : node.path
     head.appendChild(name)
 
-    if (isRoot) {
-      const pill = document.createElement('span')
-      pill.className = 'node__pill'
-      pill.textContent = 'root'
-      head.appendChild(pill)
-    }
-
-    // The extension is a fact about the file, not about the arc that reached
-    // it, so it is deliberately not tinted with the arc colour.
-    const chip = document.createElement('span')
-    chip.className = 'node__chip'
-    chip.textContent = node.ext || node.kind
-    head.appendChild(chip)
-
     const flags = document.createElement('div')
     flags.className = 'node__flags'
     if (missing) flags.appendChild(flagIcon('missing', 'File not found on disk'))
     if (node.template) flags.appendChild(flagIcon('template', 'Placeholder path'))
-    if (node.binary && !missing) flags.appendChild(flagIcon('binary', 'Binary layer'))
     if (flags.childElementCount) head.appendChild(flags)
 
     body.appendChild(head)
 
-    const sub = document.createElement('div')
-    sub.className = 'node__sub'
-    const dir = document.createElement('span')
-    dir.className = 'node__dir'
-    dir.textContent =
-      node.relDir === '.' ? './' : truncateStart(node.relDir, 30)
-    dir.title = node.dir
-    sub.appendChild(dir)
-
-    const size = document.createElement('span')
-    size.className = 'node__size'
-    size.textContent = node.exists ? formatBytes(node.size) : missing ? 'missing' : '—'
-    sub.appendChild(size)
-    body.appendChild(sub)
+    // Who published the layer, straight from its own `customLayerData`. The
+    // path, size and format live in the detail panel; the card carries only
+    // what you need to tell one node from another at a glance.
+    const artist = node.meta?.customLayerData?.['artist']
+    if (artist) {
+      const sub = document.createElement('div')
+      sub.className = 'node__sub'
+      const badge = document.createElement('span')
+      badge.className = 'node__artist'
+      badge.textContent = artist
+      badge.title = `Published by ${artist}`
+      sub.appendChild(badge)
+      body.appendChild(sub)
+    }
 
     card.appendChild(body)
 

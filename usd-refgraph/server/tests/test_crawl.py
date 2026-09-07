@@ -132,6 +132,15 @@ def main() -> int:
         ("char-robot_model_v002.usda", ("other", None)),
         # The convention is lowercase.
         ("Char-Robot.usda", ("other", None)),
+        # Textures (15.9): the channel token is a closed enum and anchors the
+        # optional descriptor.
+        ("char-robot_bc_4k.exr", ("texture", "asset")),
+        ("char-robot_body_bc_4k.exr", ("texture", "asset")),
+        ("char-robot_aormt_4k.1001.exr", ("texture", "asset")),
+        ("char-robot_bc_4k.<UDIM>.exr", ("texture", "asset")),
+        ("set-living-room_walls_aormt_4k.exr", ("texture", "set")),
+        ("char-robot_bc_16k.exr", ("other", None)),
+        ("char-robot_spec_4k.exr", ("other", None)),
         ("roughness.png", ("other", None)),
     ]:
         check(filename, classify(filename), expected)

@@ -36,7 +36,24 @@ BLOCK_RE = re.compile(rf"^{TOKEN}_{TOKEN}\.(usda|usdc)$")
 #: Sets carry their own prefix (15.2).
 SET_PREFIX = "set-"
 
-Role = Literal["assembly", "block", "other"]
+# Textures (15.9): <asset-or-set>[_<descriptor>]_<channel>_<resolution>[.<udim>].<ext>
+# The channel token is a closed enum and acts as the parse anchor, which is what
+# makes the optional descriptor unambiguous.
+CHANNEL = r"(?:bc|n|aormt|m)"
+RESOLUTION = r"(?:1k|2k|4k|8k)"
+TEXTURE_EXT = r"(?:exr|png|tif)"
+#: A UDIM tile is four digits on disk, but a USD asset path holds the `<UDIM>`
+#: placeholder, and both should read as a texture.
+UDIM = r"(?:[0-9]{4}|<UDIM>)"
+
+TEXTURE_RE = re.compile(
+    rf"^{TOKEN}(?:_{TOKEN})?_{CHANNEL}_{RESOLUTION}\.{TEXTURE_EXT}$"
+)
+TEXTURE_UDIM_RE = re.compile(
+    rf"^{TOKEN}(?:_{TOKEN})?_{CHANNEL}_{RESOLUTION}\.{UDIM}\.{TEXTURE_EXT}$"
+)
+
+Role = Literal["assembly", "block", "texture", "other"]
 Tier = Literal["asset", "set", "shot"]
 
 
@@ -57,7 +74,60 @@ def classify(path: str) -> tuple[Role, Tier | None]:
         return "assembly", "set" if name.startswith(SET_PREFIX) else "asset"
     if BLOCK_RE.match(name):
         return "block", "set" if name.startswith(SET_PREFIX) else "asset"
+    if TEXTURE_RE.match(name) or TEXTURE_UDIM_RE.match(name):
+        return "texture", "set" if name.startswith(SET_PREFIX) else "asset"
     return "other", None
+
+
+#: Asset category prefixes (15.2). `set-` is handled as its own tier.
+CATEGORY_PREFIXES = {
+    "char": "character",
+    "prop": "prop",
+    "env": "environment",
+    "veh": "vehicle",
+    "fx": "fx",
+    "set": "set",
+}
+
+SHOT_CODE_RE = re.compile(r"^([a-z]{3,5})-([0-9]{4})$")
+
+
+def split_entity(path: str) -> tuple[str, str | None]:
+    """Split a published filename into the entity it belongs to and its block.
+
+    `_` is the only token separator, so the first token names the entity and
+    the second, when there is one, names the block:
+
+        char-bob.usda          -> ("char-bob", None)      the assembly
+        char-bob_lookdev.usda  -> ("char-bob", "lookdev") a block
+        char-bob_m_1k.exr      -> ("char-bob", None)      a texture
+
+    Textures report no block: their trailing tokens are a descriptor, channel
+    and resolution (15.9), not a block name.
+    """
+    name = os.path.basename(path)
+    stem = name.split(".", 1)[0]
+    role, _ = classify(name)
+
+    if role == "texture" or "_" not in stem:
+        return stem.split("_", 1)[0], None
+
+    entity, block = stem.split("_", 1)
+    return entity, block
+
+
+def category_of(entity: str) -> str | None:
+    """The category an asset name declares through its prefix (15.2)."""
+    prefix = entity.split("-", 1)[0]
+    return CATEGORY_PREFIXES.get(prefix)
+
+
+def parse_shot_code(entity: str) -> tuple[str, int] | None:
+    """Split `kilo-0010` into its sequence and shot number (15.3)."""
+    match = SHOT_CODE_RE.match(entity)
+    if not match:
+        return None
+    return match.group(1), int(match.group(2))
 
 
 def describe(role: Role, tier: Tier | None) -> str:
@@ -68,4 +138,6 @@ def describe(role: Role, tier: Tier | None) -> str:
         return f"{tier} assembly" if tier else "assembly"
     if role == "block":
         return f"{tier} block" if tier else "block"
+    if role == "texture":
+        return "texture"
     return "unconventional name"
