@@ -90,15 +90,25 @@ environment, installs OpenUSD and builds the viewer; later runs go straight to
 the app. Leave the console window open while you use it — closing it stops the
 server.
 
-You can also **drop a `.usda` file onto the launcher's icon** to open that file
-directly.
+You can also **drop a project folder, or a single `.usda` file, onto the
+launcher's icon** to open it directly.
 
-For a right-click entry on USD files, run **`install-context-menu.bat`** once.
-It adds *Open in Reference Graph* to `.usd`, `.usda`, `.usdc` and `.usdz`,
-writing only to `HKEY_CURRENT_USER` — no administrator rights, no change to
+For a right-click entry, run **`install-context-menu.bat`** once. It adds:
+
+| Right-click | Menu entry | Opens |
+| --- | --- | --- |
+| A folder | *Open project in Reference Graph* | the whole tree, on the overview |
+| Inside a folder | *Open project in Reference Graph* | that folder |
+| `.usd` `.usda` `.usdc` `.usdz` | *Open in Reference Graph* | that layer's graph |
+
+The folder entries are the ones you will use most: the app reads a project, so
+the project folder is usually what you want to hand it.
+
+It writes only to `HKEY_CURRENT_USER` — no administrator rights, no change to
 which program owns the file type, and `uninstall-context-menu.bat` reverses it.
-On Windows 11 the entry may sit under *Show more options*. Opening a second file
-hands it to the window already running rather than starting another server.
+On Windows 11 the entries may sit under *Show more options*. Opening a second
+thing hands it to the window already running rather than starting another
+server.
 
 On macOS or Linux use `./usd-refgraph.sh` instead.
 

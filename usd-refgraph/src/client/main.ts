@@ -27,6 +27,9 @@ import { copyText, debounce, matches, must, truncateStart } from './util'
 const RECENT_KEY = 'usd-refgraph:recent'
 const MAX_RECENT = 6
 
+/** What the app can open as a single layer, as opposed to a project folder. */
+const USD_FILE_RE = /\.(usd|usda|usdc|usdz)$/i
+
 /** Which page each number key selects, in the order the nav lists them. */
 const PAGE_KEYS: PageName[] = [
   'overview',
@@ -187,10 +190,23 @@ class App {
     }
   }
 
-  /** Open a file and land on a particular page. */
-  openFile(path: string, page: PageName): void {
-    this.showPage(page)
-    void this.load(path)
+  /**
+   * Open whatever a deep link pointed at, on the page that suits it.
+   *
+   * A folder is a project, so it lands on the Overview — the summary of the
+   * whole tree is the reason you opened a folder. A single file lands on the
+   * Graph. `kind` comes from the backend, which knows which it is; `auto` is
+   * for a hand-written link and falls back to the extension.
+   */
+  openDeepLink(path: string, kind: 'file' | 'project' | 'auto' = 'auto'): void {
+    const asFile = kind === 'file' || (kind === 'auto' && USD_FILE_RE.test(path))
+    if (asFile) {
+      this.showPage('graph')
+      void this.load(path)
+    } else {
+      this.showPage('overview')
+      void this.openProject(path)
+    }
   }
 
   private async loadProject(path: string): Promise<void> {
@@ -489,7 +505,7 @@ class App {
 
   /** A USD file opens its graph; anything else is treated as a project folder. */
   open(path: string): void {
-    if (/\.(usd|usda|usdc|usdz)$/i.test(path)) void this.load(path)
+    if (USD_FILE_RE.test(path)) void this.load(path)
     else void this.openProject(path)
   }
 
@@ -683,10 +699,14 @@ async function boot(): Promise<void> {
     const capabilities = await getCapabilities()
     const app = new App(capabilities)
 
-    // Allow `?path=…` so the launcher, the right-click menu or a shelf tool can
-    // deep-link a file. Those all mean "show me this file", so open the graph.
-    const wanted = new URLSearchParams(location.search).get('path')
-    if (wanted) app.openFile(wanted, 'graph')
+    // The launcher, the right-click menu and any shelf tool deep-link through
+    // the query string: `?project=` for a folder, `?path=` for one file. The
+    // backend decides which, having looked at the path on disk.
+    const params = new URLSearchParams(location.search)
+    const project = params.get('project')
+    const wanted = params.get('path')
+    if (project) app.openDeepLink(project, 'project')
+    else if (wanted) app.openDeepLink(wanted)
   } catch {
     toast('The crawler is not responding. Is the Python backend running?', 'error')
   }

@@ -2,9 +2,11 @@
 rem ===========================================================================
 rem  USD Reference Graph - launcher
 rem
-rem  Double-click to start, or drop a .usda / .usdc file on this icon to open
-rem  that file straight away. The first run sets everything up; later runs go
-rem  straight to the app.
+rem  Double-click to start, or drop something on this icon to open it straight
+rem  away: a project folder opens the whole tree on the overview, a single
+rem  .usd / .usda / .usdc / .usdz file opens its graph.
+rem
+rem  The first run sets everything up; later runs go straight to the app.
 rem ===========================================================================
 
 setlocal EnableExtensions
