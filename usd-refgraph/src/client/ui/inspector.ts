@@ -19,6 +19,7 @@ import {
   arcSample,
 } from '../graph/theme'
 import { ICONS } from './icons'
+import { dismiss, present } from './presence'
 import {
   Facts,
   button,
@@ -52,8 +53,14 @@ export class Inspector {
   constructor(private readonly callbacks: InspectorCallbacks) {}
 
   hide(): void {
-    this.root.hidden = true
-    clear(this.root)
+    dismiss(this.root, () => clear(this.root))
+  }
+
+  /** How much of the stage's right edge the panel covers, margins included. */
+  get inset(): number {
+    if (this.root.hidden) return 0
+    const margin = parseFloat(getComputedStyle(this.root).right) || 0
+    return this.root.offsetWidth + margin * 2
   }
 
   show(graph: Graph, nodeId: string): void {
@@ -69,7 +76,7 @@ export class Inspector {
     const missing = !node.exists && !node.template
 
     clear(this.root)
-    this.root.hidden = false
+    present(this.root)
     this.root.style.setProperty(
       '--accent',
       isRoot ? ROOT_COLOR : missing ? MISSING_COLOR : TIER_TINT[node.tier ?? ''] ?? 'var(--fg-3)',

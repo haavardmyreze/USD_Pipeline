@@ -11,6 +11,7 @@ import type { Capabilities, DirEntry, DirListing } from '@shared/types'
 import { emptyState } from './kit'
 import { clear, el, formatBytes, icon, must } from '../util'
 import { ICONS } from './icons'
+import { dismiss, isPresent, present } from './presence'
 
 export class FilePicker {
   private readonly modal = must<HTMLElement>('#picker')
@@ -48,7 +49,7 @@ export class FilePicker {
 
     this.listEl.addEventListener('keydown', (event) => this.onListKey(event))
     document.addEventListener('keydown', (event) => {
-      if (this.modal.hidden) return
+      if (!isPresent(this.modal)) return
       if (event.key === 'Escape') {
         event.preventDefault()
         this.close(null)
@@ -58,7 +59,7 @@ export class FilePicker {
 
   /** Show the picker; resolves with a file path, or null if dismissed. */
   open(startPath?: string, prefill?: string): Promise<string | null> {
-    this.modal.hidden = false
+    present(this.modal)
     this.input.value = prefill ?? ''
     const start =
       startPath ??
@@ -73,7 +74,7 @@ export class FilePicker {
   }
 
   private close(path: string | null): void {
-    this.modal.hidden = true
+    dismiss(this.modal)
     this.resolve?.(path)
     this.resolve = null
   }

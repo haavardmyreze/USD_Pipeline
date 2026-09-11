@@ -17,6 +17,7 @@
 import { locate } from '../api'
 import { clear, el, formatBytes, formatDate, icon, must } from '../util'
 import { ICONS } from './icons'
+import { dismiss, isPresent, present } from './presence'
 import type { LocateMatch } from '@shared/types'
 
 const USD_EXTENSIONS = ['.usd', '.usda', '.usdc', '.usdz']
@@ -48,7 +49,7 @@ export class DropZone {
     must<HTMLElement>('#chooser-scrim').addEventListener('click', () => this.closeChooser())
     must<HTMLElement>('#chooser-close').addEventListener('click', () => this.closeChooser())
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !this.chooser.hidden) {
+      if (event.key === 'Escape' && isPresent(this.chooser)) {
         event.preventDefault()
         this.closeChooser()
       }
@@ -92,12 +93,15 @@ export class DropZone {
   }
 
   private show(): void {
-    this.overlay.hidden = false
+    if (!this.searching) this.overlayText.textContent = 'Drop a USD file'
+    present(this.overlay)
   }
 
   private hide(): void {
-    this.overlay.hidden = true
-    this.overlayText.textContent = 'Drop a USD file'
+    // Reset the wording once it has faded, not while it is still readable.
+    dismiss(this.overlay, () => {
+      this.overlayText.textContent = 'Drop a USD file'
+    })
   }
 
   private async handleDrop(data: DataTransfer | null): Promise<void> {
@@ -129,7 +133,7 @@ export class DropZone {
   private async search(name: string, size: number): Promise<void> {
     const roots = this.callbacks.searchRoots()
     this.searching = true
-    this.overlay.hidden = false
+    present(this.overlay)
     this.overlayText.textContent = `Looking for ${name}…`
 
     try {
@@ -197,12 +201,11 @@ export class DropZone {
       this.chooserList.appendChild(row)
     }
 
-    this.chooser.hidden = false
+    present(this.chooser)
   }
 
   private closeChooser(): void {
-    this.chooser.hidden = true
-    clear(this.chooserList)
+    dismiss(this.chooser, () => clear(this.chooserList))
   }
 
   // -- paste --------------------------------------------------------------

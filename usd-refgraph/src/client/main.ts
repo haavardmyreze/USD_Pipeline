@@ -1,3 +1,5 @@
+// SF on Apple platforms; Inter, with its optical-size axis, everywhere else.
+import '@fontsource-variable/inter/opsz.css'
 import './styles.css'
 
 import type { ArcKind, Capabilities, Graph } from '@shared/types'
@@ -22,7 +24,8 @@ import { FilePicker } from './ui/picker'
 import { ShortcutSheet } from './ui/shortcuts'
 import { Sidebar } from './ui/sidebar'
 import { button, emptyState } from './ui/kit'
-import { copyText, debounce, matches, must, truncateStart } from './util'
+import { copyText, debounce, displayName, matches, must, nextFrame, truncateStart } from './util'
+import { isPresent } from './ui/presence'
 
 const RECENT_KEY = 'usd-refgraph:recent'
 const MAX_RECENT = 6
@@ -161,6 +164,7 @@ class App {
       this.rootPath = path
       this.selectedId = null
       this.inspector.hide()
+      this.view.setInset(0)
 
       const rootNode = graph.nodes.find((node) => node.id === graph.rootId)
       this.els.rootName.textContent = rootNode?.name ?? path
@@ -221,11 +225,11 @@ class App {
     this.renderPage()
   }
 
-  /** The project's name, spaced and upper-cased as the manager showed it. */
+  /** The project's name, shown as a title rather than a folder name. */
   private showProjectName(): void {
     const name = this.project?.name
     this.els.projectName.textContent = name
-      ? name.replace(/_/g, ' ').toUpperCase()
+      ? displayName(name)
       : 'No project'
     this.els.projectPath.textContent = this.project
       ? truncateStart(this.project.root, 52)
@@ -470,8 +474,14 @@ class App {
     this.view.select(id)
     // Describe the graph as drawn, so the arcs listed are the arcs on screen.
     const source = this.displayed ?? this.graph
-    if (id && source) this.inspector.show(source, id)
-    else this.inspector.hide()
+    if (id && source) {
+      this.inspector.show(source, id)
+      // The panel floats over the graph; frame and centre around it.
+      this.view.setInset(this.inspector.inset)
+    } else {
+      this.inspector.hide()
+      this.view.setInset(0)
+    }
   }
 
   // -- chrome -------------------------------------------------------------
@@ -517,8 +527,8 @@ class App {
   /** True while any modal owns the keyboard. */
   private get modalOpen(): boolean {
     return (
-      !must<HTMLElement>('#picker').hidden ||
-      !must<HTMLElement>('#chooser').hidden ||
+      isPresent(must<HTMLElement>('#picker')) ||
+      isPresent(must<HTMLElement>('#chooser')) ||
       this.shortcuts.isOpen
     )
   }
@@ -560,16 +570,18 @@ class App {
       this.view.fit()
     })
 
-    const onSearch = debounce(() => {
+    // Highlighting a few hundred cards is cheap, so answer every keystroke on
+    // the next frame rather than waiting for a pause in the typing.
+    const onSearch = nextFrame(() => {
       this.query = this.els.search.value.trim()
       this.applyQuery()
-    }, 110)
+    })
     this.els.search.addEventListener('input', onSearch)
 
     const treeFilter = must<HTMLInputElement>('#tree-filter')
     treeFilter.addEventListener(
       'input',
-      debounce(() => this.tree.setQuery(treeFilter.value), 110),
+      nextFrame(() => this.tree.setQuery(treeFilter.value)),
     )
 
     document.addEventListener('keydown', (event) => this.onKey(event))

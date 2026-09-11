@@ -7,6 +7,7 @@
  */
 
 import { clear, el, must } from '../util'
+import { dismiss, isPresent, present } from './presence'
 
 export interface ShortcutGroup {
   title: string
@@ -60,7 +61,7 @@ export class ShortcutSheet {
   }
 
   get isOpen(): boolean {
-    return !this.modal.hidden
+    return isPresent(this.modal)
   }
 
   toggle(): void {
@@ -69,11 +70,11 @@ export class ShortcutSheet {
   }
 
   open(): void {
-    this.modal.hidden = false
+    present(this.modal)
   }
 
   close(): void {
-    this.modal.hidden = true
+    dismiss(this.modal)
   }
 
   private build(): void {

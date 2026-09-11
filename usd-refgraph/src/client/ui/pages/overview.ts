@@ -27,7 +27,7 @@ import {
   statusPill,
   truncated,
 } from '../kit'
-import { el, formatRelative } from '../../util'
+import { displayName, el, formatRelative } from '../../util'
 import { pageState, type PageContext } from './context'
 import { pageShell } from './shell'
 
@@ -46,7 +46,7 @@ const READY: Status[] = ['production_ready', 'locked']
 export function renderOverview(host: HTMLElement, context: PageContext): void {
   const { project } = context
   const body = pageShell(host, 'Overview', {
-    subtitle: project.name.replace(/[_-]/g, ' '),
+    subtitle: displayName(project.name),
     meta: `scanned in ${Math.round(project.stats.elapsedMs)} ms`,
   })
 

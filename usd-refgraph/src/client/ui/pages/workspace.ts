@@ -30,7 +30,7 @@ import {
   tabs,
   truncated,
 } from '../kit'
-import { debounce, el, formatBytes, formatMoment, matches } from '../../util'
+import { el, formatBytes, formatMoment, matches, nextFrame } from '../../util'
 import { pageState, type PageContext } from './context'
 import { pageShell } from './shell'
 
@@ -63,11 +63,11 @@ export function renderWorkspace(host: HTMLElement, context: PageContext): void {
       placeholder: 'Filter by name',
       value: state.query,
       variant: 'inline',
-      onInput: debounce((value: string) => {
+      onInput: nextFrame((value: string) => {
         state.query = value.trim()
         context.refresh()
         focusSearch()
-      }, 140),
+      }),
     }),
   )
   controls.appendChild(

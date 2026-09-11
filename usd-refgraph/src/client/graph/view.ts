@@ -13,6 +13,7 @@ import { statusDot } from '../ui/kit'
 import { icon } from '../util'
 import { MISSING_COLOR, ROOT_COLOR, TIER_TINT } from './theme'
 import { ICONS } from '../ui/icons'
+import { Camera, VelocityTracker, type CameraState } from './camera'
 import {
   layoutGraph,
   pipePath,
@@ -47,9 +48,13 @@ export class GraphView {
   /** Tree children per node, so a drag can take a whole subtree with it. */
   private treeChildren = new Map<string, string[]>()
 
-  private tx = 0
-  private ty = 0
-  private scale = 1
+  /** Where the view is. Always the live, on-screen value — see camera.ts. */
+  private readonly camera: Camera
+  /**
+   * How much of the stage's right edge the floating inspector covers, so
+   * framing and centring aim at the part you can actually see.
+   */
+  private insetRight = 0
 
   private selected: string | null = null
   private hovered: string | null = null
@@ -65,6 +70,7 @@ export class GraphView {
     private readonly nodeLayer: HTMLElement,
     private readonly callbacks: ViewCallbacks,
   ) {
+    this.camera = new Camera((state) => this.applyTransform(state))
     this.bindStage()
   }
 
@@ -294,14 +300,21 @@ export class GraphView {
 
       const startX = event.clientX
       const startY = event.clientY
+      // A mouse is precise, a finger is not: commit to a drag sooner for one.
+      const slop = event.pointerType === 'touch' ? 10 : 4
       let dragging = false
 
+      // Feedback on the press itself, not on release.
+      card.classList.add('is-pressed')
+
       const move = (moveEvent: PointerEvent): void => {
-        const dx = (moveEvent.clientX - startX) / this.scale
-        const dy = (moveEvent.clientY - startY) / this.scale
-        if (!dragging && Math.hypot(dx, dy) * this.scale < 4) return
+        const scale = this.camera.scale
+        const dx = (moveEvent.clientX - startX) / scale
+        const dy = (moveEvent.clientY - startY) / scale
+        if (!dragging && Math.hypot(dx, dy) * scale < slop) return
         if (!dragging) {
           dragging = true
+          card.classList.remove('is-pressed')
           card.classList.add('is-dragging')
           for (const other of moving) {
             if (other !== id) this.nodeEls.get(other)?.classList.add('is-following')
@@ -329,7 +342,7 @@ export class GraphView {
       const up = (upEvent: PointerEvent): void => {
         window.removeEventListener('pointermove', move)
         window.removeEventListener('pointerup', up)
-        card.classList.remove('is-dragging')
+        card.classList.remove('is-pressed', 'is-dragging')
         for (const other of moving) {
           this.nodeEls.get(other)?.classList.remove('is-following')
         }
@@ -384,10 +397,16 @@ export class GraphView {
   private bindStage(): void {
     this.stage.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 && event.button !== 1) return
+
+      // Grab it mid-flight: stop wherever it is on screen and pan from there.
+      this.camera.halt()
       const startX = event.clientX
       const startY = event.clientY
-      const originX = this.tx
-      const originY = this.ty
+      const originX = this.camera.x
+      const originY = this.camera.y
+      const slop = event.pointerType === 'touch' ? 10 : 3
+      const tracker = new VelocityTracker()
+      tracker.add(startX, startY)
       let moved = false
 
       this.stage.classList.add('is-panning')
@@ -395,18 +414,21 @@ export class GraphView {
       const move = (moveEvent: PointerEvent): void => {
         const dx = moveEvent.clientX - startX
         const dy = moveEvent.clientY - startY
-        if (!moved && Math.hypot(dx, dy) < 3) return
+        tracker.add(moveEvent.clientX, moveEvent.clientY)
+        if (!moved && Math.hypot(dx, dy) < slop) return
         moved = true
-        this.tx = originX + dx
-        this.ty = originY + dy
-        this.applyTransform()
+        // 1:1 with the pointer, keeping the offset from where it grabbed.
+        this.camera.set({ x: originX + dx, y: originY + dy })
       }
 
       const up = (): void => {
         window.removeEventListener('pointermove', move)
         window.removeEventListener('pointerup', up)
         this.stage.classList.remove('is-panning')
-        if (!moved) {
+        if (moved) {
+          const velocity = tracker.velocity()
+          this.camera.glide(velocity.x, velocity.y, (landing) => this.keepOnStage(landing))
+        } else {
           this.selected = null
           this.callbacks.onSelect(null)
           this.applyEmphasis()
@@ -427,11 +449,12 @@ export class GraphView {
 
         if (event.ctrlKey || !event.shiftKey) {
           const factor = Math.exp(-event.deltaY * 0.0016)
-          this.zoomAt(px, py, this.scale * factor)
+          this.zoomAt(px, py, this.camera.scale * factor)
         } else {
-          this.tx -= event.deltaX
-          this.ty -= event.deltaY
-          this.applyTransform()
+          this.camera.set({
+            x: this.camera.x - event.deltaX,
+            y: this.camera.y - event.deltaY,
+          })
         }
       },
       { passive: false },
@@ -440,73 +463,114 @@ export class GraphView {
 
   // -- camera -------------------------------------------------------------
 
-  zoomAt(px: number, py: number, target: number): void {
-    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, target))
-    const ratio = next / this.scale
-    this.tx = px - (px - this.tx) * ratio
-    this.ty = py - (py - this.ty) * ratio
-    this.scale = next
-    this.applyTransform()
+  /** Tell the view how much of its right edge the inspector is covering. */
+  setInset(right: number): void {
+    this.insetRight = right
   }
 
+  /** Zoom about a point, instantly: the wheel tracks the hand 1:1. */
+  zoomAt(px: number, py: number, target: number): void {
+    this.camera.set(this.zoomedAbout(px, py, target))
+  }
+
+  /** Zoom about the centre of what you can see, springing there. */
   zoomBy(factor: number): void {
-    const rect = this.stage.getBoundingClientRect()
-    this.zoomAt(rect.width / 2, rect.height / 2, this.scale * factor)
+    const { cx, cy } = this.visibleCentre()
+    this.camera.animateTo(this.zoomedAbout(cx, cy, this.camera.scale * factor), {
+      response: 0.3,
+    })
   }
 
   resetZoom(): void {
-    const rect = this.stage.getBoundingClientRect()
-    this.zoomAt(rect.width / 2, rect.height / 2, 1)
+    const { cx, cy } = this.visibleCentre()
+    this.camera.animateTo(this.zoomedAbout(cx, cy, 1), { response: 0.3 })
   }
 
-  /** Frame the whole graph with a comfortable margin. */
+  /** Frame the whole graph in the visible part of the stage. */
   fit(animate = true): void {
     if (!this.layout.nodes.size) return
     const rect = this.stage.getBoundingClientRect()
+    const width = Math.max(rect.width - this.insetRight, 1)
     const pad = 64
-    const scale = Math.min(
-      (rect.width - pad * 2) / Math.max(this.layout.width, 1),
-      (rect.height - pad * 2) / Math.max(this.layout.height, 1),
-      1.15,
+    const scale = clampZoom(
+      Math.min(
+        (width - pad * 2) / Math.max(this.layout.width, 1),
+        (rect.height - pad * 2) / Math.max(this.layout.height, 1),
+        1.15,
+      ),
     )
-    this.scale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale))
-    this.tx = (rect.width - this.layout.width * this.scale) / 2
-    this.ty = (rect.height - this.layout.height * this.scale) / 2
-
-    if (animate) {
-      this.viewport.style.transition = 'transform 0.36s cubic-bezier(0.16, 1, 0.3, 1)'
-      window.setTimeout(() => {
-        this.viewport.style.transition = ''
-      }, 400)
+    const state: CameraState = {
+      scale,
+      x: (width - this.layout.width * scale) / 2,
+      y: (rect.height - this.layout.height * scale) / 2,
     }
-    this.applyTransform()
+    if (animate) this.camera.animateTo(state)
+    else this.camera.set(state)
   }
 
   /** Centre the view on one node without changing zoom. */
   focusNode(id: string): void {
     const placed = this.layout.nodes.get(id)
     if (!placed) return
-    const rect = this.stage.getBoundingClientRect()
-    this.tx = rect.width / 2 - (placed.x + NODE_W / 2) * this.scale
-    this.ty = rect.height / 2 - (placed.y + NODE_H / 2) * this.scale
-    this.viewport.style.transition = 'transform 0.32s cubic-bezier(0.16, 1, 0.3, 1)'
-    window.setTimeout(() => {
-      this.viewport.style.transition = ''
-    }, 360)
-    this.applyTransform()
+    const { cx, cy } = this.visibleCentre()
+    const scale = this.camera.scale
+    this.camera.animateTo({
+      scale,
+      x: cx - (placed.x + NODE_W / 2) * scale,
+      y: cy - (placed.y + NODE_H / 2) * scale,
+    })
   }
 
-  private applyTransform(): void {
-    this.viewport.style.transform = `translate(${this.tx}px, ${this.ty}px) scale(${this.scale})`
-    const size = 26 * this.scale
+  /**
+   * Where a thrown pan may come to rest: anywhere that leaves a strip of the
+   * graph on screen. A hard stop at the edge would read as frozen; instead the
+   * throw eases to a halt against the limit, so the graph cannot be flung out
+   * of sight and lost.
+   */
+  private keepOnStage(landing: CameraState): CameraState {
+    const rect = this.stage.getBoundingClientRect()
+    const width = rect.width - this.insetRight
+    const keep = 96
+    const graphWidth = this.layout.width * landing.scale
+    const graphHeight = this.layout.height * landing.scale
+    return {
+      scale: landing.scale,
+      x: Math.min(width - keep, Math.max(keep - graphWidth, landing.x)),
+      y: Math.min(rect.height - keep, Math.max(keep - graphHeight, landing.y)),
+    }
+  }
+
+  /** The camera that keeps the point (px, py) still while zooming. */
+  private zoomedAbout(px: number, py: number, target: number): CameraState {
+    const scale = clampZoom(target)
+    const ratio = scale / this.camera.scale
+    return {
+      scale,
+      x: px - (px - this.camera.x) * ratio,
+      y: py - (py - this.camera.y) * ratio,
+    }
+  }
+
+  private visibleCentre(): { cx: number; cy: number } {
+    const rect = this.stage.getBoundingClientRect()
+    return { cx: (rect.width - this.insetRight) / 2, cy: rect.height / 2 }
+  }
+
+  private applyTransform(state: CameraState): void {
+    this.viewport.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`
+    const size = 26 * state.scale
     this.grid.style.backgroundSize = `${size}px ${size}px`
-    this.grid.style.backgroundPosition = `${this.tx}px ${this.ty}px`
-    this.callbacks.onZoom(this.scale)
+    this.grid.style.backgroundPosition = `${state.x}px ${state.y}px`
+    this.callbacks.onZoom(state.scale)
   }
 
   get zoom(): number {
-    return this.scale
+    return this.camera.scale
   }
+}
+
+function clampZoom(scale: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale))
 }
 
 function flagIcon(name: keyof typeof ICONS, title: string): SVGSVGElement {

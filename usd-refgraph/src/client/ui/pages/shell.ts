@@ -13,8 +13,8 @@ export interface ShellOptions {
 }
 
 /**
- * The page frame every project page uses: a fixed header strip on the panel
- * surface, and a scrolling body on the darker page surface below it.
+ * The page frame every project page uses: a translucent header that the page
+ * scrolls beneath, and the body below it.
  *
  * Returns the body to fill. The header is identical everywhere on purpose —
  * the only thing that changes between pages is what sits inside it.
@@ -24,7 +24,15 @@ export function pageShell(
   title: string,
   options: ShellOptions = {},
 ): HTMLElement {
+  // Clearing the page collapses it for an instant, and the browser clamps its
+  // scroll to the top. Remember where you were and put it back once the page
+  // has rendered its content, so filtering or expanding a row keeps your place.
+  const scrollTop = host.scrollTop
   clear(host)
+  queueMicrotask(() => {
+    host.scrollTop = scrollTop
+    host.classList.toggle('is-scrolled', host.scrollTop > 2)
+  })
 
   const bar = el('div', 'page__bar')
 
@@ -46,5 +54,35 @@ export function pageShell(
 
   const body = el('div', 'page__body')
   host.appendChild(body)
+  watchHeader(host, bar)
   return body
+}
+
+const scrollWatched = new WeakSet<HTMLElement>()
+const headerObservers = new WeakMap<HTMLElement, ResizeObserver>()
+
+/**
+ * Keep the header's height in `--bar-h`, for sticky headings to stop beneath,
+ * and mark the page `is-scrolled` once content is actually passing under the
+ * header — so the scroll edge shows only when it means something.
+ */
+function watchHeader(host: HTMLElement, bar: HTMLElement): void {
+  headerObservers.get(host)?.disconnect()
+  // Measure now, so sticky headings are right on the very first frame; the
+  // observer then keeps it right as the header wraps or the window resizes.
+  host.style.setProperty('--bar-h', `${bar.offsetHeight}px`)
+  const observer = new ResizeObserver(() => {
+    host.style.setProperty('--bar-h', `${bar.offsetHeight}px`)
+  })
+  observer.observe(bar)
+  headerObservers.set(host, observer)
+
+  const update = (): void => {
+    host.classList.toggle('is-scrolled', host.scrollTop > 2)
+  }
+  if (!scrollWatched.has(host)) {
+    scrollWatched.add(host)
+    host.addEventListener('scroll', update, { passive: true })
+  }
+  update()
 }

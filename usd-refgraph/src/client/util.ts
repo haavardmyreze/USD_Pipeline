@@ -138,3 +138,28 @@ export async function copyText(text: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * Run `fn` on the next frame with the latest arguments, however many times it
+ * was called before then. Feedback lands within one frame, and never costs
+ * more work than the display can show — where a debounce would make you wait
+ * for a pause in your typing before anything happened.
+ */
+export function nextFrame<A extends unknown[]>(fn: (...args: A) => void): (...args: A) => void {
+  let pending: A | null = null
+  return (...args: A) => {
+    const scheduled = pending !== null
+    pending = args
+    if (scheduled) return
+    requestAnimationFrame(() => {
+      const latest = pending!
+      pending = null
+      fn(...latest)
+    })
+  }
+}
+
+/** A folder name as a title: `demo_show` and `demo-show` both read `Demo Show`. */
+export function displayName(name: string): string {
+  return name.replace(/[_-]+/g, ' ').replace(/(^|\s)\p{L}/gu, (c) => c.toUpperCase())
+}

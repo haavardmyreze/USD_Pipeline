@@ -203,6 +203,63 @@ The same sheet is on the **Shortcuts** button at the foot of the navigation,
 and it is generated from the list the keys are bound against, so it cannot
 drift out of date.
 
+## How it looks
+
+The visual language follows Apple's Human Interface Guidelines and the
+translucent, floating chrome of macOS 26:
+
+- **Apple's system colours**, dark variants. Status keeps amber, blue and green
+  and the tiers keep purple, cyan and orange — each in Apple's exact version of
+  that hue. The interface accent is systemBlue.
+- **Type is SF on a Mac and Inter elsewhere.** SF cannot be shipped off Apple
+  platforms; Inter was drawn to the same proportions and has an optical-size
+  axis, so large numbers take the display cut and body text the text cut. It
+  is bundled, so it works offline.
+- **Section headers are sentence case**, semibold and secondary, instead of
+  small tracked capitals.
+- **The navigation is a floating glass sidebar** with a blue selection, the
+  toolbar has no strip of its own, and its controls are capsules.
+- **Content sits on Apple's grouped grays** over a black window; separators are
+  hairlines.
+- **Buttons are filled capsules.** The primary action is solid blue; plain
+  actions are blue text. Status pills are tinted and borderless.
+- **The Workspace's Assets / Sets / Shots switch is a segmented control.**
+
+## How it moves
+
+The interaction follows Apple's approach to fluid interfaces (the
+[`apple-design`](https://github.com/emilkowalski/skills) skill, distilled from
+WWDC's *Designing Fluid Interfaces*). In practice:
+
+- **The graph's camera runs on springs, from the live value.** Fit, zoom and
+  centring all spring into place, critically damped so nothing overshoots —
+  and all of them can be grabbed mid-flight. Pressing on the graph while it is
+  still gliding stops it exactly where it is on screen and pans from there.
+- **Pans carry momentum.** Let go of a quick drag and the view keeps going,
+  handed the pointer's own velocity and aimed at where that throw would come to
+  rest. A slow, deliberate drag stops where you put it. A throw cannot lose the
+  graph: it eases to a halt with a strip still on screen.
+- **The wheel tracks your hand 1:1**; the zoom buttons and `F` spring.
+- **Fit lives with the zoom controls**, on the stage, beside the thing it moves.
+- **The inspector floats over the graph** as a translucent panel instead of
+  taking a column, and the camera frames and centres around it.
+- **Project pages scroll beneath a translucent header.** A soft edge appears
+  under it only once something is actually passing underneath, and filtering
+  or expanding a row keeps your place instead of jumping back to the top.
+- **Everything answers the press, not the release.** Buttons give a little
+  under the pointer; wide rows darken.
+- **Sheets and panels leave the way they came in**, and a drag, sheet or
+  panel can be reversed partway.
+
+It also respects what you have told your system:
+
+| Setting | Effect |
+| --- | --- |
+| Reduce motion | No sliding, scaling or momentum — changes cross-fade instead |
+| Reduce transparency | Every translucent surface turns solid |
+| Increase contrast | Firmer borders and brighter secondary text |
+| Browser text size | The whole layout scales with it — type and spacing are in `rem` |
+
 ## Reading the graph
 
 The graph is laid out as a tree, left to right. Every file gets one *tree
