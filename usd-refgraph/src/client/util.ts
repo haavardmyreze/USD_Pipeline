@@ -79,9 +79,30 @@ export function formatMoment(ms: number | null | undefined): string {
   })
 }
 
-/** How long ago, in words: `today`, `yesterday`, `3 days ago`. */
+/** `16 Sep, 09:14` — the year only when it is not this one. For dense rows. */
+export function formatShortMoment(ms: number | null | undefined): string {
+  if (!ms) return '—'
+  const date = new Date(ms)
+  const sameYear = date.getFullYear() === new Date().getFullYear()
+  return date.toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: sameYear ? undefined : 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** How long ago, in words: `5 min ago`, `2 hours ago`, `yesterday`, `3 days ago`. */
 export function formatRelative(ms: number | null | undefined): string {
   if (!ms) return '—'
+  const elapsed = Date.now() - ms
+  if (elapsed >= 0 && elapsed < 60_000) return 'just now'
+  if (elapsed >= 0 && elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)} min ago`
+  if (elapsed >= 0 && elapsed < 86_400_000) {
+    const hours = Math.floor(elapsed / 3_600_000)
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
+  }
   const days = daysAgo(ms)
   if (days <= 0) return 'today'
   if (days === 1) return 'yesterday'

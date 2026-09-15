@@ -22,15 +22,7 @@ import { ICONS } from './icons'
 import { dismiss, present } from './presence'
 import type { SceneTree } from './scene'
 import { SourceView } from './source'
-import {
-  Facts,
-  button,
-  countBadge,
-  emptyState,
-  iconButton,
-  statusPill,
-  truncated,
-} from './kit'
+import { Facts, STATUS_LABEL, countBadge, emptyState, iconButton, statusDot } from './kit'
 import {
   clear,
   copyText,
@@ -49,7 +41,14 @@ export interface InspectorCallbacks {
   onToast(message: string, kind?: 'ok' | 'error'): void
   /** The panel changed width, so whatever frames around it should re-measure. */
   onLayout(): void
+  /** Switch to the Graph and crawl from this file. */
+  onOpenInGraph(path: string): void
+  /** The panel's own close button. */
+  onClose(): void
 }
+
+/** Whether the panel describes a node in the graph, or a file from a page. */
+export type PanelMode = 'graph' | 'file'
 
 type Tab = 'details' | 'scene' | 'source'
 
@@ -63,6 +62,7 @@ export class Inspector {
   private readonly root = must<HTMLElement>('#inspector')
   private readonly source: SourceView
   private tab: Tab = 'details'
+  private mode: PanelMode = 'graph'
   /** The node on screen, so re-showing it can keep the scroll position. */
   private shownId: string | null = null
 
@@ -80,7 +80,7 @@ export class Inspector {
     this.shownId = null
     dismiss(this.root, () => {
       clear(this.root)
-      this.root.classList.remove('inspector--wide')
+      this.root.classList.remove('inspector--wide', 'inspector--code')
     })
   }
 
@@ -91,16 +91,25 @@ export class Inspector {
     return this.root.offsetWidth + margin * 2
   }
 
-  show(graph: Graph, nodeId: string): void {
+  /**
+   * Show one node of `graph`.
+   *
+   * In `graph` mode the node sits in the graph on screen. In `file` mode it
+   * was picked from a project page, and `graph` is a shallow crawl from that
+   * file alone: enough for what it references, but blind to what references
+   * it, so that section is left out and "root" means nothing.
+   */
+  show(graph: Graph, nodeId: string, mode: PanelMode = this.mode): void {
     const node = graph.nodes.find((n) => n.id === nodeId)
     if (!node) {
       this.hide()
       return
     }
+    this.mode = mode
 
     const outgoing = graph.edges.filter((edge) => edge.from === nodeId)
     const incoming = graph.edges.filter((edge) => edge.to === nodeId)
-    const isRoot = node.id === graph.rootId
+    const isRoot = mode === 'graph' && node.id === graph.rootId
     const missing = !node.exists && !node.template
 
     // Only a layer that exists has a stage to show, and only a text layer has
@@ -122,15 +131,20 @@ export class Inspector {
       isRoot ? ROOT_COLOR : missing ? MISSING_COLOR : TIER_TINT[node.tier ?? ''] ?? 'var(--fg-3)',
     )
 
-    // A deep prim tree and a layer's code both want the width; Details reads
-    // better narrow.
-    const wide = tab === 'scene' || tab === 'source'
-    if (this.root.classList.contains('inspector--wide') !== wide) {
-      this.root.classList.toggle('inspector--wide', wide)
+    // A deep prim tree wants width, and code more still; Details reads better
+    // narrow.
+    const size = tab === 'source' ? 'inspector--code' : tab === 'scene' ? 'inspector--wide' : null
+    const sizes = ['inspector--wide', 'inspector--code']
+    const current = sizes.find((name) => this.root.classList.contains(name)) ?? null
+    if (current !== size) {
+      this.root.classList.remove(...sizes)
+      if (size) this.root.classList.add(size)
       this.callbacks.onLayout()
     }
 
-    this.root.appendChild(this.buildHead(node, isRoot, missing))
+    this.root.appendChild(
+      this.buildHead(node, isRoot, missing, mode === 'graph' ? incoming.length : 0),
+    )
     if (isLayer) this.root.appendChild(this.buildTabs(graph, nodeId, tabs, tab))
 
     if (tab === 'scene') this.root.appendChild(this.scene.show(node))
@@ -152,7 +166,9 @@ export class Inspector {
     if (node.meta) this.root.appendChild(this.buildLayer(node))
 
     this.root.appendChild(this.buildArcs('References out', outgoing, graph, (e) => e.to))
-    this.root.appendChild(this.buildArcs('Referenced by', incoming, graph, (e) => e.from))
+    if (this.mode === 'graph') {
+      this.root.appendChild(this.buildArcs('Referenced by', incoming, graph, (e) => e.from))
+    }
   }
 
   /** Forget cached scene trees and file text, after a rescan. */
@@ -163,34 +179,58 @@ export class Inspector {
 
   // -- head ---------------------------------------------------------------
 
-  private buildHead(node: GraphNode, isRoot: boolean, missing: boolean): HTMLElement {
+  private buildHead(
+    node: GraphNode,
+    isRoot: boolean,
+    missing: boolean,
+    usedBy: number,
+  ): HTMLElement {
+    // Two quiet lines rather than a row of chips and a row of buttons: the
+    // name with every action beside it as one small cluster, then what the
+    // file is, in words.
     const head = el('div', 'insp__head')
 
     const top = el('div', 'insp__top')
     const title = el('h2', 'insp__title', node.name)
-    title.title = node.name
+    title.title = node.path
     top.appendChild(title)
+
+    const tools = el('div', 'insp__tools')
+    const primary = this.primaryAction(node, isRoot)
+    if (primary) tools.appendChild(primary)
+    tools.appendChild(iconButton('copy', 'Copy path', () => void this.copy(node.path)))
+    if (node.exists) {
+      tools.appendChild(
+        iconButton('external', 'Show in the file manager', () => this.callbacks.onReveal(node.path)),
+      )
+    }
+    tools.appendChild(el('span', 'insp__toolSep'))
+    tools.appendChild(iconButton('close', 'Close (Esc)', () => this.callbacks.onClose()))
+    top.appendChild(tools)
     head.appendChild(top)
 
-    const tags = el('div', 'insp__tags')
-    if (isRoot) tags.appendChild(tag('root', 'accent'))
-    if (node.role === 'assembly') tags.appendChild(tag(node.roleLabel, 'role'))
-    else if (node.role === 'block') tags.appendChild(tag(node.roleLabel))
-    tags.appendChild(tag(node.kind === 'layer' ? node.format : node.ext || 'file'))
-    if (node.binary) tags.appendChild(tag('binary'))
-    if (node.template) tags.appendChild(tag('template', 'warn'))
-    if (missing) tags.appendChild(tag('missing', 'danger'))
-    if (node.exists) tags.appendChild(tag(formatBytes(node.size)))
-    head.appendChild(tags)
+    const facts = el('p', 'insp__facts')
+    const fact = (text: string, variant?: string): void => {
+      facts.appendChild(el('span', `insp__fact${variant ? ` insp__fact--${variant}` : ''}`, text))
+    }
 
-    // One line, ellipsised from the left so the filename stays visible, with
-    // the full path in the tooltip and on the clipboard.
-    const pathRow = el('div', 'insp__path')
-    pathRow.appendChild(truncated(node.path, 'insp__pathText'))
-    pathRow.appendChild(
-      iconButton('copy', 'Copy path', () => void this.copy(node.path)),
-    )
-    head.appendChild(pathRow)
+    const record = readRecord(node.meta?.customLayerData)
+    if (record.status !== 'unknown') {
+      const status = el('span', `insp__fact insp__status insp__status--${record.status}`)
+      status.appendChild(statusDot(record.status))
+      status.appendChild(el('span', undefined, STATUS_LABEL[record.status]))
+      facts.appendChild(status)
+    }
+    if (missing) fact('missing on disk', 'danger')
+    if (node.template) fact('placeholder path', 'warn')
+    if (isRoot) fact('root', 'accent')
+    if (node.role === 'assembly' || node.role === 'block') fact(node.roleLabel)
+    fact(node.kind === 'layer' ? node.format : node.ext || 'file')
+    if (node.binary) fact('binary')
+    if (node.exists) fact(formatBytes(node.size))
+    // Pulled in from more than one place: worth knowing before changing it.
+    if (usedBy > 1) fact(`used ${usedBy}×`)
+    head.appendChild(facts)
 
     if (node.error) {
       const error = el('div', 'insp__error')
@@ -200,31 +240,27 @@ export class Inspector {
       error.appendChild(el('span', undefined, node.error))
       head.appendChild(error)
     }
-
-    const actions = el('div', 'insp__actions')
-    if (node.exists) {
-      actions.appendChild(
-        button('Reveal', {
-          icon: 'external',
-          small: true,
-          title: 'Show this file in the file manager',
-          onClick: () => this.callbacks.onReveal(node.path),
-        }),
-      )
-    }
-    if (!isRoot && node.kind === 'layer' && node.exists) {
-      actions.appendChild(
-        button('Set as root', {
-          icon: 'target',
-          small: true,
-          variant: 'primary',
-          title: 'Re-crawl from this file',
-          onClick: () => this.callbacks.onSetRoot(node.id),
-        }),
-      )
-    }
-    if (actions.childElementCount) head.appendChild(actions)
     return head
+  }
+
+  /**
+   * The next step for this file, when there is one — graph from it — as the
+   * first, accented button in the header's cluster.
+   */
+  private primaryAction(node: GraphNode, isRoot: boolean): HTMLElement | null {
+    if (node.kind !== 'layer' || !node.exists) return null
+    const action =
+      this.mode === 'file'
+        ? iconButton('graph', 'Open in graph — draw the reference graph from this file', () =>
+            this.callbacks.onOpenInGraph(node.path),
+          )
+        : isRoot
+          ? null
+          : iconButton('target', 'Set as root — re-crawl the graph from this file', () =>
+              this.callbacks.onSetRoot(node.id),
+            )
+    action?.classList.add('insp__primary')
+    return action
   }
 
   /** Details, Scene or Source. The choice sticks as the selection moves. */
@@ -262,11 +298,7 @@ export class Inspector {
   private buildPublish(record: ReturnType<typeof readRecord>): HTMLElement {
     const section = el('div', 'insp__section')
 
-    const heading = el('h3', undefined, 'Publish')
-    if (record.status !== 'unknown' || record.statusRaw) {
-      heading.appendChild(statusPill(record.status, true))
-    }
-    section.appendChild(heading)
+    section.appendChild(el('h3', undefined, 'Publish'))
 
     const facts = new Facts()
     facts.add('Artist', record.artist)
@@ -373,10 +405,6 @@ export class Inspector {
     section.appendChild(list)
     return section
   }
-}
-
-function tag(text: string, variant?: 'accent' | 'danger' | 'warn' | 'role'): HTMLElement {
-  return el('span', `tag${variant ? ` tag--${variant}` : ''}`, text)
 }
 
 export function toast(

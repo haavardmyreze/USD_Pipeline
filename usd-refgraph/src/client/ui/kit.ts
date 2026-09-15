@@ -84,6 +84,33 @@ export function statusDot(status: Status): HTMLElement {
   return dot
 }
 
+export interface StripItem {
+  status: Status
+  /** What the mark stands for, e.g. the block name. */
+  label: string
+  /** A USD file: the mark opens it in the panel when picked. */
+  layerPath?: string
+}
+
+/**
+ * One mark per published file, coloured by status, in the order given.
+ *
+ * The app's answer to "which steps are done" without fixed columns: blocks are
+ * free-form, so an entity shows exactly the files it has. `labelled` writes
+ * each block name inside its mark, for rows with room to read them.
+ */
+export function statusStrip(items: StripItem[], labelled = false): HTMLElement {
+  const strip = el('span', `strip${labelled ? ' strip--labelled' : ''}`)
+  for (const item of items) {
+    const mark = el('span', `strip__mark strip__mark--${item.status}`)
+    if (labelled) mark.appendChild(el('span', 'strip__label', item.label))
+    mark.title = `${item.label} · ${STATUS_LABEL[item.status]}`
+    if (item.layerPath) markLayer(mark, item.layerPath)
+    strip.appendChild(mark)
+  }
+  return strip
+}
+
 export interface ChipOptions {
   /** A colour for the chip's leading edge, e.g. a category or tier hue. */
   accent?: string
@@ -224,49 +251,6 @@ export function emptyState(title: string, options: EmptyStateOptions = {}): HTML
   return node
 }
 
-// ---------------------------------------------------------------------------
-// Disclosure — the expanding row used by Workspace and Workfiles
-// ---------------------------------------------------------------------------
-
-export interface DisclosureOptions {
-  open: boolean
-  /** True when something else is open, so this one should recede. */
-  dimmed?: boolean
-  onToggle(): void
-  /** Everything on the left of the row: dot, icon, name, quiet notes. */
-  lead: Element[]
-  /** Everything on the right: pills, counts, timestamps. */
-  trail?: Element[]
-  /** Built only when open, so a collapsed list costs nothing to render. */
-  panel(): HTMLElement
-}
-
-export function disclosure(options: DisclosureOptions): HTMLElement {
-  const box = el('div', 'ebox')
-  if (options.open) box.classList.add('is-open')
-  if (options.dimmed && !options.open) box.classList.add('is-dim')
-
-  const row = el('button', 'ebox__row')
-  row.setAttribute('aria-expanded', String(options.open))
-
-  const caret = icon(ICONS.chevronRight)
-  caret.setAttribute('class', 'ebox__caret')
-  row.appendChild(caret)
-
-  const lead = el('span', 'ebox__lead')
-  for (const node of options.lead) lead.appendChild(node)
-  row.appendChild(lead)
-
-  const trail = el('span', 'ebox__trail')
-  for (const node of options.trail ?? []) trail.appendChild(node)
-  row.appendChild(trail)
-
-  row.addEventListener('click', options.onToggle)
-  box.appendChild(row)
-
-  if (options.open) box.appendChild(options.panel())
-  return box
-}
 
 // ---------------------------------------------------------------------------
 // Data table — one grid, used by every page that lists rows
@@ -284,6 +268,8 @@ export interface TableRow {
   cells: (HTMLElement | string)[]
   title?: string
   onClick?: () => void
+  /** A USD file the row stands for; picking the row opens it in the panel. */
+  layerPath?: string
 }
 
 /** A header row plus body rows on one shared grid template. */
@@ -306,6 +292,7 @@ export function dataTable(columns: Column[], rows: TableRow[]): HTMLElement {
       line.addEventListener('click', row.onClick)
     }
     if (row.title) line.title = row.title
+    if (row.layerPath) markLayer(line, row.layerPath)
     row.cells.forEach((content, index) => {
       const column = columns[index]
       const cell = el('span', `table__cell${column?.end ? ' table__cell--end' : ''}`)
@@ -316,6 +303,18 @@ export function dataTable(columns: Column[], rows: TableRow[]): HTMLElement {
     table.appendChild(line)
   }
   return table
+}
+
+/**
+ * Mark an element as standing for a USD file. The app listens for picks on
+ * anything carrying the mark and opens that file in the panel, so a page only
+ * says which element is which file.
+ */
+export function markLayer<T extends HTMLElement>(node: T, path: string): T {
+  node.dataset.layerPath = path
+  node.tabIndex = 0
+  node.setAttribute('role', 'button')
+  return node
 }
 
 export interface NamedCellOptions {
@@ -528,6 +527,29 @@ export function metrics(items: Metric[]): HTMLElement {
     tile.appendChild(el('div', 'tile__value', String(item.value)))
     tile.appendChild(el('div', 'tile__label', item.label))
     wrap.appendChild(tile)
+  }
+  return wrap
+}
+
+export interface HeadStat {
+  value: string | number
+  label: string
+  /** A colour for the number, e.g. a status hue. */
+  accent?: string
+  title?: string
+}
+
+/** Headline numbers for the right of a page or detail header. */
+export function headStats(items: HeadStat[]): HTMLElement {
+  const wrap = el('div', 'hstats')
+  for (const item of items) {
+    const cell = el('div', 'hstat')
+    const value = el('span', 'hstat__value', String(item.value))
+    if (item.accent) value.style.color = item.accent
+    cell.appendChild(value)
+    cell.appendChild(el('span', 'hstat__label', item.label))
+    if (item.title) cell.title = item.title
+    wrap.appendChild(cell)
   }
   return wrap
 }

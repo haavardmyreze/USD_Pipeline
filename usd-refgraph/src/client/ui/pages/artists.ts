@@ -1,27 +1,29 @@
 /**
- * Artist focus: pick a person, see everything they have published, grouped by
- * assets, sets and shots.
+ * Everyone who publishes, at once: how much each person carries, in what
+ * state, and on which entities — then what they published last.
  *
- * The roster is whoever has actually published — there is no team list in USD
+ * The roster is whoever has actually published. There is no team list in USD
  * to read one from, so this page is a record of work done, not of who is on
  * the show.
+ *
+ * Nothing here is laid out by step. Blocks are free-form, so a person's load is
+ * told by the entities they publish into, never by a fixed set of columns.
  */
 
-import type { TaskRow } from '@shared/project'
+import type { ProjectEntity, TaskRow } from '@shared/project'
 import type { Status } from '@shared/pipeline'
-import type { NodeTier } from '@shared/types'
-import { STATUS_ALL, STATUS_ORDER, allTasks, byRecency } from '@shared/project'
+import { STATUS_ORDER, allTasks, byRecency, statusRank } from '@shared/project'
 import {
+  STATUS_COLOR,
   STATUS_LABEL,
-  TIER_COLOR,
+  button,
   card,
   dataTable,
   emptyState,
-  filterChips,
-  groupHead,
-  metrics,
+  headStats,
+  meter,
   namedCell,
-  select,
+  statusDot,
   statusPill,
   truncated,
 } from '../kit'
@@ -29,70 +31,42 @@ import { el, formatMoment, formatRelative } from '../../util'
 import { pageState, type PageContext } from './context'
 import { pageShell } from './shell'
 
-const UNATTRIBUTED = '— no artist —'
+const UNATTRIBUTED = 'no artist recorded'
 
-const TIERS: { id: NodeTier; label: string }[] = [
-  { id: 'asset', label: 'Assets' },
-  { id: 'set', label: 'Sets' },
-  { id: 'shot', label: 'Shots' },
-]
+/** Entities named on a person's row before the rest fold into a count. */
+const MAX_ENTITIES = 5
+
+interface Person {
+  name: string
+  tasks: TaskRow[]
+  last: number
+}
 
 export function renderArtists(host: HTMLElement, context: PageContext): void {
   const state = pageState.artists
+  const people = gatherPeople(allTasks(context.project))
+  if (state.artist && !people.some((person) => person.name === state.artist)) state.artist = null
 
-  const byArtist = new Map<string, TaskRow[]>()
-  for (const task of allTasks(context.project)) {
-    const artist = task.layer.pipeline.artist ?? UNATTRIBUTED
-    const list = byArtist.get(artist)
-    if (list) list.push(task)
-    else byArtist.set(artist, [task])
-  }
-
-  const artists = [...byArtist.keys()].sort((a, b) => {
-    if (a === UNATTRIBUTED) return 1
-    if (b === UNATTRIBUTED) return -1
-    return a.localeCompare(b)
-  })
-  if (!state.artist || !byArtist.has(state.artist)) {
-    state.artist = artists[0] ?? null
-  }
-
-  const controls = el('div', 'page__controls')
-  if (artists.length) {
-    controls.appendChild(
-      select(
-        artists.map((artist) => ({
-          value: artist,
-          label: `${artist}  ·  ${byArtist.get(artist)?.length ?? 0} layers`,
-        })),
-        state.artist,
-        (artist) => {
-          state.artist = artist
-          context.refresh()
-        },
-      ),
-    )
-  }
-  controls.appendChild(
-    filterChips<Status>(
-      'Status',
-      STATUS_ALL.map((status) => ({ value: status, label: STATUS_LABEL[status], status })),
-      state.hiddenStatus,
-      (status) => {
-        if (state.hiddenStatus.has(status)) state.hiddenStatus.delete(status)
-        else state.hiddenStatus.add(status)
-        context.refresh()
-      },
-    ),
-  )
+  const named = people.filter((person) => person.name !== UNATTRIBUTED)
+  const busiest = named[0]
+  const quietest = [...named].sort((a, b) => a.last - b.last)[0]
 
   const body = pageShell(host, 'Artists', {
-    subtitle: 'Who published what — read from each layer, not from a roster',
-    meta: `${artists.length} ${artists.length === 1 ? 'person' : 'people'}`,
-    controls,
+    subtitle: 'Read from each layer’s publish record — not a roster',
+    stats: named.length
+      ? headStats([
+          { value: named.length, label: named.length === 1 ? 'person publishing' : 'people publishing' },
+          ...(busiest
+            ? [{ value: busiest.tasks.length, label: `busiest — ${busiest.name}`, title: 'Most layers published' }]
+            : []),
+          ...(quietest && named.length > 1
+            ? [{ value: sinceShort(quietest.last), label: `quietest — ${quietest.name}`, title: 'Longest since a publish' }]
+            : []),
+        ])
+      : undefined,
   })
 
-  if (!artists.length || !state.artist) {
+  if (!people.length) {
     body.appendChild(
       emptyState('No published layers found.', {
         icon: 'user',
@@ -102,89 +76,223 @@ export function renderArtists(host: HTMLElement, context: PageContext): void {
     return
   }
 
-  const mine = byArtist.get(state.artist) ?? []
-  const visible = mine.filter((task) => !state.hiddenStatus.has(task.layer.pipeline.status))
-
-  body.appendChild(summaryCard(state.artist, mine, visible))
-
-  let shown = 0
-  for (const tier of TIERS) {
-    const rows = visible.filter((task) => task.entity.tier === tier.id).sort(byRecency)
-    if (!rows.length) continue
-    shown++
-    body.appendChild(tierBlock(tier.id, tier.label, rows))
-  }
-
-  if (!shown) {
-    body.appendChild(
-      emptyState('Nothing matches the current filters.', {
-        icon: 'inbox',
-        body: 'Switch a status back on to see the rest of their work.',
-      }),
-    )
-  }
+  body.appendChild(loadCard(people, context))
+  const person = people.find((candidate) => candidate.name === state.artist)
+  body.appendChild(person ? historyCard(person, context) : latestCard(people))
 }
 
-function summaryCard(artist: string, all: TaskRow[], visible: TaskRow[]): HTMLElement {
-  const { root, body } = card(artist, {
-    hint: visible.length === all.length
-      ? `${all.length} ${all.length === 1 ? 'layer' : 'layers'}`
-      : `${visible.length} of ${all.length} layers shown`,
+function gatherPeople(tasks: TaskRow[]): Person[] {
+  const byName = new Map<string, TaskRow[]>()
+  for (const task of tasks) {
+    const name = task.layer.pipeline.artist ?? UNATTRIBUTED
+    const list = byName.get(name)
+    if (list) list.push(task)
+    else byName.set(name, [task])
+  }
+  // Busiest first, which is the order that answers "who is carrying this";
+  // layers with no artist always last.
+  return [...byName.entries()]
+    .map(([name, list]) => ({
+      name,
+      tasks: list.sort(byRecency),
+      last: Math.max(0, ...list.map((task) => task.layer.pipeline.exportedAt ?? 0)),
+    }))
+    .sort((a, b) => {
+      if (a.name === UNATTRIBUTED) return 1
+      if (b.name === UNATTRIBUTED) return -1
+      return b.tasks.length - a.tasks.length || b.last - a.last
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Load
+// ---------------------------------------------------------------------------
+
+function loadCard(people: Person[], context: PageContext): HTMLElement {
+  const legend = el('div', 'legendkey')
+  for (const status of STATUS_ORDER) {
+    const item = el('span', 'legendkey__item')
+    item.appendChild(statusDot(status))
+    item.appendChild(el('span', undefined, STATUS_LABEL[status].toLowerCase()))
+    legend.appendChild(item)
+  }
+
+  const { root, body } = card('Load', {
+    hint: 'what each person has published, and where',
+    actions: legend,
+    flush: true,
   })
 
-  const items = STATUS_ORDER.map((status) => ({
-    value: all.filter((task) => task.layer.pipeline.status === status).length,
-    label: STATUS_LABEL[status],
-    accent: `var(--status-${status === 'production_ready' ? 'ready' : status})`,
-  }))
-  for (const tier of TIERS) {
-    items.push({
-      value: all.filter((task) => task.entity.tier === tier.id).length,
-      label: tier.label,
-      accent: TIER_COLOR[tier.id]!,
-    })
+  const board = el('div', 'load')
+  const head = el('div', 'load__row load__row--head')
+  for (const label of ['Artist', 'Status split', 'Entities', 'Layers', 'Last']) {
+    head.appendChild(el('span', 'load__cell', label))
   }
-  body.appendChild(metrics(items))
+  board.appendChild(head)
+
+  const selected = pageState.artists.artist
+  for (const person of people) {
+    const on = person.name === selected
+    const row = el('button', `load__row${on ? ' is-on' : ''}`)
+    row.setAttribute('aria-pressed', String(on))
+    row.title = on ? 'Show everyone’s latest again' : `Show everything ${person.name} published`
+
+    const name = el('span', `load__cell load__name${person.name === UNATTRIBUTED ? ' is-absent' : ''}`, person.name)
+    row.appendChild(name)
+
+    const split = el('span', 'load__cell')
+    split.appendChild(
+      meter(
+        STATUS_ORDER.map((status) => {
+          const count = person.tasks.filter((task) => task.layer.pipeline.status === status).length
+          return { value: count, color: STATUS_COLOR[status], title: `${count} ${STATUS_LABEL[status].toLowerCase()}` }
+        }),
+      ),
+    )
+    row.appendChild(split)
+
+    row.appendChild(entityChips(person))
+    row.appendChild(el('span', 'load__cell load__num', String(person.tasks.length)))
+    const last = el('span', 'load__cell load__when', formatRelative(person.last))
+    last.title = formatMoment(person.last)
+    row.appendChild(last)
+
+    row.addEventListener('click', () => {
+      pageState.artists.artist = on ? null : person.name
+      context.refresh()
+    })
+    board.appendChild(row)
+  }
+
+  body.appendChild(board)
   return root
 }
 
-function tierBlock(tier: NodeTier, label: string, rows: TaskRow[]): HTMLElement {
-  const block = el('div', 'stack__group')
-  block.appendChild(
-    groupHead(label, `${rows.length} ${rows.length === 1 ? 'layer' : 'layers'}`, TIER_COLOR[tier]),
-  )
+/**
+ * The entities a person publishes into, most layers first, each tinted by
+ * the weakest status among that person's layers there.
+ */
+function entityChips(person: Person): HTMLElement {
+  const cell = el('span', 'load__cell load__entities')
+  const byEntity = new Map<string, { entity: ProjectEntity; tasks: TaskRow[] }>()
+  for (const task of person.tasks) {
+    const entry = byEntity.get(task.entity.name)
+    if (entry) entry.tasks.push(task)
+    else byEntity.set(task.entity.name, { entity: task.entity, tasks: [task] })
+  }
 
-  block.appendChild(
+  const entries = [...byEntity.values()].sort(
+    (a, b) => b.tasks.length - a.tasks.length || a.entity.name.localeCompare(b.entity.name),
+  )
+  for (const { entity, tasks } of entries.slice(0, MAX_ENTITIES)) {
+    const weakest = tasks
+      .map((task) => task.layer.pipeline.status)
+      .reduce<Status>((worst, status) => (statusRank(status) < statusRank(worst) ? status : worst), 'locked')
+    const chip = el('span', 'echip')
+    chip.appendChild(statusDot(weakest))
+    chip.appendChild(el('span', 'echip__name', entity.name))
+    if (tasks.length > 1) chip.appendChild(el('span', 'echip__count', `×${tasks.length}`))
+    chip.title = tasks.map((task) => `${task.step} · ${STATUS_LABEL[task.layer.pipeline.status]}`).join('\n')
+    cell.appendChild(chip)
+  }
+  if (entries.length > MAX_ENTITIES) {
+    const more = el('span', 'echip echip--more', `+${entries.length - MAX_ENTITIES}`)
+    more.title = entries.slice(MAX_ENTITIES).map((entry) => entry.entity.name).join('\n')
+    cell.appendChild(more)
+  }
+  return cell
+}
+
+// ---------------------------------------------------------------------------
+// What they published
+// ---------------------------------------------------------------------------
+
+function latestCard(people: Person[]): HTMLElement {
+  const { root, body } = card('Latest from each person', { flush: true })
+  body.appendChild(
+    dataTable(
+      [
+        { label: 'Artist', width: 'minmax(0, 0.7fr)' },
+        { label: 'Entity', width: 'minmax(0, 1fr)' },
+        { label: 'Step', width: 'minmax(0, 0.8fr)' },
+        { label: 'Comment', width: 'minmax(0, 2fr)' },
+        { label: 'Status', width: '120px', end: true },
+        { label: 'When', width: '100px', end: true },
+      ],
+      people
+        .filter((person) => person.tasks.length)
+        .map((person) => {
+          const task = person.tasks[0]!
+          return {
+            title: task.layer.path,
+            layerPath: task.layer.path,
+            cells: [
+              truncated(person.name, person.name === UNATTRIBUTED ? 'dim' : 'strong'),
+              namedCell(task.entity.name, { status: task.entity.status }),
+              truncated(task.step, 'mono dim'),
+              truncated(task.layer.pipeline.comment || '—', 'dim'),
+              statusPill(task.layer.pipeline.status, true),
+              whenCell(task),
+            ],
+          }
+        }),
+    ),
+  )
+  return root
+}
+
+function historyCard(person: Person, context: PageContext): HTMLElement {
+  const { root, body } = card(`Everything ${person.name} published`, {
+    hint: `${person.tasks.length} ${person.tasks.length === 1 ? 'layer' : 'layers'}, newest first`,
+    actions: button('Everyone’s latest', {
+      variant: 'ghost',
+      small: true,
+      onClick: () => {
+        pageState.artists.artist = null
+        context.refresh()
+      },
+    }),
+    flush: true,
+  })
+  body.appendChild(
     dataTable(
       [
         { label: 'Entity', width: 'minmax(0, 1fr)' },
-        { label: 'Step', width: 'minmax(0, 0.7fr)' },
+        { label: 'Step', width: 'minmax(0, 0.8fr)' },
         { label: 'Workfile', width: 'minmax(0, 1.1fr)' },
-        { label: 'Comment', width: 'minmax(0, 1.4fr)' },
-        { label: 'Status', width: '150px', end: true },
+        { label: 'Comment', width: 'minmax(0, 1.6fr)' },
+        { label: 'Status', width: '120px', end: true },
+        { label: 'When', width: '100px', end: true },
       ],
-      rows.map((row) => ({
-        title: row.layer.path,
+      person.tasks.map((task) => ({
+        title: task.layer.path,
+        layerPath: task.layer.path,
         cells: [
-          namedCell(row.entity.name, { status: row.entity.status, strong: true }),
-          truncated(row.step, 'mono dim'),
-          truncated(row.layer.pipeline.hipFile ?? '—', 'mono dim'),
-          truncated(row.layer.pipeline.comment || '—', 'dim'),
-          statusCell(row),
+          namedCell(task.entity.name, { status: task.entity.status, strong: true }),
+          truncated(task.step, 'mono dim'),
+          truncated(task.layer.pipeline.hipFile ?? '—', 'mono dim'),
+          truncated(task.layer.pipeline.comment || '—', 'dim'),
+          statusPill(task.layer.pipeline.status, true),
+          whenCell(task),
         ],
       })),
     ),
   )
-  return block
+  return root
 }
 
-function statusCell(row: TaskRow): HTMLElement {
-  const wrap = el('span', 'cell-status')
-  wrap.appendChild(statusPill(row.layer.pipeline.status, true))
-  if (row.layer.pipeline.exportedAt) {
-    const when = el('span', 'cell-status__when', formatRelative(row.layer.pipeline.exportedAt))
-    when.title = formatMoment(row.layer.pipeline.exportedAt)
-    wrap.appendChild(when)
-  }
-  return wrap
+function whenCell(task: TaskRow): HTMLElement {
+  const at = task.layer.pipeline.exportedAt
+  const cell = el('span', 'dim', at ? formatRelative(at) : '—')
+  if (at) cell.title = formatMoment(at)
+  return cell
+}
+
+/** `2h`, `3d`: how long since, in the fewest characters a headline allows. */
+function sinceShort(ms: number): string {
+  if (!ms) return '—'
+  const hours = Math.max(0, (Date.now() - ms) / 3_600_000)
+  if (hours < 1) return 'now'
+  if (hours < 24) return `${Math.floor(hours)}h`
+  return `${Math.floor(hours / 24)}d`
 }

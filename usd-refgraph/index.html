@@ -78,17 +78,30 @@
           </span>
         </button>
 
-        <span class="topbar__sep graph-only" aria-hidden="true"></span>
+        <!-- Where the graphed layer sits in the project, and the layer itself,
+             which opens the project's entities to graph another. -->
+        <div class="gcrumbs graph-only" id="graph-crumbs">
+          <span class="gcrumbs__dirs" id="root-path"></span>
+          <button class="gcrumbs__layer" id="open-layer" aria-haspopup="dialog" aria-expanded="false" title="Graph another layer">
+            <span class="dot" id="root-dot" hidden></span>
+            <span class="gcrumbs__name" id="root-name">No layer</span>
+            <svg class="gcrumbs__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.2 3.5 3.6 3.5-3.6"/></svg>
+          </button>
 
-        <button class="crumb-btn crumb-btn--layer graph-only" id="open-file" title="Open a different USD file">
-          <span class="crumb-btn__icon" aria-hidden="true">
-            <svg viewBox="0 0 16 16"><path d="M9 1.8H4.4A1.4 1.4 0 0 0 3 3.2v9.6a1.4 1.4 0 0 0 1.4 1.4h7.2a1.4 1.4 0 0 0 1.4-1.4V5.8z"/><path d="M9 1.8v4h4"/></svg>
-          </span>
-          <span class="crumb-btn__text">
-            <span class="crumb-btn__name" id="root-name">No layer</span>
-            <span class="crumb-btn__sub" id="root-path">Nothing loaded yet</span>
-          </span>
-        </button>
+          <div class="layerpop" id="layer-pop" role="dialog" aria-label="Graph another layer" hidden>
+            <label class="search search--rail">
+              <svg class="search__icon" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="7" cy="7" r="4.6" /><path d="m10.6 10.6 3 3" />
+              </svg>
+              <input id="tree-filter" type="search" placeholder="Filter entities" autocomplete="off" spellcheck="false" />
+            </label>
+            <div class="tree" id="tree"></div>
+            <button class="btn btn--small layerpop__other" id="open-file">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 1.8H4.4A1.4 1.4 0 0 0 3 3.2v9.6a1.4 1.4 0 0 0 1.4 1.4h7.2a1.4 1.4 0 0 0 1.4-1.4V5.8z"/><path d="M9 1.8v4h4"/></svg>
+              <span>Open another file…</span>
+            </button>
+          </div>
+        </div>
 
         <div class="topbar__spacer"></div>
 
@@ -99,21 +112,6 @@
           <input id="search" type="search" placeholder="Filter files" autocomplete="off" spellcheck="false" />
           <kbd>/</kbd>
         </label>
-
-        <div class="seg graph-only" role="group" aria-label="View options">
-          <button class="seg__btn" id="toggle-assemblies" aria-pressed="false" title="Show only assembly files, collapsing the blocks between them">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/><path d="m1.8 8 6.2 3.2L14.2 8"/><path d="m1.8 11 6.2 3.2L14.2 11"/></svg>
-            Assemblies
-          </button>
-          <button class="seg__btn is-on" id="toggle-textures" aria-pressed="true" title="Show texture and asset files">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.6"/><circle cx="6" cy="6.6" r="1.2"/><path d="m3 11 3.2-3 2.4 2.2L11 8l2 2.4"/></svg>
-            Textures
-          </button>
-          <button class="seg__btn" id="toggle-missing" aria-pressed="false" title="Show only files that are missing">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.6 14.4 13H1.6z"/><path d="M8 6.4v3.1M8 11.2v.1"/></svg>
-            Missing
-          </button>
-        </div>
 
         <div class="iconbar">
           <button class="iconbtn" id="btn-rescan" title="Rescan from disk (R)" aria-label="Rescan from disk">
@@ -132,51 +130,6 @@
 
       <!-- ── Graph ──────────────────────────────────────────────────── -->
       <section class="page page--graph" data-page="graph" id="page-graph" hidden>
-      <!-- ── Left rail ──────────────────────────────────────────────── -->
-      <aside class="sidebar" id="sidebar">
-        <section class="panel panel--tree">
-          <h2 class="panel__title">
-            Project
-            <span class="panel__hint">click to graph</span>
-          </h2>
-          <label class="search search--rail">
-            <svg class="search__icon" viewBox="0 0 16 16" aria-hidden="true">
-              <circle cx="7" cy="7" r="4.6" /><path d="m10.6 10.6 3 3" />
-            </svg>
-            <input id="tree-filter" type="search" placeholder="Filter entities" autocomplete="off" spellcheck="false" />
-          </label>
-          <div class="tree" id="tree"></div>
-        </section>
-
-        <section class="panel">
-          <h2 class="panel__title">
-            Arcs
-            <span class="panel__hint">click to isolate</span>
-          </h2>
-          <div class="legend" id="legend"></div>
-        </section>
-
-        <section class="panel">
-          <h2 class="panel__title">
-            Tiers
-            <span class="panel__hint">card tint</span>
-          </h2>
-          <div class="tierkey">
-            <span class="tierkey__item tierkey__item--asset">
-              <span class="tierkey__swatch" aria-hidden="true"></span>Asset
-            </span>
-            <span class="tierkey__item tierkey__item--set">
-              <span class="tierkey__swatch" aria-hidden="true"></span>Set
-            </span>
-            <span class="tierkey__item tierkey__item--shot">
-              <span class="tierkey__swatch" aria-hidden="true"></span>Shot
-            </span>
-          </div>
-        </section>
-
-      </aside>
-
-      <!-- ── Graph ──────────────────────────────────────────────────── -->
       <main class="stage" id="stage">
         <div class="stage__grid" id="grid"></div>
 
@@ -186,6 +139,34 @@
             <g id="edge-layer"></g>
           </svg>
           <div class="nodes" id="nodes"></div>
+        </div>
+
+        <!-- ── What is drawn: view filters, then one chip per arc kind ─── -->
+        <div class="gbar" role="toolbar" aria-label="Graph filters">
+          <button class="gchip" id="toggle-assemblies" aria-pressed="false" title="Show only assembly files, collapsing the blocks between them">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/><path d="m1.8 8 6.2 3.2L14.2 8"/><path d="m1.8 11 6.2 3.2L14.2 11"/></svg>
+            <span>Assemblies</span>
+          </button>
+          <button class="gchip is-on" id="toggle-textures" aria-pressed="true" title="Show texture and asset files">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.6"/><circle cx="6" cy="6.6" r="1.2"/><path d="m3 11 3.2-3 2.4 2.2L11 8l2 2.4"/></svg>
+            <span>Textures</span>
+          </button>
+          <button class="gchip gchip--danger" id="toggle-missing" aria-pressed="false" title="Show only files that are missing">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.6 14.4 13H1.6z"/><path d="M8 6.4v3.1M8 11.2v.1"/></svg>
+            <span>Missing</span>
+            <span class="gchip__count" id="missing-count"></span>
+          </button>
+          <span class="gbar__sep" aria-hidden="true"></span>
+          <div class="gbar__arcs" id="legend"></div>
+        </div>
+
+        <!-- ── What the tints mean, and how much is drawn ───────────────── -->
+        <div class="gkey">
+          <span class="gkey__item gkey__item--asset"><span class="gkey__swatch" aria-hidden="true"></span>Asset</span>
+          <span class="gkey__item gkey__item--set"><span class="gkey__swatch" aria-hidden="true"></span>Set</span>
+          <span class="gkey__item gkey__item--shot"><span class="gkey__swatch" aria-hidden="true"></span>Shot</span>
+          <span class="gkey__sep" aria-hidden="true"></span>
+          <span class="gkey__stats" id="graph-stats">Nothing drawn</span>
         </div>
 
         <div class="zoomctl">
@@ -228,10 +209,12 @@
           <span id="loading-text">Crawling layers…</span>
         </div>
       </main>
-
-      <!-- ── Inspector ──────────────────────────────────────────────── -->
-      <aside class="inspector" id="inspector" hidden></aside>
       </section>
+
+      <!-- ── Inspector ──────────────────────────────────────────────────
+           Shared by every page: it floats over the graph, and over a project
+           page when a USD file is picked from one of its lists. -->
+      <aside class="inspector" id="inspector" hidden></aside>
       </div>
       </div>
     </div>

@@ -134,6 +134,27 @@ export function entityTarget(entity: ProjectEntity): ProjectLayer | null {
   return entity.assembly ?? entity.blocks[0] ?? null
 }
 
+/**
+ * An entity's published files in reading order: the assembly, then blocks in
+ * the order they were published, so the work reads as it happened.
+ *
+ * Blocks are free-form — any token after the entity name — so this is the one
+ * order every view uses instead of a fixed list of steps.
+ */
+export function entityLayers(entity: ProjectEntity): ProjectLayer[] {
+  const blocks = [...entity.blocks].sort(
+    (a, b) =>
+      (a.pipeline.exportedAt ?? a.mtime ?? 0) - (b.pipeline.exportedAt ?? b.mtime ?? 0) ||
+      a.name.localeCompare(b.name),
+  )
+  return entity.assembly ? [entity.assembly, ...blocks] : blocks
+}
+
+/** A file's block token as written, or `assembly`. */
+export function layerStep(layer: ProjectLayer): string {
+  return layer.block ?? 'assembly'
+}
+
 /** Shots read best in sequence-and-number order, everything else by name. */
 export function entitySort(a: ProjectEntity, b: ProjectEntity): number {
   if (a.sequence && b.sequence && a.sequence !== b.sequence) {

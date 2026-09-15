@@ -10,6 +10,8 @@ export interface ShellOptions {
   controls?: HTMLElement
   /** Folder-style tabs sitting along the bottom edge of the header strip. */
   tabs?: HTMLElement
+  /** Headline numbers pinned to the right of the title. */
+  stats?: HTMLElement
 }
 
 /**
@@ -45,6 +47,7 @@ export function pageShell(
   const right = el('div', 'page__barRight')
   if (options.meta) right.appendChild(el('span', 'page__meta', options.meta))
   if (options.actions) right.appendChild(options.actions)
+  if (options.stats) right.appendChild(options.stats)
   if (right.childElementCount) top.appendChild(right)
   bar.appendChild(top)
 

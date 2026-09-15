@@ -10,9 +10,10 @@
  * opinion on it, and clicking one selects that layer in the graph — which in
  * turn swaps this tree for that layer's own.
  *
- * Levels are fetched as rows are expanded, never the whole stage, and each
- * layer keeps its own expansion and selection so moving around the graph and
- * back finds the tree as you left it.
+ * A layer's tree opens fully expanded, materials excepted, fetched in one
+ * request up to a budget; past that, levels are fetched as rows are opened, so
+ * a heavy shot is never walked whole. Each layer keeps its own expansion and
+ * selection, so moving around the graph and back finds the tree as you left it.
  */
 
 import type { GraphNode, PrimDetail, SceneLevel, ScenePrim } from '@shared/types'
@@ -23,9 +24,9 @@ import { Facts, countBadge, emptyState, iconButton, truncated } from './kit'
 import { copyText, el, icon } from '../util'
 
 export interface SceneCallbacks {
-  /** Select a layer in the graph. */
-  onSelectLayer(id: string): void
-  /** Whether a layer is a node in the graph as drawn, so it can be selected. */
+  /** Select a layer: in the graph, or in the panel when opened from a page. */
+  onSelectLayer(id: string, path: string): void
+  /** Whether a layer can be selected from here. */
   hasLayer(id: string): boolean
   onToast(message: string, kind?: 'ok' | 'error'): void
 }
@@ -125,12 +126,10 @@ export class SceneTree {
       state.levels.set(primPath, level)
       if (primPath === ROOT && !state.primed) {
         state.primed = true
-        // Open straight onto the default prim, since that is what anything
-        // referencing this layer gets. Its children are fetched right away.
-        if (level.defaultPrim) {
-          state.open.add(level.defaultPrim)
-          void this.fetchLevel(state, level.defaultPrim)
-        }
+        // A layer opens fully expanded, so its structure reads at a glance.
+        // The top level is already on screen while the rest arrives. Only if
+        // this layer is still the one shown: expanding reads the current node.
+        if (this.isCurrent(state)) void this.expandAll(ROOT, { state, initial: true })
       }
     } catch (error) {
       state.errors.set(primPath, describe(error))
@@ -157,10 +156,18 @@ export class SceneTree {
    * The server lists the branch in one request, breadth first up to a budget.
    * Whatever it had to leave out stays collapsed rather than open and empty,
    * and can still be opened a row at a time.
+   *
+   * The `initial` expansion a layer opens with keeps materials closed: a
+   * material's shader network is rarely what you came to see, and it can
+   * outnumber the geometry. Their children are still fetched, so opening one
+   * is instant. An explicit Expand all opens everything.
    */
-  private async expandAll(primPath: string = ROOT): Promise<void> {
+  private async expandAll(
+    primPath: string = ROOT,
+    options: { state?: LayerState; initial?: boolean } = {},
+  ): Promise<void> {
     const node = this.node
-    const state = this.state()
+    const state = options.state ?? this.state()
     if (!node || state.expanding) return
     state.expanding = true
     this.render()
@@ -172,12 +179,14 @@ export class SceneTree {
         state.levels.set(level.primPath, level)
         state.errors.delete(level.primPath)
         for (const child of level.children) {
-          if (child.childCount > 0 && listed.has(child.path)) state.open.add(child.path)
+          if (child.childCount === 0 || !listed.has(child.path)) continue
+          if (options.initial && isMaterial(child)) continue
+          state.open.add(child.path)
         }
       }
       if (primPath !== ROOT) state.open.add(primPath)
       state.primed = true
-      if (subtree.truncated && this.isCurrent(state)) {
+      if (subtree.truncated && !options.initial && this.isCurrent(state)) {
         this.callbacks.onToast(
           `Expanded the first ${subtree.prims.toLocaleString()} prims. Open the rest a branch at a time.`,
         )
@@ -201,6 +210,18 @@ export class SceneTree {
         if (path === primPath || path.startsWith(prefix)) state.open.delete(path)
       }
     }
+    this.render()
+  }
+
+  /** A click: pick the prim, or put the selection away if it is the one picked. */
+  private clickPrim(primPath: string): void {
+    const state = this.state()
+    if (state.selected !== primPath) {
+      void this.pick(primPath)
+      return
+    }
+    state.selected = null
+    state.detail = null
     this.render()
   }
 
@@ -425,7 +446,12 @@ export class SceneTree {
 
     row.appendChild(el('span', 'prim__type', prim.typeName))
 
-    row.addEventListener('click', () => void this.pick(prim.path))
+    row.addEventListener('click', (event) => {
+      // The second click of a double-click belongs to the double-click,
+      // which expands; letting it through would deselect what it just picked.
+      if (event.detail > 1) return
+      this.clickPrim(prim.path)
+    })
     row.addEventListener('dblclick', () => {
       if (branch) this.toggle(prim)
     })
@@ -500,12 +526,14 @@ export class SceneTree {
 
       row.appendChild(el('span', 'arc__kind', here ? 'this layer' : ARC_NAME[arc] ?? arc))
       row.title = reachable
-        ? `${opinion.layerPath}\nSelect in the graph`
+        ? `${opinion.layerPath}\nSelect this layer`
         : here
           ? `${opinion.layerPath}\nThe layer this tree is composed from`
           : `${opinion.layerPath}\nNot in the graph as drawn`
       if (reachable) {
-        row.addEventListener('click', () => this.callbacks.onSelectLayer(opinion.layerId))
+        row.addEventListener('click', () =>
+          this.callbacks.onSelectLayer(opinion.layerId, opinion.layerPath),
+        )
       }
       list.appendChild(row)
     }
@@ -624,6 +652,11 @@ function rowTitle(prim: ScenePrim): string {
   if (!prim.active) lines.push('Deactivated')
   if (prim.childCount) lines.push(`${prim.childCount} ${prim.childCount === 1 ? 'child' : 'children'}`)
   return lines.join('\n')
+}
+
+/** Materials, which the initial expansion leaves closed over their shaders. */
+function isMaterial(prim: ScenePrim): boolean {
+  return prim.typeName === 'Material'
 }
 
 function parentOf(path: string): string {

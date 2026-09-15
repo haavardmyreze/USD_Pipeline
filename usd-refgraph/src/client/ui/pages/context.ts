@@ -45,33 +45,34 @@ export interface PageContext {
  */
 export const pageState = {
   workspace: {
-    tier: 'asset' as NodeTier,
-    expanded: null as string | null,
-    hiddenStatus: new Set<Status>(),
+    tier: 'all' as NodeTier | 'all',
+    /** The entity shown in full; the first in the list when null. */
+    selected: null as string | null,
     query: '',
   },
   artists: {
+    /** The person whose whole history is listed; everyone's latest when null. */
     artist: null as string | null,
-    hiddenStatus: new Set<Status>(),
   },
   calendar: {
     cursor: null as { year: number; month: number } | null,
     selectedDay: null as string | null,
   },
   workfiles: {
-    expanded: null as string | null,
+    /** The workfile shown in full, by its grouping key; the first when null. */
+    selected: null as string | null,
+    query: '',
   },
 }
 
 /** Reset everything a page remembers. Called when a new project is scanned. */
 export function resetPageState(): void {
-  pageState.workspace.tier = 'asset'
-  pageState.workspace.expanded = null
-  pageState.workspace.hiddenStatus.clear()
+  pageState.workspace.tier = 'all'
+  pageState.workspace.selected = null
   pageState.workspace.query = ''
   pageState.artists.artist = null
-  pageState.artists.hiddenStatus.clear()
   pageState.calendar.cursor = null
   pageState.calendar.selectedDay = null
-  pageState.workfiles.expanded = null
+  pageState.workfiles.selected = null
+  pageState.workfiles.query = ''
 }

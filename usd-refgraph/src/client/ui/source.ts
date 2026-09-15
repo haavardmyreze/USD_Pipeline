@@ -163,7 +163,7 @@ export class SourceView {
       if (target && target !== this.node?.id) {
         const link = el('span', 'tok tok--asset src__link', text)
         link.dataset.target = target
-        link.title = 'Select this file in the graph'
+        link.title = 'Select this file'
         return link
       }
     }

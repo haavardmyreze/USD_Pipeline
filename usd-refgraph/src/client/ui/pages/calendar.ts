@@ -15,6 +15,7 @@ import {
   emptyState,
   iconButton,
   namedCell,
+  markLayer,
   statusPill,
   truncated,
 } from '../kit'
@@ -192,6 +193,7 @@ function listCard(
     )
     row.appendChild(statusPill(task.layer.pipeline.status, true))
     row.title = `${task.layer.name}\n${formatMoment(at)}`
+    markLayer(row, task.layer.path)
     list.appendChild(row)
   }
 

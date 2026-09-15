@@ -1,13 +1,14 @@
 /**
- * Which HIP file writes which layer.
+ * Which HIP file writes which layer, as a split browser.
  *
  * Publishing records the workfile and the ROP that produced each layer, so the
  * provenance is already in the files — this just inverts it.
  *
- * Artists version their workfiles as they go, so the page groups by the
- * workfile itself and separates by version inside: one box per workfile, one
- * section per version, newest first. Treating `_v001` and `_v002` as unrelated
- * files would scatter one person's history of a shot across the page.
+ * Artists version their workfiles as they go, so the list on the left holds
+ * one entry per workfile, and the right side runs through its versions newest
+ * first as a timeline, each with the layers that version wrote. Treating
+ * `_v001` and `_v002` as unrelated files would scatter one person's history of
+ * a shot across the page.
  */
 
 import type { TaskRow } from '@shared/project'
@@ -15,22 +16,27 @@ import type { WorkfileName } from '@shared/workfile'
 import { allTasks } from '@shared/project'
 import { byVersionDesc, parseWorkfile, workfileKey } from '@shared/workfile'
 import {
-  card,
-  countBadge,
   dataTable,
-  disclosure,
   emptyState,
-  metrics,
+  headStats,
   namedCell,
+  searchField,
   statusPill,
   truncated,
+  type HeadStat,
 } from '../kit'
-import { ICONS } from '../icons'
-import { el, formatMoment, formatRelative, icon } from '../../util'
+import {
+  clear,
+  el,
+  formatMoment,
+  formatRelative,
+  formatShortMoment,
+  matches,
+  nextFrame,
+} from '../../util'
 import { pageState, type PageContext } from './context'
-import { pageShell } from './shell'
 
-const UNRECORDED = '— no workfile recorded —'
+const UNRECORDED = 'no workfile recorded'
 
 /** One version of one workfile, and everything it wrote. */
 interface Version {
@@ -52,37 +58,38 @@ interface Workfile {
 
 export function renderWorkfiles(host: HTMLElement, context: PageContext): void {
   const state = pageState.workfiles
-  const tasks = allTasks(context.project)
-  const workfiles = groupWorkfiles(tasks)
+  const workfiles = groupWorkfiles(allTasks(context.project))
 
-  const versionCount = workfiles.reduce((sum, file) => sum + file.versions.length, 0)
+  const listScroll = host.querySelector('.split__list')?.scrollTop ?? 0
+  const detailScroll = host.querySelector('.split__detail')?.scrollTop ?? 0
+  const refocusFilter =
+    document.activeElement?.closest('.split__side .search') !== null &&
+    host.contains(document.activeElement)
 
-  const body = pageShell(host, 'Workfiles', {
-    subtitle: 'Which HIP file writes which layer',
-    meta: `${workfiles.length} ${workfiles.length === 1 ? 'workfile' : 'workfiles'} · ${
-      tasks.length
-    } layers`,
-  })
+  const visible = workfiles.filter(
+    (file) =>
+      !state.query ||
+      matches(file.label, state.query) ||
+      artistsOf(file.rows).some((artist) => matches(artist, state.query)),
+  )
 
-  if (!workfiles.length) {
-    body.appendChild(
-      emptyState('No published layers found.', {
-        icon: 'hip',
-        body: 'Publishing records `hip_file` in each layer; nothing here has one yet.',
-      }),
-    )
-    return
+  let selected = workfiles.find((file) => file.key === state.selected) ?? null
+  if (!selected || !visible.includes(selected)) selected = visible[0] ?? null
+  state.selected = selected?.key ?? null
+
+  clear(host)
+  const split = el('div', 'split')
+  split.appendChild(buildSide(workfiles, visible, selected, context))
+  split.appendChild(buildDetail(selected))
+  host.appendChild(split)
+
+  split.querySelector('.split__list')!.scrollTop = listScroll
+  split.querySelector('.split__detail')!.scrollTop = detailScroll
+  if (refocusFilter) {
+    const field = split.querySelector<HTMLInputElement>('.split__side input')
+    field?.focus()
+    field?.setSelectionRange(field.value.length, field.value.length)
   }
-
-  const untraced = workfiles.find((file) => file.unrecorded)?.rows.length ?? 0
-  body.appendChild(summaryCard(workfiles.length, versionCount, tasks.length, untraced))
-
-  // With a single workfile there is nothing to choose between, so open it.
-  if (workfiles.length === 1 && state.expanded === null) state.expanded = workfiles[0]!.key
-
-  const stack = el('div', 'stack__list')
-  for (const file of workfiles) stack.appendChild(fileBox(file, context))
-  body.appendChild(stack)
 }
 
 // ---------------------------------------------------------------------------
@@ -143,146 +150,188 @@ function artistsOf(rows: TaskRow[]): string[] {
   return [...new Set(rows.map((row) => row.layer.pipeline.artist).filter(Boolean))] as string[]
 }
 
+function plural(count: number, one: string, many = `${one}s`): string {
+  return `${count} ${count === 1 ? one : many}`
+}
+
 // ---------------------------------------------------------------------------
-// Rendering
+// The list
 // ---------------------------------------------------------------------------
 
-function summaryCard(
-  workfiles: number,
-  versions: number,
-  layers: number,
-  untraced: number,
+function buildSide(
+  workfiles: Workfile[],
+  visible: Workfile[],
+  selected: Workfile | null,
+  context: PageContext,
 ): HTMLElement {
-  const { root, body } = card('Provenance')
-  body.appendChild(
-    metrics([
-      { value: workfiles, label: workfiles === 1 ? 'Workfile' : 'Workfiles' },
-      {
-        value: versions,
-        label: versions === 1 ? 'Version' : 'Versions',
-        hint: 'Every version of every workfile, counted separately',
-      },
-      { value: layers, label: 'Layers written' },
-      {
-        value: untraced,
-        label: 'Untraceable',
-        accent: untraced ? 'var(--warn)' : undefined,
-        hint: 'Layers with no hip_file, so what produced them cannot be traced',
-      },
-    ]),
-  )
-  return root
-}
-
-function fileBox(file: Workfile, context: PageContext): HTMLElement {
   const state = pageState.workfiles
-  const open = state.expanded === file.key
+  const side = el('aside', 'split__side')
 
-  const glyph = icon(ICONS.hip)
-  glyph.setAttribute('class', 'ebox__icon')
-
-  const name = el('span', 'ebox__name ebox__name--mono', file.label)
-  if (file.unrecorded) name.classList.add('is-absent')
-
-  const lead: Element[] = [glyph, name]
-
-  // The newest version is the one you are most likely to be asked about, so
-  // it rides on the collapsed row rather than hiding inside.
-  const newest = file.versions[0]
-  if (!file.unrecorded && newest?.name.versionLabel) {
-    const tag = el('span', 'ver ver--latest', newest.name.versionLabel)
-    tag.title = `Latest version: ${newest.name.full}`
-    lead.push(tag)
-  }
-
-  const artists = artistsOf(file.rows)
-  if (artists.length) lead.push(el('span', 'ebox__note', artists.join(', ')))
-
-  const trail: Element[] = []
-  if (!file.unrecorded && file.versions.length > 1) {
-    const count = countBadge(`${file.versions.length} versions`)
-    count.title = file.versions.map((version) => version.name.full).join('\n')
-    trail.push(count)
-  }
-  const when = latest(file.rows)
-  if (when) {
-    const stamp = el('span', 'ebox__count', formatRelative(when))
-    stamp.title = formatMoment(when)
-    trail.push(stamp)
-  }
-  trail.push(
-    el(
-      'span',
-      'ebox__count',
-      `${file.rows.length} ${file.rows.length === 1 ? 'layer' : 'layers'}`,
-    ),
+  const head = el('div', 'split__sideHead')
+  const named = workfiles.filter((file) => !file.unrecorded).length
+  head.appendChild(
+    searchField({
+      placeholder: `Filter ${plural(named, 'workfile')}`,
+      value: state.query,
+      variant: 'rail',
+      onInput: nextFrame((value: string) => {
+        state.query = value.trim()
+        context.refresh()
+      }),
+    }),
   )
+  side.appendChild(head)
 
-  return disclosure({
-    open,
-    dimmed: state.expanded !== null,
-    lead,
-    trail,
-    onToggle: () => {
-      state.expanded = open ? null : file.key
-      context.refresh()
-    },
-    panel: () => versionsPanel(file),
-  })
-}
-
-function versionsPanel(file: Workfile): HTMLElement {
-  const panel = el('div', 'epanel')
-
-  if (file.unrecorded) {
-    panel.appendChild(
-      emptyState('These layers carry no hip_file, so what produced them cannot be traced.', {
+  const list = el('div', 'split__list')
+  list.setAttribute('role', 'listbox')
+  if (!workfiles.length) {
+    list.appendChild(
+      emptyState('No published layers found.', {
         inline: true,
+        body: 'Publishing records `hip_file` in each layer; nothing here has one yet.',
       }),
     )
+  } else if (!visible.length) {
+    list.appendChild(emptyState('Nothing matches.', { inline: true }))
   }
 
-  for (const version of file.versions) {
-    panel.appendChild(versionBlock(file, version))
-  }
-  return panel
+  for (const file of visible) list.appendChild(workfileRow(file, file === selected, context))
+  side.appendChild(list)
+  return side
 }
 
-function versionBlock(file: Workfile, version: Version): HTMLElement {
-  const block = el('div', 'ver-block')
+function workfileRow(file: Workfile, on: boolean, context: PageContext): HTMLElement {
+  const row = el(
+    'button',
+    `split__row${on ? ' is-on' : ''}${file.unrecorded ? ' split__row--absent' : ''}`,
+  )
+  row.setAttribute('role', 'option')
+  row.setAttribute('aria-selected', String(on))
 
-  // An unversioned workfile has exactly one section, and a heading saying
-  // "no version" would be noise, so it goes straight to the table.
-  if (!file.unrecorded && version.name.versionLabel) {
-    const head = el('div', 'ver-block__head')
-    head.appendChild(el('span', 'ver', version.name.versionLabel))
-    head.appendChild(truncated(version.name.full, 'ver-block__file'))
+  const text = el('span', 'split__rowText')
+  text.appendChild(el('span', `split__rowName${file.unrecorded ? '' : ' split__rowName--mono'}`, file.label))
+  const sub = file.unrecorded
+    ? [plural(file.rows.length, 'layer'), 'untraceable']
+    : [
+        artistsOf(file.rows).join(', ') || null,
+        plural(file.versions.length, 'version'),
+        plural(file.rows.length, 'layer'),
+      ].filter(Boolean)
+  text.appendChild(el('span', 'split__rowSub', sub.join(' · ')))
+  row.appendChild(text)
 
-    const meta = el('span', 'ver-block__meta')
-    const artists = artistsOf(version.rows)
-    if (artists.length) meta.appendChild(el('span', undefined, artists.join(', ')))
+  const newest = file.versions[0]?.name.versionLabel
+  if (!file.unrecorded && newest) {
+    const tag = el('span', 'ver', newest)
+    tag.title = `Latest version: ${file.versions[0]!.name.full}`
+    row.appendChild(tag)
+  }
 
-    const when = latest(version.rows)
-    if (when) {
-      const stamp = el('span', undefined, formatRelative(when))
-      stamp.title = formatMoment(when)
-      meta.appendChild(stamp)
-    }
-    meta.appendChild(
+  row.addEventListener('click', () => {
+    pageState.workfiles.selected = file.key
+    context.refresh()
+  })
+  return row
+}
+
+// ---------------------------------------------------------------------------
+// One workfile in full
+// ---------------------------------------------------------------------------
+
+function buildDetail(file: Workfile | null): HTMLElement {
+  const detail = el('section', 'split__detail')
+  if (!file) {
+    detail.appendChild(
+      emptyState('No workfiles', {
+        icon: 'hip',
+        body: 'Publishing records `hip_file` in each layer; nothing here has one yet.',
+      }),
+    )
+    return detail
+  }
+
+  detail.appendChild(detailHead(file))
+
+  const body = el('div', 'wfl__body')
+  if (file.unrecorded) {
+    body.appendChild(
       el(
-        'span',
-        undefined,
-        `${version.rows.length} ${version.rows.length === 1 ? 'layer' : 'layers'}`,
+        'p',
+        'wfl__note',
+        'These layers carry no hip_file, so what produced them cannot be traced. Publish them again from a workfile to fill it in.',
       ),
     )
-    head.appendChild(meta)
-    block.appendChild(head)
+    body.appendChild(outputs(file.rows))
+    detail.appendChild(body)
+    return detail
   }
 
-  block.appendChild(outputs(version.rows))
-  return block
+  const timeline = el('div', 'vtl')
+  file.versions.forEach((version, index) => {
+    timeline.appendChild(versionEntry(version, index === 0))
+  })
+  body.appendChild(timeline)
+  detail.appendChild(body)
+  return detail
 }
 
+function detailHead(file: Workfile): HTMLElement {
+  const head = el('header', 'split__head')
+
+  const title = el('div', 'split__title')
+  const line = el('div', 'split__titleLine')
+  line.appendChild(
+    el('h1', `split__name${file.unrecorded ? '' : ' split__name--mono'}`, file.label),
+  )
+  const newest = file.versions[0]?.name.versionLabel
+  if (!file.unrecorded && newest) line.appendChild(el('span', 'ver ver--latest', `${newest} latest`))
+  title.appendChild(line)
+
+  const sub = file.unrecorded
+    ? ['Layers that recorded no workfile']
+    : [artistsOf(file.rows).join(', '), `last written ${formatRelative(latest(file.rows))}`]
+  title.appendChild(el('p', 'split__sub', sub.filter(Boolean).join(' · ')))
+  head.appendChild(title)
+
+  const rops = new Set(file.rows.map((row) => row.layer.pipeline.ropPath).filter(Boolean))
+  const stats: HeadStat[] = []
+  if (!file.unrecorded) {
+    stats.push({ value: file.versions.length, label: file.versions.length === 1 ? 'version' : 'versions' })
+  }
+  stats.push({ value: file.rows.length, label: 'layers written' })
+  if (!file.unrecorded) stats.push({ value: rops.size, label: rops.size === 1 ? 'ROP' : 'ROPs' })
+  head.appendChild(headStats(stats))
+  return head
+}
+
+/** One version on the timeline: when, how much, and the layers it wrote. */
+function versionEntry(version: Version, newest: boolean): HTMLElement {
+  const entry = el('section', `vtl__entry${newest ? ' is-newest' : ''}`)
+
+  const when = latest(version.rows)
+  const gutter = el('div', 'vtl__gutter')
+  gutter.appendChild(el('span', 'vtl__version', version.name.versionLabel ?? 'unversioned'))
+  if (when) {
+    const ago = el('span', 'vtl__meta', formatRelative(when))
+    ago.title = formatMoment(when)
+    gutter.appendChild(ago)
+  }
+  gutter.appendChild(el('span', 'vtl__meta', plural(version.rows.length, 'layer')))
+  entry.appendChild(gutter)
+
+  entry.appendChild(el('span', 'vtl__dot'))
+
+  const main = el('div', 'vtl__main')
+  const head = el('div', 'vtl__head')
+  head.appendChild(truncated(version.name.full, 'vtl__file'))
+  if (when) head.appendChild(el('span', 'vtl__date', formatShortMoment(when)))
+  main.appendChild(head)
+  main.appendChild(outputs(version.rows))
+  entry.appendChild(main)
+  return entry
+}
+
+/** The layers written, the file first: it is what anyone downstream uses. */
 function outputs(rows: TaskRow[]): HTMLElement {
   // Sorting by ROP keeps the outputs of one part of the stage together, since
   // ROP paths share a prefix per network.
@@ -294,16 +343,17 @@ function outputs(rows: TaskRow[]): HTMLElement {
 
   return dataTable(
     [
+      { label: 'Writes', width: 'minmax(0, 1.3fr)' },
       { label: 'ROP', width: 'minmax(0, 1fr)' },
-      { label: 'Writes', width: 'minmax(0, 1.2fr)' },
-      { label: 'Entity', width: 'minmax(0, 0.8fr)' },
-      { label: 'Status', width: '120px', end: true },
+      { label: 'Entity', width: 'minmax(0, 0.7fr)' },
+      { label: 'Status', width: '110px', end: true },
     ],
     sorted.map((row) => ({
       title: row.layer.path,
+      layerPath: row.layer.path,
       cells: [
-        truncated(ropLabel(row.layer.pipeline.ropPath), 'mono dim'),
         namedCell(row.layer.name, { mono: true, strong: true }),
+        truncated(ropLabel(row.layer.pipeline.ropPath), 'mono dim'),
         namedCell(row.entity.name, { status: row.entity.status }),
         statusPill(row.layer.pipeline.status, true),
       ],

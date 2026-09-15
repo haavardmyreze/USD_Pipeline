@@ -397,6 +397,11 @@ export class GraphView {
   private bindStage(): void {
     this.stage.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 && event.button !== 1) return
+      // The controls floating over the stage — toolbar, key, zoom — are not
+      // the graph: pressing one must neither pan nor clear the selection.
+      if ((event.target as HTMLElement).closest('.gbar > *, .gbar__arcs > *, .gkey, .zoomctl, .empty')) {
+        return
+      }
 
       // Grab it mid-flight: stop wherever it is on screen and pan from there.
       this.camera.halt()

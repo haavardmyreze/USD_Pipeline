@@ -37,6 +37,7 @@ export const ICONS = {
   /** Two chevrons closing upwards — collapse everything. */
   collapseAll: '<path d="m4 7 4-3.6L12 7"/><path d="m4 12.6 4-3.6 4 3.6"/>',
   search: '<circle cx="7" cy="7" r="4.6"/><path d="m10.6 10.6 3 3"/>',
+  close: '<path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/>',
   user: '<circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.4a5 5 0 0 1 10 0"/>',
   clock: '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.4V8l2.4 1.6"/>',
   hip: '<path d="M9.6 1.8H4.6A1.4 1.4 0 0 0 3.2 3.2v9.6a1.4 1.4 0 0 0 1.4 1.4h6.8a1.4 1.4 0 0 0 1.4-1.4V5.2z"/><path d="M9.6 1.8v3.6h3.2"/><path d="M5.6 9h4.8M5.6 11.2h3"/>',

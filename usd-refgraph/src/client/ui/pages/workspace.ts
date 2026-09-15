@@ -1,199 +1,235 @@
 /**
- * Entities as a stack of boxes, grouped by category or sequence.
+ * The workspace as a split browser: every entity in a list on the left, one
+ * entity in full on the right.
  *
- * One entity opens at a time and the rest dim back, so the thing you are
- * looking at is unambiguous. Each row carries enough to scan without opening
- * it — its rolled-up state and how many layers it has — and opening it shows
- * every published layer with its full record.
+ * The list is for finding — a filter, a tier switch, and a strip per entity
+ * with one mark per published file, so its state reads without opening it.
+ * The right side is for reading: a card per published file with its whole
+ * publish record, and beside them what the entity uses, what uses it, and
+ * what sits in its folder.
+ *
+ * Blocks are free-form. A card is labelled with whatever block token the
+ * file carries, and nothing here assumes a fixed set of steps.
  */
 
-import type { ProjectEntity, ProjectLayer } from '@shared/project'
-import type { Status } from '@shared/pipeline'
+import type { Project, ProjectEntity, ProjectLayer } from '@shared/project'
 import type { NodeTier } from '@shared/types'
-import { STATUS_ALL, entitySort, entityTarget } from '@shared/project'
+import { entityLayers, entitySort, entityTarget, layerStep } from '@shared/project'
 import {
   CATEGORY_COLOR,
-  STATUS_LABEL,
   button,
-  chip,
-  chipRow,
-  disclosure,
   emptyState,
-  filterChips,
-  Facts,
-  groupHead,
   hashHue,
-  namedCell,
+  markLayer,
   searchField,
   statusDot,
   statusPill,
+  statusStrip,
   tabs,
   truncated,
 } from '../kit'
-import { el, formatBytes, formatMoment, matches, nextFrame } from '../../util'
+import { clear, el, formatBytes, formatRelative, formatShortMoment, matches, nextFrame } from '../../util'
 import { pageState, type PageContext } from './context'
-import { pageShell } from './shell'
 
-const TIERS: { value: NodeTier; label: string }[] = [
+const TIER_TABS: { value: NodeTier | 'all'; label: string }[] = [
+  { value: 'all', label: 'All' },
   { value: 'asset', label: 'Assets' },
   { value: 'set', label: 'Sets' },
   { value: 'shot', label: 'Shots' },
 ]
 
+const TIER_HEADING: Record<NodeTier, string> = {
+  asset: 'Assets',
+  set: 'Sets',
+  shot: 'Shots',
+}
+
 export function renderWorkspace(host: HTMLElement, context: PageContext): void {
   const state = pageState.workspace
   const { project } = context
 
-  const tierTabs = tabs(
-    TIERS.map((tier) => ({
-      ...tier,
-      count: project.entities.filter((entity) => entity.tier === tier.value).length,
-    })),
-    state.tier,
-    (tier) => {
-      state.tier = tier
-      state.expanded = null
-      context.refresh()
-    },
-  )
+  // The list keeps its own scroll, which a re-render would otherwise lose.
+  const listScroll = host.querySelector('.split__list')?.scrollTop ?? 0
+  const detailScroll = host.querySelector('.split__detail')?.scrollTop ?? 0
+  const refocusFilter = document.activeElement?.closest('.split__side .search') !== null
+    && host.contains(document.activeElement)
 
-  const controls = el('div', 'page__controls')
-  controls.appendChild(
+  const visible = project.entities
+    .filter((entity) => state.tier === 'all' || entity.tier === state.tier)
+    .filter((entity) => !state.query || matches(entity.name, state.query))
+    .sort(tierThenName)
+
+  // Keep the selection while it is still in the list; otherwise land on the
+  // first entry, so the right side is never empty when there is anything.
+  let selected = project.entities.find((entity) => entity.name === state.selected) ?? null
+  if (!selected || !visible.includes(selected)) selected = visible[0] ?? null
+  state.selected = selected?.name ?? null
+
+  clear(host)
+  const split = el('div', 'split')
+  split.appendChild(buildSide(project, visible, selected, context))
+  split.appendChild(buildDetail(project, selected, context))
+  host.appendChild(split)
+
+  split.querySelector('.split__list')!.scrollTop = listScroll
+  split.querySelector('.split__detail')!.scrollTop = detailScroll
+  if (refocusFilter) {
+    const field = split.querySelector<HTMLInputElement>('.split__side input')
+    field?.focus()
+    field?.setSelectionRange(field.value.length, field.value.length)
+  }
+}
+
+/** Assets, then sets, then shots; shots in sequence order, the rest by name. */
+function tierThenName(a: ProjectEntity, b: ProjectEntity): number {
+  const order: NodeTier[] = ['asset', 'set', 'shot']
+  return order.indexOf(a.tier) - order.indexOf(b.tier) || entitySort(a, b)
+}
+
+// ---------------------------------------------------------------------------
+// The list
+// ---------------------------------------------------------------------------
+
+function buildSide(
+  project: Project,
+  visible: ProjectEntity[],
+  selected: ProjectEntity | null,
+  context: PageContext,
+): HTMLElement {
+  const state = pageState.workspace
+  const side = el('aside', 'split__side')
+
+  const head = el('div', 'split__sideHead')
+  head.appendChild(
     searchField({
-      placeholder: 'Filter by name',
+      placeholder: `Filter ${project.entities.length} entities`,
       value: state.query,
-      variant: 'inline',
+      variant: 'rail',
       onInput: nextFrame((value: string) => {
         state.query = value.trim()
         context.refresh()
-        focusSearch()
       }),
     }),
   )
-  controls.appendChild(
-    filterChips<Status>(
-      'Status',
-      STATUS_ALL.map((status) => ({ value: status, label: STATUS_LABEL[status], status })),
-      state.hiddenStatus,
-      (status) => {
-        if (state.hiddenStatus.has(status)) state.hiddenStatus.delete(status)
-        else state.hiddenStatus.add(status)
+  head.appendChild(
+    tabs(
+      TIER_TABS.map((tier) => ({
+        ...tier,
+        count: project.entities.filter((e) => tier.value === 'all' || e.tier === tier.value).length,
+      })),
+      state.tier,
+      (tier) => {
+        state.tier = tier
         context.refresh()
       },
     ),
   )
+  side.appendChild(head)
 
-  const body = pageShell(host, 'Workspace', { tabs: tierTabs, controls })
-
-  const entities = project.entities
-    .filter((entity) => entity.tier === state.tier)
-    .filter((entity) => !state.hiddenStatus.has(entity.status))
-    .filter((entity) => !state.query || matches(entity.name, state.query))
-    .sort(entitySort)
-
-  if (!entities.length) {
-    body.appendChild(
-      emptyState(
-        state.query || state.hiddenStatus.size
-          ? 'Nothing matches the current filters.'
-          : `No ${state.tier}s found in this project.`,
-        {
-          icon: 'inbox',
-          body:
-            state.query || state.hiddenStatus.size
-              ? 'Clear the filter box or switch a status back on.'
-              : 'The scan looks for assets, sets and shots directly under the project root.',
-        },
-      ),
-    )
-    return
+  const list = el('div', 'split__list')
+  list.setAttribute('role', 'listbox')
+  if (!visible.length) {
+    list.appendChild(emptyState('Nothing matches.', { inline: true, body: 'Clear the filter or pick another tier.' }))
   }
 
-  const stack = el('div', 'stack')
-  for (const [group, members] of groupEntities(entities, state.tier)) {
-    stack.appendChild(groupBlock(group, members, context))
+  let lastGroup = ''
+  for (const entity of visible) {
+    const group = groupLabel(entity)
+    if (group !== lastGroup) {
+      list.appendChild(el('div', 'split__group', group))
+      lastGroup = group
+    }
+    list.appendChild(entityRow(entity, entity === selected, context))
   }
-  body.appendChild(stack)
+  side.appendChild(list)
+  return side
 }
 
-/** Assets group by category, shots by sequence, sets stay in one list. */
-function groupEntities(
-  entities: ProjectEntity[],
-  tier: NodeTier,
-): [string | null, ProjectEntity[]][] {
-  if (tier === 'set') return [[null, entities]]
-
-  const groups = new Map<string, ProjectEntity[]>()
-  for (const entity of entities) {
-    const key = tier === 'shot' ? entity.sequence ?? 'misc' : entity.category ?? 'other'
-    const list = groups.get(key)
-    if (list) list.push(entity)
-    else groups.set(key, [entity])
-  }
-  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))
+/** Shots group by sequence; assets and sets are one group each. */
+function groupLabel(entity: ProjectEntity): string {
+  if (entity.tier === 'shot' && entity.sequence) return `Shots · ${entity.sequence}`
+  return TIER_HEADING[entity.tier]
 }
 
-function groupBlock(
-  group: string | null,
-  entities: ProjectEntity[],
+function entityRow(entity: ProjectEntity, on: boolean, context: PageContext): HTMLElement {
+  const row = el('button', `split__row${on ? ' is-on' : ''}`)
+  row.setAttribute('role', 'option')
+  row.setAttribute('aria-selected', String(on))
+
+  row.appendChild(statusDot(entity.status))
+
+  const text = el('span', 'split__rowText')
+  text.appendChild(el('span', 'split__rowName', entity.name))
+  const files = entityLayers(entity)
+  const sub = [
+    entity.category ?? null,
+    `${files.length} ${files.length === 1 ? 'layer' : 'layers'}`,
+    latestArtist(files),
+  ].filter(Boolean)
+  text.appendChild(el('span', 'split__rowSub', sub.join(' · ')))
+  row.appendChild(text)
+
+  row.appendChild(
+    statusStrip(files.map((file) => ({ status: file.pipeline.status, label: layerStep(file) }))),
+  )
+  row.addEventListener('click', () => {
+    pageState.workspace.selected = entity.name
+    context.refresh()
+  })
+  return row
+}
+
+// ---------------------------------------------------------------------------
+// The entity in full
+// ---------------------------------------------------------------------------
+
+function buildDetail(
+  project: Project,
+  entity: ProjectEntity | null,
   context: PageContext,
 ): HTMLElement {
-  const block = el('div', 'stack__group')
-
-  if (group) {
-    block.appendChild(
-      groupHead(
-        group,
-        `${entities.length} ${entities.length === 1 ? 'entry' : 'entries'}`,
-        CATEGORY_COLOR[group] ?? hashHue(group),
-      ),
+  const detail = el('section', 'split__detail')
+  if (!entity) {
+    detail.appendChild(
+      emptyState('No entities', {
+        icon: 'inbox',
+        body: 'The scan looks for assets, sets and shots directly under the project root.',
+      }),
     )
+    return detail
   }
 
-  const list = el('div', 'stack__list')
-  for (const entity of entities) list.appendChild(entityBox(entity, context))
-  block.appendChild(list)
-  return block
+  detail.appendChild(detailHead(entity, context))
+
+  const body = el('div', 'wsp__body')
+  const cards = el('div', 'wsp__cards')
+  const files = entityLayers(entity)
+  if (!files.length) cards.appendChild(emptyState('Nothing published yet.', { inline: true }))
+  for (const file of files) cards.appendChild(fileCard(file))
+  body.appendChild(cards)
+  body.appendChild(relations(project, entity, context))
+  detail.appendChild(body)
+  return detail
 }
 
-function entityBox(entity: ProjectEntity, context: PageContext): HTMLElement {
-  const state = pageState.workspace
-  const open = state.expanded === entity.name
-  const layerCount = entity.blocks.length + (entity.assembly ? 1 : 0)
+function detailHead(entity: ProjectEntity, context: PageContext): HTMLElement {
+  const head = el('header', 'split__head')
 
-  const lead: HTMLElement[] = [
-    statusDot(entity.status),
-    el('span', 'ebox__name', entity.name),
-  ]
-  if (entity.dependsOn.length) {
-    const uses = el('span', 'ebox__note', `uses ${entity.dependsOn.length}`)
-    uses.title = `Uses ${entity.dependsOn.join(', ')}`
-    lead.push(uses)
+  const title = el('div', 'split__title')
+  const line = el('div', 'split__titleLine')
+  line.appendChild(el('h1', 'split__name', entity.name))
+  line.appendChild(statusPill(entity.status, true))
+  const badge = entity.category ?? entity.sequence
+  if (badge) {
+    const tag = el('span', 'split__badge', badge)
+    tag.style.setProperty('--badge', CATEGORY_COLOR[badge] ?? hashHue(badge))
+    line.appendChild(tag)
   }
+  title.appendChild(line)
+  title.appendChild(truncated(entity.dir, 'split__path'))
+  head.appendChild(title)
 
-  return disclosure({
-    open,
-    dimmed: state.expanded !== null,
-    lead,
-    trail: [
-      statusPill(entity.status, true),
-      el('span', 'ebox__count', `${layerCount} ${layerCount === 1 ? 'layer' : 'layers'}`),
-    ],
-    onToggle: () => {
-      state.expanded = open ? null : entity.name
-      context.refresh()
-    },
-    panel: () => entityPanel(entity, context),
-  })
-}
-
-function entityPanel(entity: ProjectEntity, context: PageContext): HTMLElement {
-  const panel = el('div', 'epanel')
-
-  const bar = el('div', 'epanel__bar')
-  bar.appendChild(truncated(entity.dir, 'epanel__path'))
-
-  const actions = el('div', 'epanel__actions')
+  const actions = el('div', 'split__actions')
   const target = entityTarget(entity)
   if (target) {
     actions.appendChild(
@@ -207,132 +243,141 @@ function entityPanel(entity: ProjectEntity, context: PageContext): HTMLElement {
     )
   }
   actions.appendChild(
-    button('Copy path', {
-      icon: 'copy',
-      small: true,
-      onClick: () => context.copyPath(entity.dir),
-    }),
+    button('Copy path', { icon: 'copy', small: true, onClick: () => context.copyPath(entity.dir) }),
   )
   actions.appendChild(
-    button('Reveal', {
-      icon: 'external',
-      small: true,
-      onClick: () => context.reveal(entity.dir),
-    }),
+    button('Reveal', { icon: 'external', small: true, onClick: () => context.reveal(entity.dir) }),
   )
-  bar.appendChild(actions)
-  panel.appendChild(bar)
-
-  if (entity.dependsOn.length) {
-    const byName = new Map(context.project.entities.map((e) => [e.name, e]))
-    panel.appendChild(
-      chipRow(
-        entity.dependsOn.map((name) => {
-          const other = byName.get(name)
-          return chip(name, {
-            status: other?.status,
-            accent: other?.category ? CATEGORY_COLOR[other.category] : undefined,
-          })
-        }),
-        'Uses',
-      ),
-    )
-  }
-
-  const layers: { label: string; layer: ProjectLayer }[] = []
-  if (entity.assembly) layers.push({ label: 'assembly', layer: entity.assembly })
-  for (const block of entity.blocks) {
-    layers.push({ label: block.block ?? 'block', layer: block })
-  }
-
-  if (!layers.length) {
-    panel.appendChild(emptyState('Nothing published yet.', { inline: true }))
-    return panel
-  }
-
-  for (const { label, layer } of layers) {
-    panel.appendChild(taskBlock(label, layer))
-  }
-
-  // Textures live inside the task that references them, above. Anything left
-  // over is sitting in the folder unused, which is worth saying out loud.
-  if (entity.unusedTextures.length) {
-    panel.appendChild(
-      chipRow(
-        entity.unusedTextures.map((texture) =>
-          chip(texture.name, { mono: true, muted: true, title: texture.path }),
-        ),
-        'Unused',
-      ),
-    )
-  }
-  return panel
+  head.appendChild(actions)
+  return head
 }
 
-function taskBlock(label: string, layer: ProjectLayer): HTMLElement {
-  const block = el('div', 'task')
+/** A published file and its whole record. Picking it opens the file panel. */
+function fileCard(file: ProjectLayer): HTMLElement {
+  const card = markLayer(el('article', 'fcard'), file.path)
+  card.title = file.path
 
-  const head = el('div', 'task__head')
-  head.appendChild(el('span', 'task__label', label))
-  head.appendChild(statusPill(layer.pipeline.status))
-  head.appendChild(el('span', 'task__spacer'))
-  head.appendChild(namedCell(layer.name, { mono: true, title: layer.path }))
-  block.appendChild(head)
+  const lead = el('div', 'fcard__lead')
+  lead.appendChild(el('span', 'fcard__step', layerStep(file)))
+  lead.appendChild(statusPill(file.pipeline.status, true))
+  card.appendChild(lead)
 
-  const facts = new Facts({ columns: true })
-  facts.add('Artist', layer.pipeline.artist)
-  facts.add(
-    'Published',
-    layer.pipeline.exportedAt ? formatMoment(layer.pipeline.exportedAt) : null,
-  )
-  facts.add('Workfile', layer.pipeline.hipFile)
-  facts.add('ROP', layer.pipeline.ropPath)
-  facts.add('Size', layer.size !== null ? formatBytes(layer.size) : null)
-  if (layer.pipeline.status === 'unknown' && layer.pipeline.statusRaw) {
-    facts.add('Status as written', layer.pipeline.statusRaw)
+  const main = el('div', 'fcard__main')
+  const top = el('div', 'fcard__top')
+  top.appendChild(truncated(file.name, 'fcard__file'))
+  const when = file.pipeline.exportedAt ?? file.mtime
+  if (when) top.appendChild(el('span', 'fcard__when', formatRelative(when)))
+  main.appendChild(top)
+
+  const record = file.pipeline
+  const facts = el('div', 'fcard__facts')
+  const fact = (text: string | null | undefined, mono = false): void => {
+    if (text) facts.appendChild(truncated(text, mono ? 'fcard__fact fcard__fact--mono' : 'fcard__fact'))
   }
-  for (const [key, value] of Object.entries(layer.pipeline.extra ?? {})) {
-    facts.add(key, value)
-  }
-  if (!facts.isEmpty) block.appendChild(facts.root)
+  fact(record.artist)
+  fact(record.exportedAt ? formatShortMoment(record.exportedAt) : null)
+  fact(record.hipFile, true)
+  fact(record.ropPath, true)
+  fact(file.size !== null ? formatBytes(file.size) : null)
+  if (facts.childElementCount) main.appendChild(facts)
 
-  if (layer.textures?.length) {
-    block.appendChild(
-      chipRow(
-        layer.textures.map((texture) =>
-          chip(texture.name, {
-            mono: true,
-            muted: !texture.exists,
-            title: [
-              texture.rawPath,
-              texture.attribute ?? '',
-              texture.exists ? '' : 'Not found on disk',
-            ]
-              .filter(Boolean)
-              .join('\n'),
-          }),
-        ),
-        'Textures',
-      ),
-    )
+  if (record.comment) main.appendChild(el('p', 'fcard__comment', record.comment))
+
+  if (file.textures?.length) {
+    const chips = el('div', 'fcard__textures')
+    for (const texture of file.textures) {
+      const missing = !texture.exists && !texture.template
+      const chip = el('span', `tchip${missing ? ' tchip--missing' : ''}`, texture.name)
+      if (missing) chip.appendChild(el('span', 'tchip__note', 'missing'))
+      chip.title = [texture.rawPath, texture.attribute ?? ''].filter(Boolean).join('\n')
+      chips.appendChild(chip)
+    }
+    main.appendChild(chips)
   }
 
-  if (layer.pipeline.comment) {
-    block.appendChild(el('p', 'task__comment', layer.pipeline.comment))
-  }
-  if (layer.error) {
-    block.appendChild(el('p', 'task__error', layer.error))
-  }
-  return block
+  if (file.error) main.appendChild(el('p', 'fcard__error', file.error))
+  card.appendChild(main)
+  return card
 }
 
-/**
- * Re-rendering replaces the filter field, so put the caret back afterwards —
- * otherwise typing a second character would go nowhere.
- */
-function focusSearch(): void {
-  const field = document.querySelector<HTMLInputElement>('.search--inline input')
-  if (!field) return
-  field.focus()
-  field.setSelectionRange(field.value.length, field.value.length)
+function relations(project: Project, entity: ProjectEntity, context: PageContext): HTMLElement {
+  const column = el('div', 'wsp__aside')
+  const byName = new Map(project.entities.map((e) => [e.name, e]))
+
+  const uses = entity.dependsOn.map((name) => byName.get(name)).filter(isEntity)
+  const usedBy = project.entities.filter((other) => other.dependsOn.includes(entity.name))
+
+  column.appendChild(relationCard('Uses', uses, 'Pulls in no other entity.', context))
+  column.appendChild(relationCard('Used by', usedBy, 'Nothing else pulls this in.', context))
+  column.appendChild(folderCard(entity))
+  return column
+}
+
+function relationCard(
+  title: string,
+  entities: ProjectEntity[],
+  empty: string,
+  context: PageContext,
+): HTMLElement {
+  const card = el('section', 'rcard')
+  card.appendChild(el('h2', 'rcard__title', title))
+  if (!entities.length) {
+    card.appendChild(el('p', 'rcard__empty', empty))
+    return card
+  }
+  for (const other of entities) {
+    const row = el('button', 'rcard__row')
+    row.appendChild(statusDot(other.status))
+    row.appendChild(el('span', 'rcard__name', other.name))
+    row.appendChild(el('span', 'rcard__note', TIER_HEADING[other.tier].slice(0, -1).toLowerCase()))
+    row.title = `Show ${other.name}`
+    row.addEventListener('click', () => {
+      const state = pageState.workspace
+      state.selected = other.name
+      // The entity has to be in the list to be shown, so widen it if needed.
+      if (state.tier !== 'all' && state.tier !== other.tier) state.tier = 'all'
+      if (state.query && !matches(other.name, state.query)) state.query = ''
+      context.refresh()
+    })
+    card.appendChild(row)
+  }
+  return card
+}
+
+function folderCard(entity: ProjectEntity): HTMLElement {
+  const card = el('section', 'rcard')
+  card.appendChild(el('h2', 'rcard__title', 'Folder'))
+  const list = el('div', 'rcard__files')
+  for (const file of entityLayers(entity)) list.appendChild(truncated(file.name, 'rcard__file'))
+  if (entity.textures.length) {
+    const count = entity.textures.length
+    list.appendChild(
+      el('span', 'rcard__file rcard__file--dim', `${count} texture ${count === 1 ? 'file' : 'files'}`),
+    )
+  }
+  for (const texture of entity.unusedTextures) {
+    const line = truncated(`${texture.name} · unused`, 'rcard__file rcard__file--dim')
+    line.title = `${texture.path}\nNo layer references this file`
+    list.appendChild(line)
+  }
+  if (!list.childElementCount) list.appendChild(el('p', 'rcard__empty', 'Empty.'))
+  card.appendChild(list)
+  return card
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function latestArtist(files: ProjectLayer[]): string | null {
+  let best: ProjectLayer | null = null
+  for (const file of files) {
+    if (!file.pipeline.artist) continue
+    if (!best || (file.pipeline.exportedAt ?? 0) > (best.pipeline.exportedAt ?? 0)) best = file
+  }
+  return best?.pipeline.artist ?? null
+}
+
+function isEntity(value: ProjectEntity | undefined): value is ProjectEntity {
+  return value !== undefined
 }

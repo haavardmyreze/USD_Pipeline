@@ -23,10 +23,11 @@ import { Inspector, toast } from './ui/inspector'
 import { SceneTree } from './ui/scene'
 import { FilePicker } from './ui/picker'
 import { ShortcutSheet } from './ui/shortcuts'
-import { Sidebar } from './ui/sidebar'
+import { ArcBar, STRUCTURAL_ARCS } from './ui/arcbar'
 import { button, emptyState } from './ui/kit'
 import { copyText, debounce, displayName, matches, must, nextFrame, truncateStart } from './util'
-import { isPresent } from './ui/presence'
+import { dismiss, isPresent, present } from './ui/presence'
+import { readRecord } from '@shared/pipeline'
 
 const RECENT_KEY = 'usd-refgraph:recent'
 const MAX_RECENT = 6
@@ -61,6 +62,14 @@ class App {
   private rootPath: string | null = null
   private selectedId: string | null = null
 
+  /**
+   * The file open in the panel on a project page: its path, picked from a
+   * list, and a shallow crawl from it once that arrives.
+   */
+  private filePanel: { path: string; graph: Graph | null } | null = null
+  /** Bumped per pick, so a slow crawl cannot land after a newer one. */
+  private filePanelToken = 0
+
   /** Arc kinds the user has switched off in the legend or the toolbar. */
   private hiddenArcs = new Set<ArcKind>()
   private missingOnly = false
@@ -70,7 +79,7 @@ class App {
   private busy = false
 
   private readonly view: GraphView
-  private readonly sidebar: Sidebar
+  private readonly arcbar: ArcBar
   private readonly inspector: Inspector
   private readonly scene: SceneTree
   private readonly picker: FilePicker
@@ -85,6 +94,11 @@ class App {
     loadingText: must<HTMLElement>('#loading-text'),
     rootName: must<HTMLElement>('#root-name'),
     rootPath: must<HTMLElement>('#root-path'),
+    rootDot: must<HTMLElement>('#root-dot'),
+    layerPop: must<HTMLElement>('#layer-pop'),
+    openLayer: must<HTMLButtonElement>('#open-layer'),
+    missingCount: must<HTMLElement>('#missing-count'),
+    graphStats: must<HTMLElement>('#graph-stats'),
     search: must<HTMLInputElement>('#search'),
     zoomLevel: must<HTMLElement>('#zoom-level'),
     rescan: must<HTMLButtonElement>('#btn-rescan'),
@@ -116,36 +130,60 @@ class App {
       },
     )
 
-    this.sidebar = new Sidebar({
-      onToggleArc: (kind) => this.toggleArc(kind),
+    this.arcbar = new ArcBar({
+      onChange: (hidden) => {
+        // Textures belong to their own toggle; keep whatever it says.
+        const next = new Set(hidden)
+        if (this.hiddenArcs.has('asset')) next.add('asset')
+        else next.delete('asset')
+        this.hiddenArcs = next
+        this.redraw()
+      },
     })
 
-    const focusNode = (id: string): void => {
-      this.select(id)
-      this.view.focusNode(id)
+    // A link inside the panel selects in whatever the panel is describing: the
+    // graph on the Graph page, the panel itself on a project page.
+    const selectFromPanel = (id: string, path?: string): void => {
+      if (this.page === 'graph') {
+        this.select(id)
+        this.view.focusNode(id)
+      } else {
+        this.selectInFilePanel(id, path)
+      }
     }
 
     this.scene = new SceneTree({
-      onSelectLayer: focusNode,
-      hasLayer: (id) => Boolean(this.displayed?.nodes.some((node) => node.id === id)),
+      onSelectLayer: (id, path) => selectFromPanel(id, path),
+      // Off the graph, any layer on disk can be opened in the panel by path.
+      hasLayer: (id) =>
+        this.page !== 'graph' || Boolean(this.displayed?.nodes.some((node) => node.id === id)),
       onToast: (message, kind) => toast(message, kind),
     })
 
     this.inspector = new Inspector(
       {
-        onSelect: focusNode,
+        onSelect: (id) => selectFromPanel(id),
         onSetRoot: (id) => this.setRootFromNode(id),
         onReveal: (path) => this.reveal(path),
         onToast: (message, kind) => toast(message, kind),
-        onLayout: () => {
-          if (this.selectedId) this.view.setInset(this.inspector.inset)
+        onLayout: () => this.fitAroundPanel(),
+        onClose: () => {
+          if (this.page === 'graph') this.select(null)
+          else this.closeFilePanel()
+        },
+        onOpenInGraph: (path) => {
+          this.showPage('graph')
+          void this.load(path)
         },
       },
       this.scene,
     )
 
     this.tree = new ProjectTree(must<HTMLElement>('#tree'), {
-      onPick: (layer) => void this.load(layer.path),
+      onPick: (layer) => {
+        this.toggleLayerPop(false)
+        void this.load(layer.path)
+      },
     })
 
     this.dropzone = new DropZone({
@@ -157,7 +195,6 @@ class App {
 
     this.showCapabilities(capabilities)
     this.bindChrome()
-    this.sidebar.update(null, this.hiddenArcs)
     this.showPage('overview')
   }
 
@@ -182,14 +219,15 @@ class App {
       // The crawl just re-read every layer from disk, so a remembered tree or
       // file text may describe files that have since changed.
       this.inspector.reset()
-      this.inspector.hide()
+      // A load can run behind a project page, after a scan; the panel there
+      // belongs to that page and stays open.
+      if (this.page === 'graph') this.inspector.hide()
       this.view.setInset(0)
 
       const rootNode = graph.nodes.find((node) => node.id === graph.rootId)
-      this.els.rootName.textContent = rootNode?.name ?? path
-      this.els.rootPath.textContent = truncateStart(rootNode?.dir ?? path, 52)
-      this.els.rootPath.title = rootNode?.dir ?? path
+      this.showRootCrumb()
       this.els.empty.hidden = true
+      this.els.missingCount.textContent = graph.stats.missing ? String(graph.stats.missing) : ''
 
       this.rememberRecent(path, rootNode?.name ?? path, rootNode?.dir ?? '')
       this.tree.setCurrent(path)
@@ -241,6 +279,7 @@ class App {
     resetPageState()
     this.tree.setProject(this.project)
     this.showProjectName()
+    this.showRootCrumb()
     this.renderPage()
   }
 
@@ -280,6 +319,7 @@ class App {
       if (previous !== this.project.root) resetPageState()
       this.tree.setProject(this.project)
       this.showProjectName()
+      this.showRootCrumb()
       this.renderPage()
       this.rememberRecent(dir, this.project.name, this.project.root)
     } catch (error) {
@@ -326,7 +366,19 @@ class App {
   // -- pages --------------------------------------------------------------
 
   private showPage(page: PageName): void {
+    const leaving = this.page
     this.page = page
+    // The panel belongs to the page it was opened on. A file picked on a page
+    // closes with it; the graph's own selection is kept, and comes back when
+    // the graph does.
+    if (leaving !== page) {
+      this.closeFilePanel()
+      if (page === 'graph' && this.selectedId && (this.displayed ?? this.graph)) {
+        this.select(this.selectedId)
+      } else {
+        this.inspector.hide()
+      }
+    }
     for (const section of document.querySelectorAll<HTMLElement>('.page')) {
       section.hidden = section.dataset.page !== page
     }
@@ -373,6 +425,77 @@ class App {
     else if (this.page === 'artists') renderArtists(host, context)
     else if (this.page === 'calendar') renderCalendar(host, context)
     else if (this.page === 'workfiles') renderWorkfiles(host, context)
+    // A re-render builds fresh rows; mark the open file among them again.
+    this.markOpenFile()
+  }
+
+  // -- the panel on project pages -----------------------------------------
+
+  /**
+   * Open a USD file from a project page in the panel.
+   *
+   * The panel describes graph nodes, so the file is crawled one arc deep:
+   * enough to know the file and everything it points at, cheap even for a
+   * shot root. The row is marked at once; the panel follows the crawl.
+   */
+  private async openFilePanel(path: string): Promise<void> {
+    if (this.filePanel?.path === path && this.filePanel.graph) return
+    const token = ++this.filePanelToken
+    this.filePanel = { path, graph: null }
+    this.markOpenFile()
+
+    try {
+      const graph = await getGraph(path, { includeAssets: true, maxDepth: 1 })
+      if (token !== this.filePanelToken || this.page === 'graph') return
+      this.filePanel = { path, graph }
+      this.inspector.show(graph, graph.rootId, 'file')
+      this.fitAroundPanel()
+    } catch (error) {
+      if (token !== this.filePanelToken) return
+      toast(describeFailure(error, 'Could not read that file'), 'error')
+      this.closeFilePanel()
+    }
+  }
+
+  /**
+   * A link inside the panel on a project page. A layer on disk opens in its
+   * own right; a texture or a missing file has nothing to crawl, so it is
+   * shown from the crawl already open, which knows it as an arc target.
+   */
+  private selectInFilePanel(id: string, path?: string): void {
+    const graph = this.filePanel?.graph
+    const node = graph?.nodes.find((candidate) => candidate.id === id)
+    if (graph && node && (node.kind !== 'layer' || !node.exists)) {
+      this.inspector.show(graph, id, 'file')
+      return
+    }
+    const target = path ?? node?.path
+    if (target) void this.openFilePanel(target)
+  }
+
+  private closeFilePanel(): void {
+    if (!this.filePanel) return
+    this.filePanel = null
+    this.filePanelToken++
+    this.inspector.hide()
+    this.markOpenFile()
+    this.fitAroundPanel()
+  }
+
+  /** Mark the rows standing for the file in the panel, and only those. */
+  private markOpenFile(): void {
+    const open = this.filePanel?.path
+    for (const row of document.querySelectorAll<HTMLElement>('[data-layer-path]')) {
+      row.classList.toggle('is-selected', row.dataset.layerPath === open)
+    }
+  }
+
+  /**
+   * The graph frames its camera around the panel. Project pages do not move:
+   * the panel floats over them.
+   */
+  private fitAroundPanel(): void {
+    if (this.page === 'graph' && this.selectedId) this.view.setInset(this.inspector.inset)
   }
 
   private noProjectNotice(): HTMLElement {
@@ -414,33 +537,60 @@ class App {
    * file that was only reachable through one.
    */
   private computeVisible(graph: Graph): Set<string> {
-    const allowed = graph.edges.filter((edge) => !this.hiddenArcs.has(edge.kind))
+    const isolated = this.isolatedArc(graph)
+    // An isolated kind is still reached through the others — a shot's
+    // references sit behind its sublayers — so walk every arc, and narrow to
+    // that kind afterwards.
+    const walkable = isolated
+      ? graph.edges.filter((edge) => edge.kind !== 'asset' || !this.hiddenArcs.has('asset'))
+      : graph.edges.filter((edge) => !this.hiddenArcs.has(edge.kind))
+    const allowed = isolated ? walkable.filter((edge) => edge.kind === isolated) : walkable
 
     const forward = new Map<string, string[]>()
-    for (const edge of allowed) {
+    for (const edge of walkable) {
       const list = forward.get(edge.from)
       if (list) list.push(edge.to)
       else forward.set(edge.from, [edge.to])
     }
 
+    // Breadth first, remembering how each file was first reached.
     const visible = new Set<string>([graph.rootId])
+    const parent = new Map<string, string>()
     const queue = [graph.rootId]
     while (queue.length) {
       const current = queue.shift()!
       for (const next of forward.get(current) ?? []) {
         if (visible.has(next)) continue
         visible.add(next)
+        parent.set(next, current)
         queue.push(next)
       }
     }
 
-    if (!this.missingOnly) return visible
+    let shown = visible
+    if (isolated) {
+      // The files that kind brings in, and the path from the root to each, so
+      // they are shown in context rather than floating free.
+      shown = new Set([graph.rootId])
+      for (const edge of allowed) {
+        if (!visible.has(edge.to)) continue
+        for (let id: string | undefined = edge.to; id && !shown.has(id); id = parent.get(id)) {
+          shown.add(id)
+        }
+        for (let id: string | undefined = edge.from; id && !shown.has(id); id = parent.get(id)) {
+          shown.add(id)
+        }
+      }
+    }
+
+    if (!this.missingOnly) return shown
+    const visibleForMissing = shown
 
     // Keep only broken files and whatever points at them, so the graph
     // collapses to just the problem.
     const broken = new Set(
       graph.nodes
-        .filter((node) => visible.has(node.id) && !node.exists && !node.template)
+        .filter((node) => visibleForMissing.has(node.id) && !node.exists && !node.template)
         .map((node) => node.id),
     )
     const kept = new Set<string>([graph.rootId, ...broken])
@@ -450,9 +600,19 @@ class App {
     return kept
   }
 
+  /**
+   * The one composition arc kind left switched on while the others are off,
+   * when that is the case — the arc chips' "isolated" state.
+   */
+  private isolatedArc(graph: Graph): ArcKind | null {
+    const present = STRUCTURAL_ARCS.filter((kind) => (this.graph ?? graph).stats.byArc[kind] > 0)
+    const shown = present.filter((kind) => !this.hiddenArcs.has(kind))
+    return present.length > 1 && shown.length === 1 ? shown[0]! : null
+  }
+
   private redraw(): void {
     if (!this.graph) return
-    // The sidebar keeps reporting the whole crawl: filters change the view,
+    // The arc chips keep reporting the whole crawl: filters change the view,
     // not what is on disk, and a hidden missing file is still missing.
     const display = this.assembliesOnly ? collapseToAssemblies(this.graph) : this.graph
     this.displayed = display
@@ -460,7 +620,11 @@ class App {
     this.view.render(display, visible)
     this.view.select(this.selectedId)
     this.applyQuery()
-    this.sidebar.update(this.graph, this.hiddenArcs)
+    this.arcbar.update(this.graph, this.hiddenArcs)
+
+    const depth = this.graph.stats.maxDepth
+    this.els.graphStats.textContent =
+      `${visible.size} of ${display.nodes.length} files · ${depth} ${depth === 1 ? 'level' : 'levels'} deep`
   }
 
   private applyQuery(): void {
@@ -488,13 +652,44 @@ class App {
     this.redraw()
   }
 
+  /**
+   * The graphed layer in the top bar: where it sits under the project root,
+   * then its name with its publish status. Called again once a project scan
+   * lands, since only then is "under the project root" known.
+   */
+  private showRootCrumb(): void {
+    const node = this.graph?.nodes.find((candidate) => candidate.id === this.graph?.rootId)
+    if (!node) return
+    this.els.rootName.textContent = node.name
+    this.els.openLayer.title = `${node.path}\nGraph another layer`
+
+    const root = this.project?.root
+    const inside = root && node.dir.toLowerCase().startsWith(root.toLowerCase())
+    const dirs = inside
+      ? node.dir.slice(root.length).split(/[\\/]/).filter(Boolean).join(' / ')
+      : truncateStart(node.dir, 40)
+    this.els.rootPath.textContent = dirs ? `${dirs} /` : ''
+    this.els.rootPath.title = node.dir
+
+    const status = readRecord(node.meta?.customLayerData).status
+    this.els.rootDot.hidden = status === 'unknown'
+    this.els.rootDot.className = `dot dot--${status}`
+  }
+
+  private toggleLayerPop(open = this.els.layerPop.hidden): void {
+    if (open) present(this.els.layerPop)
+    else dismiss(this.els.layerPop)
+    this.els.openLayer.setAttribute('aria-expanded', String(open))
+    if (open) must<HTMLInputElement>('#tree-filter').focus()
+  }
+
   private select(id: string | null): void {
     this.selectedId = id
     this.view.select(id)
     // Describe the graph as drawn, so the arcs listed are the arcs on screen.
     const source = this.displayed ?? this.graph
     if (id && source) {
-      this.inspector.show(source, id)
+      this.inspector.show(source, id, 'graph')
       // The panel floats over the graph; frame and centre around it.
       this.view.setInset(this.inspector.inset)
     } else {
@@ -556,7 +751,19 @@ class App {
     const openPicker = (): void => void this.openPicker()
 
     must<HTMLButtonElement>('#open-project').addEventListener('click', openPicker)
-    must<HTMLButtonElement>('#open-file').addEventListener('click', openPicker)
+    must<HTMLButtonElement>('#open-file').addEventListener('click', () => {
+      this.toggleLayerPop(false)
+      openPicker()
+    })
+    this.els.openLayer.addEventListener('click', () => this.toggleLayerPop())
+    // A pick anywhere outside the dropdown closes it.
+    document.addEventListener('pointerdown', (event) => {
+      if (this.els.layerPop.hidden) return
+      const target = event.target as Node
+      if (!this.els.layerPop.contains(target) && !this.els.openLayer.contains(target)) {
+        this.toggleLayerPop(false)
+      }
+    })
     must<HTMLButtonElement>('#empty-open').addEventListener('click', openPicker)
     must<HTMLButtonElement>('#btn-help').addEventListener('click', () =>
       this.shortcuts.toggle(),
@@ -603,6 +810,42 @@ class App {
       nextFrame(() => this.tree.setQuery(treeFilter.value)),
     )
 
+    // Any USD file a project page lists opens in the panel. Pages only mark
+    // which element is which file (`markLayer`); this one listener does the
+    // rest, so every page behaves the same. A control inside a marked row —
+    // a button, a link — keeps its own job.
+    const pages = must<HTMLElement>('#pages')
+    const pickedFile = (event: Event): string | null => {
+      const target = event.target as HTMLElement
+      const row = target.closest<HTMLElement>('[data-layer-path]')
+      if (!row || this.page === 'graph') return null
+      const control = target.closest('button, a, input, select')
+      if (control && control !== row && row.contains(control)) return null
+      return row.dataset.layerPath ?? null
+    }
+    pages.addEventListener('click', (event) => {
+      const path = pickedFile(event)
+      if (path) {
+        void this.openFilePanel(path)
+        return
+      }
+      // A click on the page's empty space puts the panel away, the way a
+      // click on the graph's background clears its selection. Controls keep
+      // their own job, and so does anything inside the panel itself.
+      const target = event.target as HTMLElement
+      const interactive = target.closest(
+        'button, a, input, select, textarea, label, [role="button"], [data-layer-path], .inspector',
+      )
+      if (this.page !== 'graph' && this.filePanel && !interactive) this.closeFilePanel()
+    })
+    pages.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      const path = pickedFile(event)
+      if (!path) return
+      event.preventDefault()
+      void this.openFilePanel(path)
+    })
+
     document.addEventListener('keydown', (event) => this.onKey(event))
 
     window.addEventListener(
@@ -620,6 +863,12 @@ class App {
       event.target instanceof HTMLSelectElement
 
     // Escape is the one key a modal does not own: it closes the sheet.
+    if (event.key === 'Escape' && !this.els.layerPop.hidden) {
+      event.preventDefault()
+      this.toggleLayerPop(false)
+      this.els.openLayer.focus()
+      return
+    }
     if (event.key === 'Escape' && this.shortcuts.isOpen) {
       event.preventDefault()
       this.shortcuts.close()
@@ -637,8 +886,10 @@ class App {
         field.blur()
       } else if (inField) {
         ;(field as HTMLElement).blur()
-      } else {
+      } else if (this.page === 'graph') {
         this.select(null)
+      } else {
+        this.closeFilePanel()
       }
       return
     }

@@ -6,10 +6,44 @@ who published it, what state it is in, and what depends on what. Six sections �
 **Graph**.
 
 The first five read the project; the **Graph** is where you go to walk it.
-They are deliberately not wired together everywhere — the tables are for
-reading, not for clicking through. The one crossing is the **Graph it** button
-on an expanded entity in the Workspace, which is an explicit action rather than
-a link hiding under a row.
+
+Any USD file those pages list — a row in Artists or Publishes, a publish in
+the Overview feed, an output in Workfiles, a file card in the Workspace —
+opens in the same detail panel the graph uses, with its **Details**,
+**Scene** and **Source** tabs, without leaving the page. It floats over the
+page exactly as it floats over the graph, the page underneath never moves, the
+picked row stays marked, and Escape closes it. Links inside the
+panel move it along to the next file.
+
+Opened from a page, the panel reads the file one arc deep, so it knows what
+the file references but not what references it; that section only appears on
+the graph. **Open in graph** switches over and crawls from the file, as does
+the **Graph it** button on a Workspace entity. The panel belongs to the page it
+was opened on: it closes when you change page, and the graph keeps its own
+selection for when you come back.
+
+**Blocks are free-form** — any token after the entity name — so no page lays
+work out in a fixed set of step columns. Wherever an entity's files are shown
+together, they are a strip with one mark per published file, coloured by its
+status and labelled with the block as written: the assembly first, then blocks
+in the order they were published.
+
+- **Overview** — the project's headline counts (still placeholder, ready to
+  build on, signed off, missing files), a publish board with every entity's
+  strip grouped by tier and sequence, the missing textures and what points at
+  them, and everything published in the last day.
+- **Workspace** — a split browser. On the left, every entity, filtered by name
+  and tier, each with its strip. On the right, the picked entity in full: a
+  card per published file with its publish record and textures (missing ones
+  in red), and beside them what the entity uses, what uses it, and what sits in
+  its folder.
+- **Artists** — everyone who publishes at once: each person's status split,
+  the entities they publish into, how many layers and when last; below it,
+  the latest from each person, or one person's whole history once picked.
+- **Publishes** — the calendar and timeline of publish times.
+- **Workfiles** — a split browser of HIP workfiles. Each one's versions run as
+  a timeline, newest first, each listing the layers it wrote: the USD file,
+  then the ROP that wrote it, the entity and its status.
 
 ## The files are the database
 
@@ -35,8 +69,8 @@ the current three.
 `hip_file` is a free string, so the **Workfiles** tab is the only place that
 reads any structure out of it. A trailing version token — `_v001`, `-v12`,
 `.v3` — marks a file as one version of a workfile rather than a workfile of its
-own, so every version groups under one box and separates by version inside it,
-newest first. A separator before the `v` is required, so a name like
+own, so every version groups under one workfile and runs as a timeline inside
+it, newest first. A separator before the `v` is required, so a name like
 `shot_rev2.hip` is left alone.
 
 Versions are told apart by the token exactly as authored: a project that has
@@ -223,7 +257,8 @@ translucent, floating chrome of macOS 26:
   hairlines.
 - **Buttons are filled capsules.** The primary action is solid blue; plain
   actions are blue text. Status pills are tinted and borderless.
-- **The Workspace's Assets / Sets / Shots switch is a segmented control.**
+- **Workspace and Workfiles are split browsers**: a list on the left, one item
+  in full on the right, each side keeping its own scroll.
 
 ## How it moves
 
@@ -317,7 +352,8 @@ things in colour says neither quickly.
 for an asset, cyan for a set, orange for a shot. Areas hold colour well, and a
 tint still reads when the whole graph is zoomed out to fit, which is exactly
 when you want to see how a scene divides. A file outside the three tiers keeps
-the plain card surface. The rail carries a key under **Tiers**.
+the plain card surface. The key in the stage's lower left says which is which,
+beside how many files are drawn and how deep the tree goes.
 
 **Wires carry line style.** Every arc is drawn in the same neutral grey and
 told apart by its stroke:
@@ -335,8 +371,9 @@ They are told apart by *rhythm*, not by thickness — two solid lines of
 different weight are nearly the same line. Only the sublayer is left solid,
 which makes the spine of a stage findable at a glance.
 
-The **Arcs** panel draws a real sample of each, using the same CSS class as the
-wires themselves, so the key cannot drift from the picture.
+The toolbar over the graph has a chip per arc kind with a real sample of its
+line, drawn with the same CSS class as the wires themselves so the key cannot
+drift from the picture, and how many of that kind the crawl found.
 
 Dash patterns are drawn in graph space, so they shrink with the view. Zoomed
 right out the kinds converge — which is the point at which you are reading tier
@@ -361,9 +398,27 @@ shows `via kilo-0010_props.usda`. The ten-layer demo shot collapses to four
 assemblies, which is the dependency graph a supervisor wants — which shots use
 which sets, and which assets those pull in.
 
-The **Textures**, **Missing** and **Assemblies** toggles filter the graph. Hiding an arc kind
-also removes any file that was only reachable through that kind of arc, so
-switching off textures collapses the graph to composition alone.
+The graph takes the whole page; everything that controls it floats over it.
+
+- **The top bar** shows where the graphed layer sits in the project
+  (`shots / kilo / 0010 /`) and the layer itself with its status dot. Picking
+  the layer opens a dropdown of the project's entities to graph another, or to
+  open any file.
+- **The toolbar** holds the **Assemblies**, **Textures** and **Missing**
+  toggles — Missing carries the count of missing files — and one chip per arc
+  kind. Clicking an arc chip **isolates** that kind: the graph shows only the
+  files that kind brings in, plus the path from the root to each, so a shot's
+  references still read in context behind its sublayers. Click the isolated
+  chip again for everything; Shift-click toggles a single kind.
+- Hiding textures removes any file that was only reachable through a texture
+  arc, so switching them off collapses the graph to composition alone.
+- **Zoom and fit** sit in the lower right, clear of the detail panel.
+
+The detail panel's header is two lines. The first is the file name with its
+actions as one small cluster: **Set as root** (or **Open in graph** from a
+project page) in blue, copy path, reveal in the file manager, and close. The
+second is what the file is, in words: status, role, format, size and — when
+more than one layer pulls it in — how many.
 
 You can deep-link a file with `?path=`, which makes it easy to launch from a
 shelf tool or a shell alias:
@@ -403,7 +458,8 @@ outside the studio.
 
 Picking a prim lists its **opinions**: every layer with something to say about
 it, strongest first, labelled with the arc that brought the layer in. Clicking
-one selects that layer in the graph, and the tree switches to it.
+one selects that layer in the graph, and the tree switches to it. Clicking the
+picked prim again puts the selection away.
 
 - Stages open **without payloads**, which is fast; an unloaded payload is
   flagged in amber. The **Payloads** toggle reopens with them loaded and keeps
@@ -413,6 +469,9 @@ one selects that layer in the graph, and the tree switches to it.
   whole. A level stops at 500 children and says how many more there are.
 - Arrow keys walk the tree: up and down move, right expands, left collapses or
   goes to the parent.
+- A layer's tree **opens fully expanded**, except materials, which stay closed
+  over their shaders; their contents are already loaded, so opening one is
+  instant.
 - **Expand all** and **Collapse all** sit beside the prim count. For a single
   branch, Shift-click its arrow, or press Shift+→ / Shift+← on it. Expanding
   lists the branch in one request (`/api/subtree`), breadth first, and stops at
@@ -423,9 +482,9 @@ one selects that layer in the graph, and the tree switches to it.
 ## The source
 
 The detail panel's **Source** tab shows a text layer's contents exactly as the
-file sits on disk, comments and formatting included. Like the Scene tab, it
-widens the panel, since neither code nor a deep prim tree fits 340px; the
-panel narrows again for Details.
+file sits on disk, comments and formatting included. It widens the panel the
+most — up to 980px, since code lines run long — where Scene takes 620px and
+Details stays at 340px.
 
 - USDA is highlighted: specifiers and list ops, the arcs the graph draws
   (`subLayers`, `references`, `payload`, …), metadata, types, strings, numbers,
