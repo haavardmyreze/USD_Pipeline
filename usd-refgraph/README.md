@@ -25,13 +25,14 @@ selection for when you come back.
 **Blocks are free-form** — any token after the entity name — so no page lays
 work out in a fixed set of step columns. Wherever an entity's files are shown
 together, they are a strip with one mark per published file, coloured by its
-status and labelled with the block as written: the assembly first, then blocks
+status and named after the block as written: the assembly first, then blocks
 in the order they were published.
 
-- **Overview** — the project's headline counts (still placeholder, ready to
-  build on, signed off, missing files), a publish board with every entity's
-  strip grouped by tier and sequence, the missing textures and what points at
-  them, and everything published in the last day.
+- **Overview** — deliberately high level. One headline: what share of the
+  project's entities are ready to build on, with the status split behind it.
+  Then the same split for assets, sets and shots, and three signals over the
+  project's whole span: missing files, every publish since the first, and
+  everyone who has published. Each tile opens the page that holds the detail.
 - **Workspace** — a split browser. On the left, every entity, filtered by name
   and tier, each with its strip. On the right, the picked entity in full: a
   card per published file with its publish record and textures (missing ones
@@ -252,7 +253,8 @@ translucent, floating chrome of macOS 26:
 - **Section headers are sentence case**, semibold and secondary, instead of
   small tracked capitals.
 - **The navigation is a floating glass sidebar** with a blue selection, the
-  toolbar has no strip of its own, and its controls are capsules.
+  open project — and the button to open another, and rescan — sits at its top,
+  so there is no top bar; the graph's controls float on the stage.
 - **Content sits on Apple's grouped grays** over a black window; separators are
   hairlines.
 - **Buttons are filled capsules.** The primary action is solid blue; plain
@@ -400,11 +402,11 @@ which sets, and which assets those pull in.
 
 The graph takes the whole page; everything that controls it floats over it.
 
-- **The top bar** shows where the graphed layer sits in the project
-  (`shots / kilo / 0010 /`) and the layer itself with its status dot. Picking
-  the layer opens a dropdown of the project's entities to graph another, or to
-  open any file.
-- **The toolbar** holds the **Assemblies**, **Textures** and **Missing**
+- **The toolbar's first row** shows where the graphed layer sits in the
+  project (`shots / kilo / 0010 /`) and the layer itself with its status dot,
+  then the file filter. Picking the layer opens a dropdown of the project's
+  entities to graph another, or to open any file.
+- **Its second row** holds the **Assemblies**, **Textures** and **Missing**
   toggles — Missing carries the count of missing files — and one chip per arc
   kind. Clicking an arc chip **isolates** that kind: the graph shows only the
   files that kind brings in, plus the path from the root to each, so a shot's
@@ -474,6 +476,8 @@ picked prim again puts the selection away.
   instant.
 - **Expand all** and **Collapse all** sit beside the prim count. For a single
   branch, Shift-click its arrow, or press Shift+→ / Shift+← on it. Expanding
+  leaves materials closed too, and everything inside them — unless the branch
+  being expanded is the material itself. Expanding
   lists the branch in one request (`/api/subtree`), breadth first, and stops at
   5,000 prims: anything beyond that stays collapsed, with a note saying so,
   and opens a branch at a time as usual.

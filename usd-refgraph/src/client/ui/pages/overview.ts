@@ -1,67 +1,48 @@
 /**
- * The project at a glance: every entity and every file it has published, on
- * one board, then what is missing and what happened today.
+ * The project at a glance, across its whole span: how finished it is, and
+ * whether anything needs a look — nothing more.
  *
- * The board is a strip per entity rather than a grid of steps. Blocks are
- * free-form — any token after the entity name — so no two entities need share
- * any, and a column per step would be mostly empty cells and names that only
- * one entity uses. A strip shows exactly the files each entity has, labelled
- * with the block names as written.
+ * Every number here is a door to the page that holds the detail. The
+ * Workspace has every file, Publishes has every publish, Artists has every
+ * person; this page only says which of them is worth opening, so it stays
+ * readable however large the show grows.
+ *
+ * Readiness counts entities, never layers. Mixing the two units invites
+ * comparing numbers that do not compare.
  */
 
-import type { ProjectEntity, TaskRow, TextureRef } from '@shared/project'
+import type { Project, ProjectEntity, TaskRow } from '@shared/project'
+import type { Status } from '@shared/pipeline'
 import type { NodeTier } from '@shared/types'
-import { STATUS_ORDER, allTasks, byRecency, entityLayers, entitySort, layerStep } from '@shared/project'
-import {
-  STATUS_COLOR,
-  STATUS_LABEL,
-  TIER_COLOR,
-  card,
-  emptyState,
-  headStats,
-  markLayer,
-  statusDot,
-  statusStrip,
-  truncated,
-} from '../kit'
+import { STATUS_ORDER, allTasks } from '@shared/project'
+import { STATUS_COLOR, STATUS_LABEL, TIER_COLOR, emptyState, meter, statusDot } from '../kit'
 import { displayName, el, formatMoment, formatRelative } from '../../util'
-import { pageState, type PageContext } from './context'
+import { pageState, type PageContext, type PageName } from './context'
 import { pageShell } from './shell'
 
-const TIERS: { id: NodeTier; label: string }[] = [
-  { id: 'asset', label: 'Assets' },
-  { id: 'set', label: 'Sets' },
-  { id: 'shot', label: 'Shots' },
+const TIERS: { id: NodeTier; one: string; many: string }[] = [
+  { id: 'asset', one: 'asset', many: 'Assets' },
+  { id: 'set', one: 'set', many: 'Sets' },
+  { id: 'shot', one: 'shot', many: 'Shots' },
 ]
 
-/** How far back "today" reaches: the last day, not the calendar date. */
-const TODAY_MS = 86_400_000
+/** Statuses that mean "safe to build on". */
+const READY: Status[] = ['production_ready', 'locked']
 
 export function renderOverview(host: HTMLElement, context: PageContext): void {
   const { project } = context
-  const entities = project.entities
-  const count = (status: string): number => entities.filter((e) => e.status === status).length
-  const missing = missingTextures(allTasks(project))
+  const tasks = allTasks(project)
+  const people = new Set(tasks.map((task) => task.layer.pipeline.artist).filter(Boolean))
 
   const body = pageShell(host, displayName(project.name), {
     subtitle: [
-      `${entities.length} ${entities.length === 1 ? 'entity' : 'entities'}`,
-      `${project.stats.layers} published ${project.stats.layers === 1 ? 'layer' : 'layers'}`,
-      `scanned in ${Math.round(project.stats.elapsedMs)} ms`,
+      plural(project.entities.length, 'entity', 'entities'),
+      plural(project.stats.layers, 'published layer'),
+      plural(people.size, 'person', 'people'),
     ].join(' · '),
-    stats: headStats([
-      { value: count('placeholder'), label: 'still placeholder', accent: STATUS_COLOR.placeholder },
-      { value: count('production_ready'), label: 'ready to build on', accent: STATUS_COLOR.production_ready },
-      { value: count('locked'), label: 'signed off', accent: STATUS_COLOR.locked },
-      {
-        value: missing.length,
-        label: missing.length === 1 ? 'missing file' : 'missing files',
-        accent: missing.length ? 'var(--danger)' : undefined,
-      },
-    ]),
   })
 
-  if (!entities.length) {
+  if (!project.entities.length) {
     body.appendChild(
       emptyState('Nothing published yet.', {
         icon: 'inbox',
@@ -71,196 +52,185 @@ export function renderOverview(host: HTMLElement, context: PageContext): void {
     return
   }
 
-  body.appendChild(boardCard(entities, context))
+  body.appendChild(readiness(project.entities))
 
-  const bottom = el('div', 'grid grid--split')
-  bottom.appendChild(missingCard(missing))
-  bottom.appendChild(todayCard(allTasks(project)))
-  body.appendChild(bottom)
+  const tiers = el('div', 'ov__row ov__row--three')
+  for (const tier of TIERS) tiers.appendChild(tierTile(project, tier, context))
+  body.appendChild(tiers)
+
+  const signals = el('div', 'ov__row ov__row--three')
+  signals.appendChild(missingTile(tasks))
+  signals.appendChild(publishesTile(tasks, context))
+  signals.appendChild(peopleTile(tasks, context))
+  body.appendChild(signals)
 }
 
 // ---------------------------------------------------------------------------
-// The board
+// How finished is it?
 // ---------------------------------------------------------------------------
 
-function boardCard(entities: ProjectEntity[], context: PageContext): HTMLElement {
-  const legend = el('div', 'legendkey')
+function readiness(entities: ProjectEntity[]): HTMLElement {
+  const total = entities.length
+  const ready = entities.filter((entity) => READY.includes(entity.status)).length
+  const percent = Math.round((ready / total) * 100)
+
+  const card = el('section', 'ov__hero')
+  const lead = el('div', 'ov__heroLead')
+  lead.appendChild(el('span', 'ov__heroValue', `${percent}%`))
+  const words = el('div', 'ov__heroWords')
+  words.appendChild(el('span', 'ov__heroTitle', 'ready to build on'))
+  words.appendChild(
+    el('span', 'ov__heroSub', `${ready} of ${plural(total, 'entity', 'entities')} are production ready or locked`),
+  )
+  lead.appendChild(words)
+  card.appendChild(lead)
+
+  card.appendChild(statusMeter(entities))
+
+  const legend = el('div', 'ov__legend')
   for (const status of STATUS_ORDER) {
-    const item = el('span', 'legendkey__item')
+    const count = entities.filter((entity) => entity.status === status).length
+    const item = el('span', 'ov__legendItem')
     item.appendChild(statusDot(status))
-    item.appendChild(el('span', undefined, STATUS_LABEL[status].toLowerCase()))
+    item.appendChild(el('span', undefined, STATUS_LABEL[status]))
+    item.appendChild(el('span', 'ov__legendCount', String(count)))
     legend.appendChild(item)
   }
-
-  const { root, body } = card('Publish board', {
-    hint: 'every entity, every published file',
-    actions: legend,
-  })
-
-  const board = el('div', 'board')
-  for (const tier of TIERS) {
-    const members = entities.filter((entity) => entity.tier === tier.id).sort(entitySort)
-    if (!members.length) continue
-
-    // Shots split by sequence, the way a show is actually organised.
-    const groups = new Map<string, ProjectEntity[]>()
-    for (const entity of members) {
-      const label = tier.id === 'shot' && entity.sequence ? `${tier.label} · ${entity.sequence}` : tier.label
-      const list = groups.get(label)
-      if (list) list.push(entity)
-      else groups.set(label, [entity])
-    }
-
-    for (const [label, list] of groups) {
-      const head = el('div', 'board__group')
-      const badge = el('span', 'group-badge', label)
-      badge.style.setProperty('--chip-accent', TIER_COLOR[tier.id]!)
-      head.appendChild(badge)
-      board.appendChild(head)
-      for (const entity of list) board.appendChild(boardRow(entity, context))
-    }
-  }
-  body.appendChild(board)
-  return root
+  card.appendChild(legend)
+  return card
 }
 
-function boardRow(entity: ProjectEntity, context: PageContext): HTMLElement {
-  const row = el('div', 'board__row')
+function tierTile(
+  project: Project,
+  tier: (typeof TIERS)[number],
+  context: PageContext,
+): HTMLElement {
+  const entities = project.entities.filter((entity) => entity.tier === tier.id)
+  const ready = entities.filter((entity) => READY.includes(entity.status)).length
 
-  const name = el('button', 'board__name')
-  name.appendChild(statusDot(entity.status))
-  name.appendChild(el('span', undefined, entity.name))
-  name.title = `Open ${entity.name} in the workspace`
-  name.addEventListener('click', () => {
-    pageState.workspace.selected = entity.name
-    pageState.workspace.tier = 'all'
+  const tile = doorTile(`Open ${tier.many.toLowerCase()} in the workspace`, () => {
+    pageState.workspace.tier = tier.id
+    pageState.workspace.selected = null
     pageState.workspace.query = ''
     context.goTo('workspace')
   })
-  row.appendChild(name)
+  tile.style.setProperty('--tile-accent', TIER_COLOR[tier.id]!)
 
-  const files = entityLayers(entity)
-  if (files.length) {
-    row.appendChild(
-      statusStrip(
-        files.map((file) => ({ status: file.pipeline.status, label: layerStep(file), layerPath: file.path })),
-        true,
-      ),
-    )
+  tile.appendChild(el('span', 'ov__label', tier.many))
+  tile.appendChild(el('span', 'ov__value', String(entities.length)))
+  if (entities.length) {
+    tile.appendChild(statusMeter(entities))
+    tile.appendChild(el('span', 'ov__note', `${ready} of ${entities.length} ready`))
   } else {
-    row.appendChild(el('span', 'board__empty', 'nothing published'))
+    tile.appendChild(el('span', 'ov__note', `No ${tier.one}s yet`))
   }
-
-  const last = entity.lastPublished
-  const when = el('span', 'board__when', last ? formatRelative(last) : '—')
-  if (last) when.title = formatMoment(last)
-  row.appendChild(when)
-  return row
+  return tile
 }
 
 // ---------------------------------------------------------------------------
-// Missing and today
+// Does anything need a look?
 // ---------------------------------------------------------------------------
 
-interface MissingFile {
-  texture: TextureRef
-  /** The layers that point at it. */
-  referencedBy: TaskRow[]
-}
-
-/** Every texture a layer points at that is not on disk, once each. */
-function missingTextures(tasks: TaskRow[]): MissingFile[] {
-  const byPath = new Map<string, MissingFile>()
+function missingTile(tasks: TaskRow[]): HTMLElement {
+  const missing = new Set<string>()
+  const layers = new Set<string>()
   for (const task of tasks) {
     for (const texture of task.layer.textures ?? []) {
       if (texture.exists || texture.template) continue
-      const entry = byPath.get(texture.path)
-      if (entry) entry.referencedBy.push(task)
-      else byPath.set(texture.path, { texture, referencedBy: [task] })
+      missing.add(texture.path)
+      layers.add(task.layer.path)
     }
   }
-  return [...byPath.values()].sort((a, b) => a.texture.name.localeCompare(b.texture.name))
-}
 
-function missingCard(missing: MissingFile[]): HTMLElement {
-  const { root, body } = card('Missing files', {
-    hint: missing.length ? 'referenced, but not on disk' : undefined,
-  })
-  if (!missing.length) {
-    body.appendChild(emptyState('Every referenced texture is on disk.', { inline: true }))
-    return root
-  }
-
-  const list = el('div', 'feed')
-  for (const { texture, referencedBy } of missing) {
-    const first = referencedBy[0]!
-    const row = markLayer(el('div', 'feed__row feed__row--missing'), first.layer.path)
-    row.appendChild(el('span', 'feed__icon', '!'))
-    const main = el('div', 'feed__main')
-    main.appendChild(truncated(texture.name, 'feed__name mono'))
-    main.appendChild(
-      el(
-        'span',
-        'feed__by',
-        `in ${referencedBy.map((task) => task.layer.name).join(', ')}`,
-      ),
-    )
-    row.appendChild(main)
-    row.appendChild(el('span', 'feed__when', first.entity.name))
-    row.title = `${texture.rawPath}\nOpen ${first.layer.name}`
-    list.appendChild(row)
-  }
-  body.appendChild(list)
-  return root
-}
-
-function todayCard(tasks: TaskRow[]): HTMLElement {
-  const since = Date.now() - TODAY_MS
-  const today = tasks
-    .filter((task) => (task.layer.pipeline.exportedAt ?? 0) >= since)
-    .sort(byRecency)
-  const people = new Set(today.map((task) => task.layer.pipeline.artist).filter(Boolean))
-
-  const { root, body } = card('Today', {
-    hint: today.length
-      ? `${today.length} ${today.length === 1 ? 'publish' : 'publishes'} · ${people.size} ${
-          people.size === 1 ? 'person' : 'people'
-        }`
-      : 'the last 24 hours',
-  })
-
-  if (!today.length) {
-    const latest = [...tasks].sort(byRecency)[0]
-    body.appendChild(
-      emptyState('Nothing published in the last day.', {
-        inline: true,
-        body: latest?.layer.pipeline.exportedAt
-          ? `The latest was ${latest.entity.name} · ${latest.step}, ${formatRelative(latest.layer.pipeline.exportedAt)}.`
-          : undefined,
-      }),
-    )
-    return root
-  }
-
-  const list = el('div', 'feed')
-  for (const task of today) {
-    const row = markLayer(el('div', 'feed__row'), task.layer.path)
-    row.appendChild(statusDot(task.layer.pipeline.status))
-    const main = el('div', 'feed__main feed__main--inline')
-    main.appendChild(truncated(`${task.entity.name} · ${task.step}`, 'feed__name'))
-    if (task.layer.pipeline.artist) main.appendChild(el('span', 'feed__by', task.layer.pipeline.artist))
-    row.appendChild(main)
-    const at = task.layer.pipeline.exportedAt!
-    const time = el(
+  const tile = el('div', `ov__tile${missing.size ? ' ov__tile--alert' : ''}`)
+  tile.appendChild(el('span', 'ov__label', 'Missing files'))
+  tile.appendChild(el('span', 'ov__value', String(missing.size)))
+  tile.appendChild(
+    el(
       'span',
-      'feed__when',
-      new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-    )
-    time.title = formatMoment(at)
-    row.appendChild(time)
-    row.title = task.layer.path
-    list.appendChild(row)
+      'ov__note',
+      missing.size
+        ? `referenced by ${plural(layers.size, 'layer')} but not on disk`
+        : 'every referenced file is on disk',
+    ),
+  )
+  return tile
+}
+
+/** Every publish the project holds, and the span of time they cover. */
+function publishesTile(tasks: TaskRow[], context: PageContext): HTMLElement {
+  const times = tasks
+    .map((task) => task.layer.pipeline.exportedAt)
+    .filter((at): at is number => Boolean(at))
+  const first = times.length ? Math.min(...times) : 0
+  const last = times.length ? Math.max(...times) : 0
+
+  const tile = doorTile('Open the publish history', () => context.goTo('calendar' satisfies PageName))
+  tile.appendChild(el('span', 'ov__label', 'Publishes'))
+  tile.appendChild(el('span', 'ov__value', String(times.length)))
+  const note = el(
+    'span',
+    'ov__note',
+    times.length
+      ? `since ${formatDay(first)} · latest ${formatRelative(last)}`
+      : 'nothing carries a publish time',
+  )
+  if (times.length) note.title = `First ${formatMoment(first)}\nLatest ${formatMoment(last)}`
+  tile.appendChild(note)
+  return tile
+}
+
+/** Everyone who has published, and who has published most. */
+function peopleTile(tasks: TaskRow[], context: PageContext): HTMLElement {
+  const counts = new Map<string, number>()
+  for (const task of tasks) {
+    const artist = task.layer.pipeline.artist
+    if (artist) counts.set(artist, (counts.get(artist) ?? 0) + 1)
   }
-  body.appendChild(list)
-  return root
+  const busiest = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
+
+  const tile = doorTile('Open artists', () => {
+    pageState.artists.artist = null
+    context.goTo('artists')
+  })
+  tile.appendChild(el('span', 'ov__label', 'People'))
+  tile.appendChild(el('span', 'ov__value', String(counts.size)))
+  tile.appendChild(
+    el(
+      'span',
+      'ov__note',
+      busiest ? `most published: ${busiest[0]}, ${plural(busiest[1], 'layer')}` : 'no artist recorded',
+    ),
+  )
+  return tile
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** A tile that opens the page holding its detail. */
+function doorTile(title: string, onClick: () => void): HTMLButtonElement {
+  const tile = el('button', 'ov__tile ov__tile--door')
+  tile.title = title
+  tile.addEventListener('click', onClick)
+  return tile
+}
+
+function statusMeter(entities: ProjectEntity[]): HTMLElement {
+  return meter(
+    STATUS_ORDER.map((status) => {
+      const value = entities.filter((entity) => entity.status === status).length
+      return { value, color: STATUS_COLOR[status], title: `${value} ${STATUS_LABEL[status].toLowerCase()}` }
+    }),
+  )
+}
+
+/** `2 Sep 2026`: a day, without the time. */
+function formatDay(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function plural(count: number, one: string, many = `${one}s`): string {
+  return `${count} ${count === 1 ? one : many}`
 }

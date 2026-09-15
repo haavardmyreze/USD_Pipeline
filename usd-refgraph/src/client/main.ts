@@ -387,10 +387,6 @@ class App {
       item.classList.toggle('is-on', on)
       item.setAttribute('aria-selected', String(on))
     }
-    // The graph's own controls have no meaning on the project pages.
-    for (const control of document.querySelectorAll<HTMLElement>('.graph-only')) {
-      control.hidden = page !== 'graph'
-    }
     this.renderPage()
     if (page === 'graph' && this.graph) this.view.fit(false)
   }

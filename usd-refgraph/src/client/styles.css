@@ -300,12 +300,12 @@ kbd {
 .badge,
 .ver,
 .node__artist,
-.crumb-btn__sub,
+.navproj__path,
 .nav__version {
   font-family: var(--font-small);
 }
 .node__artist,
-.crumb-btn__sub,
+.navproj__path,
 .nav__version,
 .pill,
 .badge {
@@ -477,7 +477,7 @@ kbd {
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-rows: var(--topbar-h) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 /* The file panel floats over whichever page is showing, as it does over the
@@ -528,73 +528,61 @@ kbd {
 }
 
 /* ===========================================================================
-   Top bar
+   The open project, at the top of the navigation
    =========================================================================== */
 
-.topbar {
+/* Everything below reads from the project, so choosing one comes first. */
+.navproj {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
-  padding: 0 var(--s-4);
-  background: transparent;
-  min-width: 0;
-}
-
-.topbar__spacer {
-  flex: 1;
-  min-width: var(--s-3);
-}
-
-.topbar__sep {
-  width: 1px;
-  height: 22px;
+  gap: var(--s-1);
   flex: none;
-  background: var(--line-strong);
-}
-
-/* What is open: the project always, the layer only on the graph. Both are the
-   same shape, so the bar reads as one breadcrumb rather than two widgets. */
-.crumb-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  flex: 0 1 auto;
-  min-width: 132px;
-  max-width: 300px;
-  padding: var(--s-2) var(--s-3);
-  border-radius: var(--r-full);
-  border: 1px solid transparent;
-  transition: background var(--fast), border-color var(--fast);
-}
-.crumb-btn:hover {
+  margin: 0 var(--s-3) var(--s-2);
+  padding: var(--s-1);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
   background: var(--fill-4);
 }
 
-.crumb-btn__icon {
+.navproj__open {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex: 1;
+  min-width: 0;
+  padding: var(--s-2);
+  border-radius: var(--r-md);
+  text-align: left;
+  transition: background var(--fast);
+}
+.navproj__open:hover {
+  background: var(--fill-3);
+}
+
+.navproj__icon {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   flex: none;
-  border-radius: var(--r-full);
+  border-radius: var(--r-sm);
   background: var(--fill-3);
   color: var(--fg-2);
 }
-.crumb-btn:hover .crumb-btn__icon {
+.navproj__open:hover .navproj__icon {
   color: var(--fg);
 }
-.crumb-btn__icon svg {
+.navproj__icon svg {
   width: 14px;
   height: 14px;
 }
 
-.crumb-btn__text {
+.navproj__text {
   display: grid;
   min-width: 0;
-  text-align: left;
 }
 
-.crumb-btn__name {
+.navproj__name {
   font-size: var(--t-sm);
   font-weight: 600;
   color: var(--fg);
@@ -602,20 +590,24 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The layer is a filename, so it keeps its own case and spacing. */
-.crumb-btn--layer .crumb-btn__name {
-  letter-spacing: 0;
-  font-family: var(--mono);
-  font-size: var(--t-xs);
-}
 
-.crumb-btn__sub {
+.navproj__path {
+  font-family: var(--mono);
   font-size: var(--t-2xs);
   color: var(--fg-3);
-  font-family: var(--mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.navproj__rescan {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+.navproj__rescan svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* ===========================================================================
@@ -1058,65 +1050,149 @@ kbd {
 }
 
 /* ===========================================================================
-   Overview: the publish board, missing files, today
+   Overview: how finished the project is, and whether anything needs a look
    =========================================================================== */
 
-/* Name, strip, last publish. The strip takes whatever room is left and wraps,
-   so an entity with many blocks grows taller rather than wider. */
-.board {
+/* The one headline: a percentage, what it means, and the split behind it. */
+.ov__hero {
   display: grid;
-}
-
-.board__group {
-  padding: var(--s-5) 0 var(--s-2);
-}
-.board__group:first-child {
-  padding-top: 0;
-}
-
-.board__row {
-  display: grid;
-  grid-template-columns: minmax(140px, 200px) minmax(0, 1fr) 90px;
-  align-items: center;
   gap: var(--s-4);
-  padding: var(--s-2) 0;
-  border-top: 1px solid var(--line-soft);
+  padding: var(--s-6);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
 }
 
-.board__name {
+.ov__heroLead {
   display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  min-width: 0;
-  padding: var(--s-1) var(--s-2);
-  margin-left: calc(var(--s-2) * -1);
-  border-radius: var(--r-sm);
-  font-size: var(--t-sm);
+  align-items: baseline;
+  gap: var(--s-5);
+  flex-wrap: wrap;
+}
+
+.ov__heroValue {
+  font-family: var(--font-display);
+  font-size: var(--t-display);
+  font-weight: 700;
+  line-height: var(--lh-display);
+  letter-spacing: var(--tr-display);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.ov__heroWords {
+  display: grid;
+  gap: 2px;
+}
+
+.ov__heroTitle {
+  font-size: var(--t-lg);
   font-weight: 600;
-  color: var(--fg-1);
-  text-align: left;
-  transition: background var(--fast), color var(--fast);
-}
-.board__name span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.board__name:hover {
-  background: var(--fill-4);
   color: var(--fg);
 }
 
-.board__empty {
-  font-size: var(--t-xs);
+.ov__heroSub {
+  font-size: var(--t-sm);
   color: var(--fg-3);
 }
 
-.board__when {
+.ov__hero .meter {
+  height: 10px;
+}
+
+.ov__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-6);
+}
+
+.ov__legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+}
+
+.ov__legendCount {
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.ov__row {
+  display: grid;
+  gap: var(--s-5);
+}
+.ov__row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .ov__row--three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A tile: a label, one number, one line about it. Tiles that lead somewhere
+   are buttons and lift on hover; the rest are plain facts. */
+.ov__tile {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--s-2);
+  min-width: 0;
+  padding: var(--s-5);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  text-align: left;
+  overflow: clip;
+  transition: background var(--fast), border-color var(--fast);
+}
+.ov__tile::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--tile-accent, transparent);
+}
+.ov__tile--door {
+  cursor: pointer;
+}
+.ov__tile--door:hover {
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+}
+.ov__tile--alert {
+  --tile-accent: var(--danger);
+}
+.ov__tile--alert .ov__value {
+  color: var(--danger);
+}
+
+.ov__label {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--fg-2);
+}
+
+.ov__value {
+  font-family: var(--font-display);
+  font-size: var(--t-2xl);
+  font-weight: 700;
+  line-height: var(--lh-display);
+  letter-spacing: var(--tr-display);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.ov__tile .meter {
+  margin-top: var(--s-1);
+}
+
+.ov__note {
   font-size: var(--t-xs);
   color: var(--fg-3);
-  text-align: right;
-  white-space: nowrap;
 }
 
 /* The status key a board or load card carries in its header. */
@@ -1131,71 +1207,6 @@ kbd {
   gap: var(--s-2);
   font-size: var(--t-xs);
   color: var(--fg-3);
-}
-
-/* -- Feeds: missing files, today ----------------------------------------- */
-
-.feed {
-  display: grid;
-}
-
-.feed__row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--s-3);
-  padding: var(--s-3) var(--s-2);
-  margin: 0 calc(var(--s-2) * -1);
-  border-radius: var(--r-sm);
-}
-.feed__row + .feed__row {
-  border-top: 1px solid var(--line-soft);
-}
-
-.feed__main {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-.feed__main--inline {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-3);
-}
-
-.feed__name {
-  font-size: var(--t-sm);
-  color: var(--fg-1);
-}
-.feed__row--missing .feed__name {
-  color: var(--danger);
-}
-
-.feed__icon {
-  display: grid;
-  place-items: center;
-  width: 14px;
-  height: 14px;
-  border-radius: var(--r-full);
-  background: color-mix(in srgb, var(--danger) 18%, transparent);
-  font-size: var(--t-2xs);
-  font-weight: 700;
-  color: var(--danger);
-}
-
-.feed__by {
-  font-size: var(--t-2xs);
-  color: var(--fg-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.feed__when {
-  font-size: var(--t-2xs);
-  color: var(--fg-3);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 /* ===========================================================================
@@ -1906,56 +1917,6 @@ kbd {
   background: var(--status-locked);
 }
 
-/*
- * The labelled strip: each mark wide enough to carry its block name, tinted
- * rather than solid so the name stays legible. Marks wrap onto a second line
- * before they shrink past their label.
- */
-.strip--labelled {
-  flex: 1;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  min-width: 0;
-}
-.strip--labelled .strip__mark {
-  --mark: var(--status-unknown);
-  display: inline-flex;
-  align-items: center;
-  width: auto;
-  min-width: 72px;
-  max-width: 180px;
-  height: 22px;
-  padding: 0 var(--s-3);
-  border-radius: var(--r-sm);
-  border: 1px solid color-mix(in srgb, var(--mark) 55%, transparent);
-  background: color-mix(in srgb, var(--mark) 22%, transparent);
-  box-shadow: inset 3px 0 0 var(--mark);
-  transition: background var(--fast), border-color var(--fast);
-}
-.strip--labelled .strip__mark--placeholder {
-  --mark: var(--status-placeholder);
-}
-.strip--labelled .strip__mark--production_ready {
-  --mark: var(--status-ready);
-}
-.strip--labelled .strip__mark--locked {
-  --mark: var(--status-locked);
-}
-.strip--labelled .strip__mark:hover {
-  background: color-mix(in srgb, var(--mark) 36%, transparent);
-}
-.strip--labelled .strip__mark.is-selected {
-  border-color: var(--fg);
-  box-shadow: inset 3px 0 0 var(--mark), 0 0 0 1px var(--fg);
-}
-.strip__label {
-  font-family: var(--mono);
-  font-size: var(--t-2xs);
-  color: var(--fg-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 /* Its layout answers to its own width, not the window's: the list beside it
    and the nav both take space the window size knows nothing about. */
@@ -2773,15 +2734,28 @@ kbd {
   left: var(--s-4);
   right: var(--s-4);
   z-index: 20;
+  display: grid;
+  justify-items: start;
+  gap: var(--s-2);
+  pointer-events: none;
+}
+/* What is graphed on the first row, what is drawn of it on the second. */
+.gbar__row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
-  pointer-events: none;
+  max-width: 100%;
 }
-.gbar > *,
+.gbar__row > *,
 .gbar__arcs > * {
   pointer-events: auto;
+}
+.gbar__search {
+  background: var(--material);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  border-color: var(--line);
 }
 
 .gbar__sep {
@@ -4707,7 +4681,7 @@ button.prim:hover {
 .seg__btn,
 .filterchip,
 .ptab,
-.crumb-btn,
+.navproj__open,
 .nav__item,
 .nav__help,
 .tile--action,
@@ -4726,7 +4700,7 @@ button.prim:hover {
 .seg__btn:active,
 .filterchip:active,
 .ptab:active,
-.crumb-btn:active,
+.navproj__open:active,
 .nav__item:active,
 .nav__help:active,
 .tile--action:active,
@@ -4847,11 +4821,8 @@ button.prim:hover {
     padding-right: var(--s-5);
   }
   /* The key hint is the first thing to go: the shortcut still works. */
-  .topbar .search kbd {
+  .gbar__search kbd {
     display: none;
-  }
-  .crumb-btn {
-    max-width: 210px;
   }
 }
 
@@ -4864,8 +4835,17 @@ button.prim:hover {
   .nav__key,
   .nav__help span,
   .nav__version,
-  .brand__name {
+  .brand__name,
+  .navproj__text,
+  .navproj__rescan {
     display: none;
+  }
+  .navproj {
+    margin-inline: var(--s-2);
+    justify-content: center;
+  }
+  .navproj__open {
+    flex: none;
   }
   .nav__item,
   .nav__help {

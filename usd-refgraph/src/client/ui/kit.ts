@@ -96,14 +96,12 @@ export interface StripItem {
  * One mark per published file, coloured by status, in the order given.
  *
  * The app's answer to "which steps are done" without fixed columns: blocks are
- * free-form, so an entity shows exactly the files it has. `labelled` writes
- * each block name inside its mark, for rows with room to read them.
+ * free-form, so an entity shows exactly the files it has.
  */
-export function statusStrip(items: StripItem[], labelled = false): HTMLElement {
-  const strip = el('span', `strip${labelled ? ' strip--labelled' : ''}`)
+export function statusStrip(items: StripItem[]): HTMLElement {
+  const strip = el('span', 'strip')
   for (const item of items) {
     const mark = el('span', `strip__mark strip__mark--${item.status}`)
-    if (labelled) mark.appendChild(el('span', 'strip__label', item.label))
     mark.title = `${item.label} · ${STATUS_LABEL[item.status]}`
     if (item.layerPath) markLayer(mark, item.layerPath)
     strip.appendChild(mark)

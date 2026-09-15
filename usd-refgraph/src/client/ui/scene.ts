@@ -157,10 +157,13 @@ export class SceneTree {
    * Whatever it had to leave out stays collapsed rather than open and empty,
    * and can still be opened a row at a time.
    *
-   * The `initial` expansion a layer opens with keeps materials closed: a
-   * material's shader network is rarely what you came to see, and it can
-   * outnumber the geometry. Their children are still fetched, so opening one
-   * is instant. An explicit Expand all opens everything.
+   * Materials stay closed, and everything inside them: a shader network is
+   * rarely what you came to see, and it can outnumber the geometry. Their
+   * children are still fetched, so opening one is instant. Expanding a
+   * material itself — Shift-click on its arrow — does open it.
+   *
+   * `initial` marks the expansion a layer opens with, which stays quiet about
+   * running out of budget.
    */
   private async expandAll(
     primPath: string = ROOT,
@@ -175,12 +178,19 @@ export class SceneTree {
     try {
       const subtree = await getSubtree(node.path, primPath, this.payloads)
       const listed = new Set(subtree.levels.map((level) => level.primPath))
+      // Levels arrive breadth first, so a parent is always decided before its
+      // children: anything under a material left closed stays closed too.
+      const closed = new Set<string>()
       for (const level of subtree.levels) {
         state.levels.set(level.primPath, level)
         state.errors.delete(level.primPath)
+        const insideClosed = closed.has(level.primPath)
         for (const child of level.children) {
+          if (insideClosed || isMaterial(child)) {
+            closed.add(child.path)
+            continue
+          }
           if (child.childCount === 0 || !listed.has(child.path)) continue
-          if (options.initial && isMaterial(child)) continue
           state.open.add(child.path)
         }
       }
@@ -654,7 +664,7 @@ function rowTitle(prim: ScenePrim): string {
   return lines.join('\n')
 }
 
-/** Materials, which the initial expansion leaves closed over their shaders. */
+/** Materials, which expanding leaves closed over their shaders. */
 function isMaterial(prim: ScenePrim): boolean {
   return prim.typeName === 'Material'
 }

@@ -21,6 +21,23 @@
           <span class="brand__name">USD Pipeline</span>
         </div>
 
+        <!-- The open project, and the way to open another. Scanning happens
+             here because everything below reads from it. -->
+        <div class="navproj">
+          <button class="navproj__open" id="open-project" title="Open a different project folder (O)">
+            <span class="navproj__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16"><path d="M1.5 4.2A1.7 1.7 0 0 1 3.2 2.5h2.6l1.4 1.6h5.6a1.7 1.7 0 0 1 1.7 1.7v6a1.7 1.7 0 0 1-1.7 1.7H3.2a1.7 1.7 0 0 1-1.7-1.7z"/></svg>
+            </span>
+            <span class="navproj__text">
+              <span class="navproj__name" id="project-name">No project</span>
+              <span class="navproj__path" id="project-path">Open a project folder</span>
+            </span>
+          </button>
+          <button class="iconbtn navproj__rescan" id="btn-rescan" title="Rescan from disk (R)" aria-label="Rescan from disk">
+            <svg viewBox="0 0 16 16"><path d="M13.4 7a5.5 5.5 0 1 0-.5 3.4"/><path d="M13.8 3.4V7h-3.5"/></svg>
+          </button>
+        </div>
+
         <nav class="nav__list" role="tablist" aria-label="Sections">
           <button class="nav__item is-on" data-page="overview" role="tab" aria-selected="true">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8.4 10 3l7 5.4V16a1.4 1.4 0 0 1-1.4 1.4H4.4A1.4 1.4 0 0 1 3 16z"/><path d="M8 17.4v-5.6h4v5.6"/></svg>
@@ -64,61 +81,6 @@
       </aside>
 
       <div class="main">
-      <!-- ── Top bar ────────────────────────────────────────────────── -->
-      <header class="topbar">
-        <!-- What is open. The project is stable across pages; the layer only
-             means anything on the graph. -->
-        <button class="crumb-btn" id="open-project" title="Open a different project folder (O)">
-          <span class="crumb-btn__icon" aria-hidden="true">
-            <svg viewBox="0 0 16 16"><path d="M1.5 4.2A1.7 1.7 0 0 1 3.2 2.5h2.6l1.4 1.6h5.6a1.7 1.7 0 0 1 1.7 1.7v6a1.7 1.7 0 0 1-1.7 1.7H3.2a1.7 1.7 0 0 1-1.7-1.7z"/></svg>
-          </span>
-          <span class="crumb-btn__text">
-            <span class="crumb-btn__name" id="project-name">No project</span>
-            <span class="crumb-btn__sub" id="project-path">Open a project folder</span>
-          </span>
-        </button>
-
-        <!-- Where the graphed layer sits in the project, and the layer itself,
-             which opens the project's entities to graph another. -->
-        <div class="gcrumbs graph-only" id="graph-crumbs">
-          <span class="gcrumbs__dirs" id="root-path"></span>
-          <button class="gcrumbs__layer" id="open-layer" aria-haspopup="dialog" aria-expanded="false" title="Graph another layer">
-            <span class="dot" id="root-dot" hidden></span>
-            <span class="gcrumbs__name" id="root-name">No layer</span>
-            <svg class="gcrumbs__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.2 3.5 3.6 3.5-3.6"/></svg>
-          </button>
-
-          <div class="layerpop" id="layer-pop" role="dialog" aria-label="Graph another layer" hidden>
-            <label class="search search--rail">
-              <svg class="search__icon" viewBox="0 0 16 16" aria-hidden="true">
-                <circle cx="7" cy="7" r="4.6" /><path d="m10.6 10.6 3 3" />
-              </svg>
-              <input id="tree-filter" type="search" placeholder="Filter entities" autocomplete="off" spellcheck="false" />
-            </label>
-            <div class="tree" id="tree"></div>
-            <button class="btn btn--small layerpop__other" id="open-file">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 1.8H4.4A1.4 1.4 0 0 0 3 3.2v9.6a1.4 1.4 0 0 0 1.4 1.4h7.2a1.4 1.4 0 0 0 1.4-1.4V5.8z"/><path d="M9 1.8v4h4"/></svg>
-              <span>Open another file…</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="topbar__spacer"></div>
-
-        <label class="search graph-only" title="Filter nodes (/)">
-          <svg class="search__icon" viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="7" cy="7" r="4.6" /><path d="m10.6 10.6 3 3" />
-          </svg>
-          <input id="search" type="search" placeholder="Filter files" autocomplete="off" spellcheck="false" />
-          <kbd>/</kbd>
-        </label>
-
-        <div class="iconbar">
-          <button class="iconbtn" id="btn-rescan" title="Rescan from disk (R)" aria-label="Rescan from disk">
-            <svg viewBox="0 0 16 16"><path d="M13.4 7a5.5 5.5 0 1 0-.5 3.4"/><path d="M13.8 3.4V7h-3.5"/></svg>
-          </button>
-        </div>
-      </header>
 
       <div class="pages" id="pages">
       <!-- ── Project pages ──────────────────────────────────────────── -->
@@ -141,8 +103,43 @@
           <div class="nodes" id="nodes"></div>
         </div>
 
-        <!-- ── What is drawn: view filters, then one chip per arc kind ─── -->
-        <div class="gbar" role="toolbar" aria-label="Graph filters">
+        <!-- ── What is graphed, then what is drawn of it ────────────────── -->
+        <div class="gbar" role="toolbar" aria-label="Graph">
+          <div class="gbar__row">
+          <!-- Where the graphed layer sits in the project, and the layer itself,
+               which opens the project's entities to graph another. -->
+          <div class="gcrumbs" id="graph-crumbs">
+            <span class="gcrumbs__dirs" id="root-path"></span>
+            <button class="gcrumbs__layer" id="open-layer" aria-haspopup="dialog" aria-expanded="false" title="Graph another layer">
+              <span class="dot" id="root-dot" hidden></span>
+              <span class="gcrumbs__name" id="root-name">No layer</span>
+              <svg class="gcrumbs__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.2 3.5 3.6 3.5-3.6"/></svg>
+            </button>
+
+            <div class="layerpop" id="layer-pop" role="dialog" aria-label="Graph another layer" hidden>
+              <label class="search search--rail">
+                <svg class="search__icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle cx="7" cy="7" r="4.6" /><path d="m10.6 10.6 3 3" />
+                </svg>
+                <input id="tree-filter" type="search" placeholder="Filter entities" autocomplete="off" spellcheck="false" />
+              </label>
+              <div class="tree" id="tree"></div>
+              <button class="btn btn--small layerpop__other" id="open-file">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 1.8H4.4A1.4 1.4 0 0 0 3 3.2v9.6a1.4 1.4 0 0 0 1.4 1.4h7.2a1.4 1.4 0 0 0 1.4-1.4V5.8z"/><path d="M9 1.8v4h4"/></svg>
+                <span>Open another file…</span>
+              </button>
+            </div>
+          </div>
+          <label class="search gbar__search" title="Filter nodes (/)">
+            <svg class="search__icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.6" /><path d="m10.6 10.6 3 3" />
+            </svg>
+            <input id="search" type="search" placeholder="Filter files" autocomplete="off" spellcheck="false" />
+            <kbd>/</kbd>
+          </label>
+          </div>
+
+          <div class="gbar__row">
           <button class="gchip" id="toggle-assemblies" aria-pressed="false" title="Show only assembly files, collapsing the blocks between them">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 14.2 5 8 8.2 1.8 5z"/><path d="m1.8 8 6.2 3.2L14.2 8"/><path d="m1.8 11 6.2 3.2L14.2 11"/></svg>
             <span>Assemblies</span>
@@ -158,6 +155,7 @@
           </button>
           <span class="gbar__sep" aria-hidden="true"></span>
           <div class="gbar__arcs" id="legend"></div>
+          </div>
         </div>
 
         <!-- ── What the tints mean, and how much is drawn ───────────────── -->
