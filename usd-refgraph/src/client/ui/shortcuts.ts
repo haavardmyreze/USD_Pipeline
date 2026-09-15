@@ -45,6 +45,16 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: ['Hover'], description: 'Light up everything it reaches' },
     ],
   },
+  {
+    title: 'Scene tree',
+    items: [
+      { keys: ['↑', 'or', '↓'], description: 'Move between prims' },
+      { keys: ['→', 'or', '←'], description: 'Expand or collapse a prim' },
+      { keys: ['Shift', '→'], description: 'Expand everything beneath' },
+      { keys: ['Shift', '←'], description: 'Collapse everything beneath' },
+      { keys: ['Shift', 'Click'], description: 'On an arrow: the whole branch' },
+    ],
+  },
 ]
 
 /** Entries that punctuate a key list rather than naming a key. */

@@ -274,6 +274,9 @@ kbd {
   background: rgb(255 255 255 / 0.32);
   background-clip: content-box;
 }
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 /* ===========================================================================
    Shared text utilities
@@ -3245,6 +3248,506 @@ kbd {
   flex: none;
   font-size: var(--t-2xs);
   color: var(--fg-3);
+}
+.arc:disabled {
+  cursor: default;
+}
+.arc:disabled:hover {
+  background: none;
+}
+.arc--here .arc__kind {
+  color: var(--root);
+}
+
+/* Details / Scene. Pinned under the head so the switch stays in reach while
+   a long tree scrolls beneath it. */
+.insp__tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  padding: var(--s-3) var(--s-5);
+  border-bottom: 1px solid var(--line);
+  background: var(--material-thick);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+}
+.insp__tabs .seg {
+  width: 100%;
+}
+.insp__tabs .seg__btn {
+  flex: 1;
+  justify-content: center;
+}
+
+/* The Scene and Source tabs widen the panel: a deep prim tree and a layer's
+   code are both cramped at 340px. It never takes more than half the stage,
+   so the graph stays in reach beside it. */
+.inspector--wide {
+  width: min(620px, 50vw);
+}
+
+/* ===========================================================================
+   Source: the selected layer's text
+   =========================================================================== */
+
+.src {
+  --src-line: 18px;
+  display: grid;
+  align-content: start;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-4) var(--s-5);
+  min-width: 0;
+}
+
+.src__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: 0 var(--s-1);
+}
+
+.src__facts {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.src__format {
+  padding: 1px var(--s-2);
+  border-radius: var(--r-sm);
+  background: var(--fill-3);
+  font-family: var(--mono);
+  font-size: var(--t-2xs);
+  color: var(--fg-2);
+}
+
+.src__tools {
+  display: flex;
+  margin-left: auto;
+}
+.src__tools .iconbtn {
+  width: 26px;
+  height: 26px;
+}
+.src__tools .iconbtn svg {
+  width: 14px;
+  height: 14px;
+}
+.src__tools .iconbtn.is-on {
+  background: var(--fill-3);
+  color: var(--root);
+}
+
+/*
+ * The code sits on the app's deepest ground, like an editor pane set into the
+ * panel. Line numbers are drawn from a data attribute, so selecting and
+ * copying text never picks them up.
+ */
+.src__code {
+  overflow-x: auto;
+  /* Room below the last line for the horizontal scrollbar to sit in. */
+  padding: var(--s-3) 0 var(--s-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  line-height: var(--src-line);
+  color: var(--fg-1);
+  -webkit-user-select: text;
+  user-select: text;
+  tab-size: 4;
+}
+
+.src__chunk {
+  width: max-content;
+  min-width: 100%;
+}
+.src__code.is-wrapped .src__chunk {
+  width: auto;
+}
+
+.src__line {
+  position: relative;
+  /* A blank line has no text to give it height. */
+  min-height: var(--src-line);
+  padding: 0 var(--s-4) 0 calc(var(--src-gutter, 3ch) + var(--s-5) + var(--s-3));
+  white-space: pre;
+}
+.src__code.is-wrapped .src__line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.src__line::before {
+  content: attr(data-n);
+  position: absolute;
+  left: var(--s-3);
+  width: calc(var(--src-gutter, 3ch) + var(--s-2));
+  text-align: right;
+  color: var(--fg-3);
+  opacity: 0.6;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.src__line:hover {
+  background: rgb(255 255 255 / 0.03);
+}
+.src__line:hover::before {
+  opacity: 1;
+}
+
+/* Xcode's dark theme, the editor this app's type and colour already follow. */
+.tok--comment {
+  color: #7f8c98;
+  font-style: italic;
+}
+.tok--string {
+  color: #ff8170;
+}
+.tok--number {
+  color: #d9c97c;
+}
+.tok--keyword {
+  color: #ff7ab2;
+  font-weight: 600;
+}
+.tok--meta {
+  color: #67b7a4;
+}
+.tok--arc {
+  color: #ffa14f;
+  font-weight: 600;
+}
+.tok--type {
+  color: #dabaff;
+}
+.tok--asset {
+  color: #6bdfff;
+}
+.tok--path {
+  color: #acf2e4;
+}
+
+/* An asset path that resolved to a file in the graph. */
+.src__link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, #6bdfff 40%, transparent);
+  text-underline-offset: 2px;
+}
+.src__link:hover {
+  text-decoration-color: #6bdfff;
+  background: color-mix(in srgb, #6bdfff 12%, transparent);
+  border-radius: 3px;
+}
+
+/* ===========================================================================
+   Scene: the composed prim tree of the selected layer
+   =========================================================================== */
+
+.scene {
+  display: grid;
+  align-content: start;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-4) var(--s-5);
+  min-width: 0;
+}
+
+.scene__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0 var(--s-1);
+}
+.scene__bar h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--fg-2);
+  font-family: var(--font-small);
+}
+.scene__tools {
+  display: flex;
+  margin-left: auto;
+}
+.scene__tools .iconbtn {
+  width: 26px;
+  height: 26px;
+}
+.scene__tools .iconbtn svg {
+  width: 14px;
+  height: 14px;
+}
+.scene__tools .iconbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.scene__tools .iconbtn:disabled:hover {
+  background: none;
+  color: var(--fg-2);
+}
+.scene__payloads.is-on {
+  color: var(--warn);
+}
+
+.scene__tree {
+  display: grid;
+  min-width: 0;
+}
+
+/*
+ * Rows sit edge to edge with no gap, so each row's connector cells join the
+ * next row's into unbroken lines. Every column is one caret wide, which puts a
+ * child's branch line exactly under its parent's caret.
+ */
+.prim {
+  --col: 16px;
+  --rail: rgb(255 255 255 / 0.2);
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 26px;
+  padding: 0 var(--s-2) 0 var(--s-1);
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+  color: var(--fg-1);
+  text-align: left;
+  transition: background var(--fast), color var(--fast);
+}
+button.prim:hover {
+  background: var(--fill-4);
+}
+.prim.is-on {
+  --rail: rgb(255 255 255 / 0.45);
+  background: var(--root);
+  color: #fff;
+}
+
+.prim--note .prim__name {
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+}
+.prim--error .prim__name {
+  color: var(--danger);
+}
+
+.guide {
+  position: relative;
+  align-self: stretch;
+  width: var(--col);
+  flex: none;
+}
+.guide--pipe::before,
+.guide--tee::before,
+.guide--elbow::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--col) / 2 - 0.5px);
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--rail);
+}
+.guide--elbow::before {
+  bottom: 50%;
+}
+.guide--tee::after,
+.guide--elbow::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--col) / 2);
+  right: 0;
+  top: calc(50% - 0.5px);
+  height: 1px;
+  background: var(--rail);
+}
+
+.hicon {
+  display: block;
+  flex: none;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.prim__icon {
+  width: 16px;
+  height: 16px;
+  margin-right: var(--s-2);
+}
+.prim.is-inactive .prim__icon {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
+.hicon--flag {
+  width: 13px;
+  height: 13px;
+  pointer-events: auto;
+}
+.hicon--flag.is-unloaded {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.hicon--pip {
+  width: 16px;
+  height: 16px;
+}
+
+.prim__variant {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 11ch;
+  padding: 0 5px 0 3px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--tier-set) 16%, transparent);
+  font-family: var(--font-small);
+  font-size: var(--t-2xs);
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--tier-set);
+}
+.prim__variant span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prim.is-on .prim__variant {
+  background: rgb(255 255 255 / 0.18);
+  color: #fff;
+}
+.prim.is-on .prim__type,
+.prim.is-on .prim__caret {
+  color: rgb(255 255 255 / 0.75);
+}
+.prim.is-on .prim__flag {
+  background: rgb(255 255 255 / 0.18);
+  color: #fff;
+}
+
+/* Composition says these exist but would not render: dim them, never hide
+   them, since an unexpected `over` is usually the thing being looked for. */
+.prim.is-over .prim__name,
+.prim.is-class .prim__name {
+  font-style: italic;
+  color: var(--fg-2);
+}
+.prim.is-proxy:not(.is-on) .prim__name {
+  color: var(--fg-2);
+}
+.prim.is-inactive .prim__name {
+  color: var(--fg-3);
+  text-decoration: line-through;
+  text-decoration-color: rgb(255 255 255 / 0.25);
+}
+
+.prim__caret {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--col);
+  align-self: stretch;
+  flex: none;
+  color: var(--fg-3);
+}
+/* An open prim starts the line its children branch off, just below the
+   chevron. */
+.prim__caret.is-open::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--col) / 2 - 0.5px);
+  top: calc(50% + 6px);
+  bottom: 0;
+  width: 1px;
+  background: var(--rail);
+}
+/* A leaf has no chevron, so the branch runs on into its icon. */
+.prim__caret.is-leaf::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 3px;
+  top: calc(50% - 0.5px);
+  height: 1px;
+  background: var(--rail);
+}
+.prim__caret svg {
+  width: 11px;
+  height: 11px;
+  transition: transform 0.16s var(--ease);
+}
+.prim__caret.is-open svg {
+  transform: rotate(90deg);
+}
+
+.prim__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prim__flags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-left: var(--s-2);
+}
+
+.prim__flag {
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--fill-3);
+  font-family: var(--font-small);
+  font-size: var(--t-2xs);
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--fg-2);
+  max-width: 9ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prim__type {
+  margin-left: auto;
+  padding-left: var(--s-2);
+  flex: none;
+  font-size: var(--t-2xs);
+  color: var(--fg-3);
+}
+
+.scene__detail {
+  display: grid;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+  padding: var(--s-4) var(--s-1) 0;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.scene__detail h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: var(--s-2);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--fg-2);
+  font-family: var(--font-small);
+}
+.scene__detail h3 > :not(:first-child) {
+  margin-left: auto;
 }
 
 /* ===========================================================================

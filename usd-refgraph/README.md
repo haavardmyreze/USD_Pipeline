@@ -372,6 +372,75 @@ shelf tool or a shell alias:
 http://localhost:5173/?path=C:\show\shots\kilo\0010\kilo-0010.usda
 ```
 
+## The scene tree
+
+Select a layer in the graph and switch its detail panel to **Scene** to see the
+prim hierarchy that layer composes into. It is always the stage opened *from the
+selected node*, so it shows exactly what that file can see: the shot root shows
+the whole shot, an asset's model block shows only that block. The tab stays
+chosen as you click around the graph, and each layer remembers what was expanded.
+
+This is the other half of the graph. The graph reads arcs as authored; the tree
+opens a real `UsdStage` and shows what composition made of them — every prim,
+including `over`s (italic), deactivated prims (struck through) and classes.
+Connector lines run from each open prim down to its children, the way an
+outline or a file tree draws them, so depth reads without counting indents.
+
+It speaks Houdini's visual language. Each prim carries the icon Solaris's Scene
+Graph Tree gives its type — axes for an Xform, a pill for a Scope, a ball for a
+Material. A prim gets one icon: on an Xform, a Scope or a typeless prim with a
+kind, the kind's stars (component, assembly, group) replace the type icon,
+since there the kind is what matters; any other type keeps its own icon.
+Rows then flag what is authored on them with Houdini's icons: the Reference and
+Set Variant LOPs, the payload icon (greyed while unloaded) and the instance
+icon. Inherits and specializes have no Houdini icon and stay as words.
+
+The icons are SideFX's official SVGs, copied unchanged into
+`src/client/assets/houdini/` and looked up by their Houdini names in
+`ui/houdini.ts`. A type Houdini has no icon for shows its question mark. They
+are SideFX's artwork, so check your Houdini licence before shipping this tool
+outside the studio.
+
+Picking a prim lists its **opinions**: every layer with something to say about
+it, strongest first, labelled with the arc that brought the layer in. Clicking
+one selects that layer in the graph, and the tree switches to it.
+
+- Stages open **without payloads**, which is fast; an unloaded payload is
+  flagged in amber. The **Payloads** toggle reopens with them loaded and keeps
+  the tree as it was.
+- The tree is read one level at a time as rows expand (`/api/scene`), and a
+  prim's detail on demand (`/api/prim`), so a heavy shot never has to be walked
+  whole. A level stops at 500 children and says how many more there are.
+- Arrow keys walk the tree: up and down move, right expands, left collapses or
+  goes to the parent.
+- **Expand all** and **Collapse all** sit beside the prim count. For a single
+  branch, Shift-click its arrow, or press Shift+→ / Shift+← on it. Expanding
+  lists the branch in one request (`/api/subtree`), breadth first, and stops at
+  5,000 prims: anything beyond that stays collapsed, with a note saying so,
+  and opens a branch at a time as usual.
+- Variant selections are shown, not switched. The tree is read-only.
+
+## The source
+
+The detail panel's **Source** tab shows a text layer's contents exactly as the
+file sits on disk, comments and formatting included. Like the Scene tab, it
+widens the panel, since neither code nor a deep prim tree fits 340px; the
+panel narrows again for Details.
+
+- USDA is highlighted: specifiers and list ops, the arcs the graph draws
+  (`subLayers`, `references`, `payload`, …), metadata, types, strings, numbers,
+  asset paths and prim paths.
+- An asset path that matches an arc in the graph is a link. Clicking
+  `@./assets/hero.usda@` selects `hero.usda`, and the Source tab stays open on
+  it, so you can walk a chain of layers reading each file in turn.
+- Wrap long lines, or copy the whole file, from the bar above the code.
+- Only text layers have a Source tab. Binary `.usdc` and `.usdz` files have
+  none, and a `.usd` file is checked by its first bytes rather than trusted by
+  its extension.
+- Long files stay quick: lines are built in chunks of 200 as they scroll into
+  view, and a file is cut off after 4 million characters with a note saying
+  how much was shown (`/api/source`).
+
 ## What counts as a dependency
 
 Arcs are read from `Sdf` layer specs rather than a composed `UsdStage`. That is
@@ -400,7 +469,13 @@ family of files, so they are shown but never reported as missing.
 ```bash
 cd server && ../.venv/Scripts/python tests/test_crawl.py
 cd server && ../.venv/Scripts/python tests/test_project.py
+cd server && ../.venv/Scripts/python tests/test_scene.py
+cd server && ../.venv/Scripts/python tests/test_source.py
 ```
+
+`test_scene.py` covers the composed tree against the same fixture: sublayer
+prims, variant composition, payload loading, and that a prim's opinion layers
+carry the same ids as the graph's nodes.
 
 `test_project.py` covers the metadata reading, the status vocabulary and the
 project scan, against a fixture project in `server/tests/fixture-project/`.

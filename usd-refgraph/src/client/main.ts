@@ -20,6 +20,7 @@ import { DropZone } from './ui/dropzone'
 import { collapseToAssemblies } from './graph/collapse'
 import { GraphView } from './graph/view'
 import { Inspector, toast } from './ui/inspector'
+import { SceneTree } from './ui/scene'
 import { FilePicker } from './ui/picker'
 import { ShortcutSheet } from './ui/shortcuts'
 import { Sidebar } from './ui/sidebar'
@@ -71,6 +72,7 @@ class App {
   private readonly view: GraphView
   private readonly sidebar: Sidebar
   private readonly inspector: Inspector
+  private readonly scene: SceneTree
   private readonly picker: FilePicker
   private readonly dropzone: DropZone
   private readonly tree: ProjectTree
@@ -118,15 +120,29 @@ class App {
       onToggleArc: (kind) => this.toggleArc(kind),
     })
 
-    this.inspector = new Inspector({
-      onSelect: (id) => {
-        this.select(id)
-        this.view.focusNode(id)
-      },
-      onSetRoot: (id) => this.setRootFromNode(id),
-      onReveal: (path) => this.reveal(path),
+    const focusNode = (id: string): void => {
+      this.select(id)
+      this.view.focusNode(id)
+    }
+
+    this.scene = new SceneTree({
+      onSelectLayer: focusNode,
+      hasLayer: (id) => Boolean(this.displayed?.nodes.some((node) => node.id === id)),
       onToast: (message, kind) => toast(message, kind),
     })
+
+    this.inspector = new Inspector(
+      {
+        onSelect: focusNode,
+        onSetRoot: (id) => this.setRootFromNode(id),
+        onReveal: (path) => this.reveal(path),
+        onToast: (message, kind) => toast(message, kind),
+        onLayout: () => {
+          if (this.selectedId) this.view.setInset(this.inspector.inset)
+        },
+      },
+      this.scene,
+    )
 
     this.tree = new ProjectTree(must<HTMLElement>('#tree'), {
       onPick: (layer) => void this.load(layer.path),
@@ -163,6 +179,9 @@ class App {
       this.graph = graph
       this.rootPath = path
       this.selectedId = null
+      // The crawl just re-read every layer from disk, so a remembered tree or
+      // file text may describe files that have since changed.
+      this.inspector.reset()
       this.inspector.hide()
       this.view.setInset(0)
 

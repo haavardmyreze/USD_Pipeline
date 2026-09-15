@@ -163,6 +163,93 @@ export interface Graph {
 }
 
 // ---------------------------------------------------------------------------
+// Scene graph — the composed prim hierarchy of one layer
+//
+// Mirrors `server/usd_refgraph/scene.py`.
+// ---------------------------------------------------------------------------
+
+/** Composition arcs authored on a prim, as the tree row flags them. */
+export type PrimArc = 'reference' | 'payload' | 'inherit' | 'specialize'
+
+export interface ScenePrim {
+  name: string
+  /** Absolute prim path, e.g. `/Shot/Hero`. */
+  path: string
+  /** Schema type, e.g. `Xform`; empty for a typeless prim. */
+  typeName: string
+  specifier: 'def' | 'over' | 'class'
+  active: boolean
+  childCount: number
+  arcs: PrimArc[]
+  /** Model kind, e.g. `component`, when one is authored. */
+  kind?: string
+  /** Variant set name to its current selection. */
+  variants?: Record<string, string>
+  instance?: true
+  instanceProxy?: true
+  /** Has a payload the stage was opened without. */
+  unloaded?: true
+}
+
+/** One prim's children. */
+export interface SceneLevel {
+  /** Graph node id of the layer the stage was opened from. */
+  layerId: string
+  primPath: string
+  defaultPrim: string | null
+  children: ScenePrim[]
+  /** Children that exist, which is more than `children` when cut short. */
+  total: number
+}
+
+/** Every level beneath one prim, breadth first. */
+export interface SceneSubtree {
+  levels: SceneLevel[]
+  /** True when the prim budget ran out and deeper levels were left out. */
+  truncated: boolean
+  /** Prims listed across all the levels. */
+  prims: number
+}
+
+/** A layer holding an opinion on a prim, and the arc that brought it in. */
+export interface PrimOpinion {
+  /** Matches a graph node id when the layer is in the graph. */
+  layerId: string
+  layerPath: string
+  name: string
+  /** Where the opinion sits in that layer, e.g. `/Shot/Crowd{lod=high}Body`. */
+  specPath: string
+  /** `root` for the layer stack the stage was opened on. */
+  arc: string
+  /** The layer that authored the arc. */
+  introducedBy?: string
+}
+
+export interface PrimDetail extends ScenePrim {
+  variantSets: { name: string; selection: string | null; options: string[] }[]
+  appliedSchemas: string[]
+  attributeCount: number
+  relationshipCount: number
+  /** Strongest first. */
+  opinions: PrimOpinion[]
+}
+
+// ---------------------------------------------------------------------------
+// Layer source — mirrors `server/usd_refgraph/source.py`
+// ---------------------------------------------------------------------------
+
+export interface LayerSource {
+  path: string
+  text: string
+  /** True when the text stops short of the end of the file. */
+  truncated: boolean
+  /** Lines in the whole file, including any not returned. */
+  totalLines: number
+  size: number
+  mtime: number
+}
+
+// ---------------------------------------------------------------------------
 // File browsing
 // ---------------------------------------------------------------------------
 

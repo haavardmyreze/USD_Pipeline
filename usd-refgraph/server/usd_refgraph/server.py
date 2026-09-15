@@ -17,7 +17,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import browse, project
+from . import browse, project, scene, source
 from .crawl import DEFAULT_MAX_NODES, Crawler
 
 #: Only browsers pointed at our own dev server may call the API.
@@ -206,6 +206,35 @@ class Handler(BaseHTTPRequestHandler):
                 max_nodes=max_nodes,
             )
             self._send_json(crawler.run().to_dict())
+            return
+
+        if route == "/api/source":
+            try:
+                self._send_json(source.read(first("path")))
+            except source.SourceError as exc:
+                self._send_error_json(exc.status, exc.message, exc.detail)
+            return
+
+        if route in ("/api/scene", "/api/subtree", "/api/prim"):
+            path = first("path")
+            if not path:
+                self._send_error_json(400, "Missing `path` parameter")
+                return
+            load_payloads = first("payloads", "0") not in ("0", "false")
+            prim_path = first("prim", "/")
+            try:
+                if route == "/api/scene":
+                    limit_text = first("limit")
+                    limit = int(limit_text) if limit_text.isdigit() else scene.DEFAULT_CHILD_LIMIT
+                    payload = scene.children(path, prim_path, load_payloads, limit)
+                elif route == "/api/subtree":
+                    payload = scene.subtree(path, prim_path, load_payloads)
+                else:
+                    payload = scene.detail(path, prim_path, load_payloads)
+            except scene.SceneError as exc:
+                self._send_error_json(exc.status, exc.message, exc.detail)
+                return
+            self._send_json(payload)
             return
 
         self._send_error_json(404, "Unknown endpoint", route)

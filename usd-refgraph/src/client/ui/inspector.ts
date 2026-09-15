@@ -20,6 +20,8 @@ import {
 } from '../graph/theme'
 import { ICONS } from './icons'
 import { dismiss, present } from './presence'
+import type { SceneTree } from './scene'
+import { SourceView } from './source'
 import {
   Facts,
   button,
@@ -45,15 +47,41 @@ export interface InspectorCallbacks {
   onSetRoot(id: string): void
   onReveal(path: string): void
   onToast(message: string, kind?: 'ok' | 'error'): void
+  /** The panel changed width, so whatever frames around it should re-measure. */
+  onLayout(): void
 }
+
+type Tab = 'details' | 'scene' | 'source'
+
+const TABS: [Tab, string][] = [
+  ['details', 'Details'],
+  ['scene', 'Scene'],
+  ['source', 'Source'],
+]
 
 export class Inspector {
   private readonly root = must<HTMLElement>('#inspector')
+  private readonly source: SourceView
+  private tab: Tab = 'details'
+  /** The node on screen, so re-showing it can keep the scroll position. */
+  private shownId: string | null = null
 
-  constructor(private readonly callbacks: InspectorCallbacks) {}
+  constructor(
+    private readonly callbacks: InspectorCallbacks,
+    private readonly scene: SceneTree,
+  ) {
+    this.source = new SourceView(this.root, {
+      onSelect: (id) => callbacks.onSelect(id),
+      onToast: (message, kind) => callbacks.onToast(message, kind),
+    })
+  }
 
   hide(): void {
-    dismiss(this.root, () => clear(this.root))
+    this.shownId = null
+    dismiss(this.root, () => {
+      clear(this.root)
+      this.root.classList.remove('inspector--wide')
+    })
   }
 
   /** How much of the stage's right edge the panel covers, margins included. */
@@ -75,6 +103,18 @@ export class Inspector {
     const isRoot = node.id === graph.rootId
     const missing = !node.exists && !node.template
 
+    // Only a layer that exists has a stage to show, and only a text layer has
+    // source; anything else gets no tab rather than an empty one. The chosen
+    // tab is kept, so stepping through a binary file and back returns to it.
+    const isLayer = node.kind === 'layer' && node.exists
+    const tabs = TABS.filter(([value]) => value !== 'source' || !node.binary)
+    const tab = isLayer && tabs.some(([value]) => value === this.tab) ? this.tab : 'details'
+
+    // A different file starts at its top; the same file keeps its place.
+    const sameNode = this.shownId === nodeId
+    const scrollTop = this.root.scrollTop
+    this.shownId = nodeId
+
     clear(this.root)
     present(this.root)
     this.root.style.setProperty(
@@ -82,7 +122,30 @@ export class Inspector {
       isRoot ? ROOT_COLOR : missing ? MISSING_COLOR : TIER_TINT[node.tier ?? ''] ?? 'var(--fg-3)',
     )
 
+    // A deep prim tree and a layer's code both want the width; Details reads
+    // better narrow.
+    const wide = tab === 'scene' || tab === 'source'
+    if (this.root.classList.contains('inspector--wide') !== wide) {
+      this.root.classList.toggle('inspector--wide', wide)
+      this.callbacks.onLayout()
+    }
+
     this.root.appendChild(this.buildHead(node, isRoot, missing))
+    if (isLayer) this.root.appendChild(this.buildTabs(graph, nodeId, tabs, tab))
+
+    if (tab === 'scene') this.root.appendChild(this.scene.show(node))
+    else if (tab === 'source') this.root.appendChild(this.source.show(graph, node))
+    else this.buildDetails(graph, node, outgoing, incoming)
+
+    this.root.scrollTop = sameNode ? scrollTop : 0
+  }
+
+  private buildDetails(
+    graph: Graph,
+    node: GraphNode,
+    outgoing: GraphEdge[],
+    incoming: GraphEdge[],
+  ): void {
 
     const record = readRecord(node.meta?.customLayerData)
     if (!isEmptyRecord(record)) this.root.appendChild(this.buildPublish(record))
@@ -90,6 +153,12 @@ export class Inspector {
 
     this.root.appendChild(this.buildArcs('References out', outgoing, graph, (e) => e.to))
     this.root.appendChild(this.buildArcs('Referenced by', incoming, graph, (e) => e.from))
+  }
+
+  /** Forget cached scene trees and file text, after a rescan. */
+  reset(): void {
+    this.scene.reset()
+    this.source.reset()
   }
 
   // -- head ---------------------------------------------------------------
@@ -156,6 +225,27 @@ export class Inspector {
     }
     if (actions.childElementCount) head.appendChild(actions)
     return head
+  }
+
+  /** Details, Scene or Source. The choice sticks as the selection moves. */
+  private buildTabs(graph: Graph, nodeId: string, tabs: [Tab, string][], active: Tab): HTMLElement {
+    const bar = el('div', 'insp__tabs')
+    const seg = el('div', 'seg')
+    seg.setAttribute('role', 'tablist')
+    for (const [value, label] of tabs) {
+      const on = active === value
+      const tab = el('button', `seg__btn${on ? ' is-on' : ''}`, label)
+      tab.setAttribute('role', 'tab')
+      tab.setAttribute('aria-selected', String(on))
+      tab.addEventListener('click', () => {
+        if (on) return
+        this.tab = value
+        this.show(graph, nodeId)
+      })
+      seg.appendChild(tab)
+    }
+    bar.appendChild(seg)
+    return bar
   }
 
   private async copy(path: string): Promise<void> {

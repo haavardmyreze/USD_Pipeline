@@ -30,6 +30,12 @@ export const ICONS = {
   arrowUp: '<path d="M8 12.6V3.4M3.6 7.8 8 3.4l4.4 4.4"/>',
   chevronLeft: '<path d="M10 3.5 5.5 8l4.5 4.5"/>',
   chevronRight: '<path d="m6 3.5 4.5 4.5L6 12.5"/>',
+  /** A line running on and turning back under itself — wrap long lines. */
+  wrap: '<path d="M2.4 4h11.2M2.4 8h9a2.2 2.2 0 0 1 0 4.4H8.6"/><path d="m10 11-1.4 1.4 1.4 1.4M2.4 12.4h3.4"/>',
+  /** Two chevrons opening downwards — expand everything. */
+  expandAll: '<path d="m4 3.4 4 3.6 4-3.6"/><path d="m4 9 4 3.6L12 9"/>',
+  /** Two chevrons closing upwards — collapse everything. */
+  collapseAll: '<path d="m4 7 4-3.6L12 7"/><path d="m4 12.6 4-3.6 4 3.6"/>',
   search: '<circle cx="7" cy="7" r="4.6"/><path d="m10.6 10.6 3 3"/>',
   user: '<circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.4a5 5 0 0 1 10 0"/>',
   clock: '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.4V8l2.4 1.6"/>',

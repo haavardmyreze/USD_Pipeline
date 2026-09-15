@@ -3,7 +3,11 @@ import type {
   Capabilities,
   DirListing,
   Graph,
+  LayerSource,
   LocateResult,
+  PrimDetail,
+  SceneLevel,
+  SceneSubtree,
 } from '@shared/types'
 import type { Project } from '@shared/project'
 
@@ -66,6 +70,28 @@ export function getGraph(path: string, options: GraphOptions): Promise<Graph> {
   })
   if (options.maxDepth !== undefined) params.set('maxDepth', String(options.maxDepth))
   return request<Graph>(`/api/graph?${params}`)
+}
+
+/** The children of one prim on the stage composed from `path`. */
+export function getScene(path: string, prim: string, payloads: boolean): Promise<SceneLevel> {
+  const params = new URLSearchParams({ path, prim, payloads: payloads ? '1' : '0' })
+  return request<SceneLevel>(`/api/scene?${params}`)
+}
+
+/** A layer's text: as on disk, or converted to usda for a binary layer. */
+export function getSource(path: string): Promise<LayerSource> {
+  return request<LayerSource>(`/api/source?path=${encodeURIComponent(path)}`)
+}
+
+/** Every level beneath one prim, for expanding a whole branch at once. */
+export function getSubtree(path: string, prim: string, payloads: boolean): Promise<SceneSubtree> {
+  const params = new URLSearchParams({ path, prim, payloads: payloads ? '1' : '0' })
+  return request<SceneSubtree>(`/api/subtree?${params}`)
+}
+
+export function getPrim(path: string, prim: string, payloads: boolean): Promise<PrimDetail> {
+  const params = new URLSearchParams({ path, prim, payloads: payloads ? '1' : '0' })
+  return request<PrimDetail>(`/api/prim?${params}`)
 }
 
 /**
