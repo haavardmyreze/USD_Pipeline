@@ -7,6 +7,8 @@ import { readDirectives } from './directives'
 import { EXAMPLES } from './examples'
 import { guideMarkup } from './guides'
 import { loadIcons } from './icons'
+import { AssistantPanel } from './assistant/panel'
+import type { AssistantHost, DrawInput } from './assistant/chat'
 import { setUpPanels } from './panels'
 import { moveKeyword, parse, toggleKeyword } from './parse'
 import { embed, extract } from './png'
@@ -49,6 +51,7 @@ const ui = {
   scale: $('scale'),
   file: $<HTMLInputElement>('file'),
   toast: $('toast'),
+  chatToggle: $<HTMLButtonElement>('chat-toggle'),
 }
 
 const measure = document.createElement('canvas').getContext('2d')!
@@ -90,7 +93,8 @@ async function start(): Promise<void> {
 
   buildExamples()
   wire()
-  setUpPanels(document.querySelector<HTMLElement>('.app')!)
+  const panels = setUpPanels(ui.app)
+  setUpAssistant(() => panels.fit())
   open(fromExample(1))
 }
 
@@ -610,6 +614,92 @@ function buildHelp(mode: Mode): void {
     table.append(dt, dd)
   }
   ui.help.replaceChildren(table)
+}
+
+// ---------------------------------------------------------------------------
+// Assistant
+// ---------------------------------------------------------------------------
+
+function setUpAssistant(fit: () => void): void {
+  let previewFrame = 0
+  let pending: Partial<DrawInput> | null = null
+
+  const host: AssistantHost = {
+    current: () => ({ mode: current.options.mode, name: current.name, outline: ui.source.value }),
+
+    apply(input) {
+      cancelAnimationFrame(previewFrame)
+      pending = null
+      // Writing into the editor moves focus there; give it back to whatever
+      // had it, usually the question box.
+      const focused = document.activeElement as HTMLElement | null
+      current.name = input.name
+      ui.name.value = input.name
+      if (current.options.mode !== input.mode) {
+        current.options = { ...current.options, mode: input.mode }
+        saveLook(current.options)
+        syncOptions()
+      }
+      replaceAll(input.outline.replace(/\r\n?/g, '\n'), 0)
+      ui.source.scrollTop = 0
+      syncScroll()
+      focused?.focus()
+      return drawing?.problems ?? []
+    },
+
+    preview(input) {
+      if (typeof input.outline !== 'string') return
+      pending = input
+      if (previewFrame) return
+      previewFrame = requestAnimationFrame(() => {
+        previewFrame = 0
+        if (!pending?.outline) return
+        const mode = pending.mode === 'tree' || pending.mode === 'graph' ? pending.mode : current.options.mode
+        const partial = build(measure, pending.outline, { ...current.options, mode })
+        partial.paint(ui.canvas, zoom * (window.devicePixelRatio || 1))
+        ui.canvas.style.width = `${partial.width * zoom}px`
+        ui.canvas.style.height = `${partial.height * zoom}px`
+        ui.hover.hidden = true
+      })
+    },
+
+    endPreview() {
+      cancelAnimationFrame(previewFrame)
+      previewFrame = 0
+      pending = null
+      redraw()
+    },
+  }
+
+  const panel = new AssistantPanel(
+    {
+      root: $('chat'),
+      log: $('chat-log'),
+      form: $<HTMLFormElement>('chat-form'),
+      input: $<HTMLTextAreaElement>('chat-input'),
+      send: $<HTMLButtonElement>('chat-send'),
+      keyForm: $<HTMLFormElement>('chat-key'),
+      keyInput: $<HTMLInputElement>('chat-key-input'),
+      keyRemember: $<HTMLInputElement>('chat-key-remember'),
+      keyButton: $<HTMLButtonElement>('chat-key-button'),
+      resetButton: $<HTMLButtonElement>('chat-reset'),
+      model: $('chat-model'),
+    },
+    host,
+  )
+
+  const show = (open: boolean): void => {
+    ui.app.classList.toggle('has-chat', open)
+    ui.chatToggle.setAttribute('aria-pressed', String(open))
+    writeSetting('chat', open ? '1' : '0')
+    fit()
+  }
+  show(readSetting('chat', '0') === '1')
+  ui.chatToggle.addEventListener('click', () => {
+    const open = !ui.app.classList.contains('has-chat')
+    show(open)
+    if (open) panel.focus()
+  })
 }
 
 // ---------------------------------------------------------------------------

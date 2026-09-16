@@ -7,6 +7,8 @@ export default defineConfig({
     port: 5180,
     strictPort: false,
     open: true,
+    // The assistant reads the pipeline guide from the repository's docs.
+    fs: { allow: ['.', '../docs'] },
   },
   build: {
     outDir: 'dist',

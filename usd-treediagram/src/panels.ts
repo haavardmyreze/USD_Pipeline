@@ -1,5 +1,6 @@
 /**
- * Draggable dividers between the four columns.
+ * Draggable dividers between the columns: sidebar, assistant, editor,
+ * preview and settings.
  *
  * Each divider sets one CSS variable on `.app` (see styles.css). Widths are
  * remembered in this browser; double-clicking a divider returns its column
@@ -8,7 +9,7 @@
  */
 
 interface Column {
-  name: 'side' | 'editor' | 'inspector'
+  name: 'side' | 'chat' | 'editor' | 'inspector'
   variable: string
   min: number
   max: number
@@ -18,7 +19,8 @@ interface Column {
 }
 
 const COLUMNS: Column[] = [
-  { name: 'side', variable: '--side-w', min: 120, max: 400, fromRight: false, label: 'Resize the diagram list' },
+  { name: 'side', variable: '--side-w', min: 120, max: 400, fromRight: false, label: 'Resize the sidebar' },
+  { name: 'chat', variable: '--chat-w', min: 260, max: 900, fromRight: false, label: 'Resize the assistant' },
   { name: 'editor', variable: '--editor-w', min: 200, max: 1400, fromRight: false, label: 'Resize the editor' },
   { name: 'inspector', variable: '--inspector-w', min: 180, max: 420, fromRight: true, label: 'Resize the settings' },
 ]
@@ -28,15 +30,23 @@ const STAGE_MIN = 200
 const KEY = 'usd-treediagram:panels'
 const STEP = 16
 
-export function setUpPanels(app: HTMLElement): void {
+export interface Panels {
+  /** Take room back from the columns when they no longer fit. */
+  fit(): void
+}
+
+export function setUpPanels(app: HTMLElement): Panels {
   const saved = load()
 
   const width = (column: Column): number =>
     parseFloat(getComputedStyle(app).getPropertyValue(column.variable)) || column.min
+  /** What a column takes up now: a closed assistant takes nothing. */
+  const taken = (column: Column): number =>
+    column.name === 'chat' && !app.classList.contains('has-chat') ? 0 : width(column)
 
   /** Set a column, clamped so the preview keeps `STAGE_MIN`. */
   const set = (column: Column, value: number): void => {
-    const others = COLUMNS.filter((c) => c !== column).reduce((sum, c) => sum + width(c), 0)
+    const others = COLUMNS.filter((c) => c !== column).reduce((sum, c) => sum + taken(c), 0)
     const room = app.clientWidth - others - STAGE_MIN
     const clamped = Math.round(Math.max(column.min, Math.min(value, column.max, room)))
     app.style.setProperty(column.variable, `${clamped}px`)
@@ -112,14 +122,15 @@ export function setUpPanels(app: HTMLElement): void {
     })
   }
 
-  // A smaller window takes the room back from the editor first, then the
-  // sides, rather than crushing the preview.
+  // A smaller window, or an opened assistant, takes the room back from the
+  // editor first, then the other columns, rather than crushing the preview.
   const fit = (): void => {
-    const total = COLUMNS.reduce((sum, c) => sum + width(c), 0)
+    const total = COLUMNS.reduce((sum, c) => sum + taken(c), 0)
     let over = total + STAGE_MIN - app.clientWidth
-    for (const name of ['editor', 'side', 'inspector'] as const) {
+    for (const name of ['editor', 'chat', 'side', 'inspector'] as const) {
       if (over <= 0) break
       const column = COLUMNS.find((c) => c.name === name)!
+      if (!taken(column)) continue
       const current = width(column)
       const next = Math.max(column.min, current - over)
       if (next < current) {
@@ -130,6 +141,7 @@ export function setUpPanels(app: HTMLElement): void {
   }
   window.addEventListener('resize', fit)
   fit()
+  return { fit }
 }
 
 function load(): Record<string, unknown> {

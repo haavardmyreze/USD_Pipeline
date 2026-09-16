@@ -97,6 +97,32 @@ used, and **Dotted grid** the stage's grid. Click a node to find its line, and
 Shift-click to select it. If the outline has arrows, Open and the command line
 treat it as a flowchart even without `#! mode=graph`.
 
+## Assistant
+
+**Assistant** in the sidebar opens a chat with Claude Haiku 4.5 that builds
+diagrams for you: "a flowchart of char-robot's blocks", "add an fx block to
+this", "a tree of the shot scene graph with two characters". It draws straight
+into the editor, and the preview builds as the outline is written. If the
+tool cannot read a line, the assistant is told and corrects it. Ctrl+Z in the
+editor undoes whatever it drew. It also answers questions about the pipeline.
+
+It works from the studio's own documents, bundled into its instructions:
+
+- `../docs/pipeline-guide.md`, read at build time, so it follows the guide as
+  it currently stands;
+- `src/assistant/knowledge/studio-notes.md`: the three folder trees
+  (`$WORK`, `$PROJECT`, `$OUTPUT`), the USD hierarchy and render output paths,
+  which are newer than the guide and win where the two disagree.
+
+Edit either file to change what it knows; the instructions themselves are in
+`src/assistant/prompt.ts`.
+
+It needs an Anthropic API key, entered in the panel. The key stays in the
+browser and is sent only to the Anthropic API: for the tab's lifetime, or on
+this computer if **Remember** is ticked. The documents come to roughly 35,000
+tokens, sent with every question but cached, so the first question in a while
+costs a few cents and later ones a fraction of that.
+
 ## Exporting
 
 **Save PNG** (or Ctrl+S) writes the image at the chosen resolution; 2× suits

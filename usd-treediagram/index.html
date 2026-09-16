@@ -19,9 +19,45 @@
           <button class="btn" id="open" title="Open a PNG exported from here, or an outline .txt">Open…</button>
           <input type="file" id="file" accept=".png,.txt,.tree,text/plain,image/png" hidden />
         </div>
+        <button class="assist-toggle" id="chat-toggle" aria-pressed="false" title="Ask Claude to build a diagram">
+          <span class="assist-toggle__mark" aria-hidden="true">✦</span>
+          <span>Assistant</span>
+        </button>
         <div class="side__label">Start from</div>
         <nav class="list" id="examples"></nav>
       </aside>
+
+      <section class="chat" id="chat" aria-label="Assistant">
+        <header class="chat__bar">
+          <div class="chat__heading">
+            <span class="chat__title">Assistant</span>
+            <span class="chat__model" id="chat-model"></span>
+          </div>
+          <button class="chat__action" id="chat-reset" type="button" title="Start a new conversation">New chat</button>
+          <button class="chat__action" id="chat-key-button" type="button"></button>
+        </header>
+        <form class="chat__key" id="chat-key" hidden>
+          <label class="field">
+            <span>Anthropic API key</span>
+            <input class="input" id="chat-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" />
+          </label>
+          <label class="check"><input type="checkbox" id="chat-key-remember" /> Remember on this computer</label>
+          <div class="chat__key-actions">
+            <button class="btn btn--primary" type="submit">Use key</button>
+            <button class="btn chat__forget" type="button">Forget key</button>
+          </div>
+          <p class="note">
+            The key stays in this browser and is sent only to the Anthropic API. Without “Remember”, it is
+            forgotten when the tab closes. Create one in the
+            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Claude Console</a>.
+          </p>
+        </form>
+        <div class="chat__log" id="chat-log" aria-live="polite"></div>
+        <form class="chat__compose" id="chat-form">
+          <textarea class="chat__input" id="chat-input" rows="1" placeholder="Describe a diagram, or ask about the pipeline…"></textarea>
+          <button class="btn btn--primary chat__send" id="chat-send" type="submit">Send</button>
+        </form>
+      </section>
 
       <section class="editor">
         <header class="editor__bar">
