@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>USD Tree Diagram</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='4' fill='%231c1c1e'/><path d='M5 4v8M5 8h5M5 12h5' stroke='%2398989f' stroke-width='1.2' fill='none'/><circle cx='5' cy='4' r='1.6' fill='%230a84ff'/><circle cx='11' cy='8' r='1.6' fill='%23bf5af2'/><circle cx='11' cy='12' r='1.6' fill='%2330d158'/></svg>" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="side">
+        <div class="brand">
+          <span class="brand__mark"></span>
+          <span>Tree Diagram</span>
+        </div>
+        <div class="side__actions">
+          <button class="btn btn--primary" id="new">New diagram</button>
+          <button class="btn" id="open" title="Open a PNG exported from here, or an outline .txt">Open…</button>
+          <input type="file" id="file" accept=".png,.txt,.tree,text/plain,image/png" hidden />
+        </div>
+        <div class="side__label">Diagrams</div>
+        <nav class="list" id="list"></nav>
+        <div class="side__label">Start from</div>
+        <nav class="list" id="examples"></nav>
+      </aside>
+
+      <section class="editor">
+        <header class="editor__bar">
+          <input class="editor__name" id="name" spellcheck="false" aria-label="Diagram name" />
+          <button class="iconbtn" id="help-toggle" title="Outline syntax" aria-pressed="false">?</button>
+          <button class="iconbtn" id="delete" title="Delete this diagram">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" /></svg>
+          </button>
+        </header>
+        <div class="help" id="help" hidden></div>
+        <div class="code">
+          <div class="code__gutter" id="gutter"></div>
+          <div class="code__body">
+            <pre class="code__paint" id="paint" aria-hidden="true"></pre>
+            <textarea class="code__input" id="source" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"></textarea>
+          </div>
+        </div>
+        <div class="problems" id="problems"></div>
+      </section>
+
+      <main class="stage" id="stage">
+        <div class="stage__scroll" id="scroll">
+          <div class="stage__art" id="art">
+            <canvas id="canvas"></canvas>
+            <div class="stage__hover" id="hover" hidden></div>
+          </div>
+        </div>
+        <footer class="stage__hint">
+          Click a row to find its line · Double-click to open or close · Shift-click to select · Drop a PNG to edit it
+        </footer>
+      </main>
+
+      <aside class="inspector">
+        <section class="group">
+          <h3>Look</h3>
+          <div class="field">
+            <span>Theme</span>
+            <div class="seg" data-option="theme">
+              <button data-value="dark">Dark</button>
+              <button data-value="light">Light</button>
+            </div>
+          </div>
+          <div class="field">
+            <span>Frame</span>
+            <div class="seg" data-option="frame">
+              <button data-value="panel">Panel</button>
+              <button data-value="flat">Flat</button>
+              <button data-value="transparent">None</button>
+            </div>
+          </div>
+          <label class="field">
+            <span>Heading</span>
+            <input class="input" id="title" placeholder="e.g. Prims" spellcheck="false" />
+          </label>
+          <label class="check"><input type="checkbox" id="showCount" /> Count after heading</label>
+          <label class="check"><input type="checkbox" id="showTypes" /> Type column</label>
+          <label class="check"><input type="checkbox" id="stripes" /> Alternating rows</label>
+          <div class="field">
+            <span>Minimum width <output id="minWidthOut"></output></span>
+            <input type="range" id="minWidth" min="0" max="800" step="10" />
+          </div>
+          <div class="field">
+            <span>Margin <output id="paddingOut"></output></span>
+            <input type="range" id="padding" min="0" max="64" step="2" />
+          </div>
+        </section>
+
+        <section class="group">
+          <h3>Preview</h3>
+          <div class="field">
+            <span>Zoom</span>
+            <div class="seg" id="zoom">
+              <button data-value="1">100%</button>
+              <button data-value="1.5">150%</button>
+              <button data-value="2">200%</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="group">
+          <h3>Export</h3>
+          <div class="field">
+            <span>Resolution</span>
+            <div class="seg" id="scale">
+              <button data-value="1">1×</button>
+              <button data-value="2">2×</button>
+              <button data-value="3">3×</button>
+              <button data-value="4">4×</button>
+            </div>
+          </div>
+          <div class="size" id="size"></div>
+          <button class="btn btn--primary btn--wide" id="export">Save PNG</button>
+          <button class="btn btn--wide" id="copy">Copy image</button>
+          <p class="note">Saved PNGs carry their outline. Open or drop one here to keep editing it.</p>
+        </section>
+      </aside>
+    </div>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
