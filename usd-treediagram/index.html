@@ -15,12 +15,10 @@
           <span>Tree Diagram</span>
         </div>
         <div class="side__actions">
-          <button class="btn btn--primary" id="new">New diagram</button>
+          <button class="btn btn--primary" id="new">New</button>
           <button class="btn" id="open" title="Open a PNG exported from here, or an outline .txt">Open…</button>
           <input type="file" id="file" accept=".png,.txt,.tree,text/plain,image/png" hidden />
         </div>
-        <div class="side__label">Diagrams</div>
-        <nav class="list" id="list"></nav>
         <div class="side__label">Start from</div>
         <nav class="list" id="examples"></nav>
       </aside>
@@ -29,9 +27,6 @@
         <header class="editor__bar">
           <input class="editor__name" id="name" spellcheck="false" aria-label="Diagram name" />
           <button class="iconbtn" id="help-toggle" title="Outline syntax" aria-pressed="false">?</button>
-          <button class="iconbtn" id="delete" title="Delete this diagram">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" /></svg>
-          </button>
         </header>
         <div class="help" id="help" hidden></div>
         <div class="code">
@@ -117,7 +112,7 @@
           <div class="size" id="size"></div>
           <button class="btn btn--primary btn--wide" id="export">Save PNG</button>
           <button class="btn btn--wide" id="copy">Copy image</button>
-          <p class="note">Saved PNGs carry their outline. Open or drop one here to keep editing it.</p>
+          <p class="note">Diagrams are not stored in the browser. Save a PNG to keep one: it carries its outline, so you can open or drop it here to keep editing.</p>
         </section>
       </aside>
     </div>

@@ -1,67 +1,50 @@
 /**
- * Diagrams kept in this browser's local storage.
+ * The diagram being edited, and the little the browser remembers.
  *
- * Nothing leaves the machine; a diagram meant to last goes into a PNG, which
- * carries its own source (see `png.ts`).
+ * Diagrams are never stored: the page holds one, and it lasts until the tab
+ * closes. A diagram is kept by exporting it — the PNG carries its outline
+ * (see `png.ts`) — and brought back with Open or a drop. Only the look
+ * settings are remembered, so a new diagram starts in the style last used.
  */
 
 import { DEFAULT_OPTIONS, type Options } from './render'
 
 export interface Diagram {
-  id: string
   name: string
   source: string
   options: Options
-  updated: number
 }
 
-const KEY = 'usd-treediagram:diagrams'
-const CURRENT = 'usd-treediagram:current'
+const LOOK = 'usd-treediagram:look'
 
-export function loadDiagrams(): Diagram[] {
+/** Keys from when diagrams were kept in the browser; cleared on start. */
+const RETIRED = ['usd-treediagram:diagrams', 'usd-treediagram:current']
+
+export function loadLook(): Partial<Options> {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? '[]') as Partial<Diagram>[]
-    return raw.filter((d) => d.id && typeof d.source === 'string').map(normalise)
+    for (const key of RETIRED) localStorage.removeItem(key)
+    const value = JSON.parse(localStorage.getItem(LOOK) ?? '{}')
+    return value && typeof value === 'object' ? value : {}
   } catch {
-    return []
+    return {}
   }
 }
 
-export function saveDiagrams(diagrams: Diagram[]): void {
+/** Remember the style, without the heading, which belongs to one diagram. */
+export function saveLook(options: Options): void {
+  const { title: _title, ...look } = options
   try {
-    localStorage.setItem(KEY, JSON.stringify(diagrams))
+    localStorage.setItem(LOOK, JSON.stringify(look))
   } catch {
-    // Storage full or blocked: the session keeps working, it just won't persist.
+    // Not remembered; nothing depends on it.
   }
 }
 
-export function loadCurrent(): string | null {
-  try {
-    return localStorage.getItem(CURRENT)
-  } catch {
-    return null
-  }
-}
-
-export function saveCurrent(id: string): void {
-  try {
-    localStorage.setItem(CURRENT, id)
-  } catch {
-    // As above.
-  }
-}
-
-/** Fill in anything an older or imported diagram is missing. */
-export function normalise(data: Partial<Diagram>): Diagram {
+/** Fill in anything an imported or new diagram is missing. */
+export function normalise(data: Partial<Diagram>, look: Partial<Options> = {}): Diagram {
   return {
-    id: data.id ?? newId(),
     name: data.name?.trim() || 'Untitled',
     source: data.source ?? '',
-    options: { ...DEFAULT_OPTIONS, ...(data.options ?? {}) },
-    updated: data.updated ?? Date.now(),
+    options: { ...DEFAULT_OPTIONS, ...look, ...(data.options ?? {}) },
   }
-}
-
-export function newId(): string {
-  return Math.random().toString(36).slice(2, 10)
 }

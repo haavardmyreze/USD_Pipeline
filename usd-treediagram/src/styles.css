@@ -110,32 +110,89 @@ svg {
    Layout
    ------------------------------------------------------------------------- */
 
+/* Column widths are variables, so the dividers (panels.ts) can drag them.
+   A width set by dragging is an inline style and wins over these defaults. */
 .app {
+  --side-w: 200px;
+  --editor-w: 400px;
+  --inspector-w: 248px;
+  position: relative;
   display: grid;
-  grid-template-columns: 200px minmax(320px, 420px) minmax(0, 1fr) 248px;
+  grid-template-columns: var(--side-w) var(--editor-w) minmax(0, 1fr) var(--inspector-w);
   height: 100%;
 }
 
-/* Narrower windows take width from the side columns, so the preview always
-   keeps some room. */
+/* Narrower windows start with narrower side columns, so the preview keeps
+   some room. */
 @media (max-width: 1280px) {
   .app {
-    grid-template-columns: 170px minmax(260px, 340px) minmax(0, 1fr) 220px;
+    --side-w: 170px;
+    --editor-w: 320px;
+    --inspector-w: 220px;
   }
 }
 @media (max-width: 1000px) {
   .app {
-    grid-template-columns: 140px 240px minmax(0, 1fr) 200px;
+    --side-w: 140px;
+    --editor-w: 240px;
+    --inspector-w: 200px;
   }
-  .side__actions {
-    grid-template-columns: 1fr;
-  }
+}
+
+/* A divider straddles each column edge: a wide invisible grab area with a
+   thin line that lights up on hover and while dragging. */
+.divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 9px;
+  margin-left: -4.5px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.divider::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background var(--fast);
+}
+.divider:hover::after,
+.divider:focus-visible::after,
+.divider.is-dragging::after {
+  background: var(--accent);
+}
+.divider:focus-visible {
+  outline: none;
+}
+.divider--side {
+  left: var(--side-w);
+}
+.divider--editor {
+  left: calc(var(--side-w) + var(--editor-w));
+}
+.divider--inspector {
+  left: calc(100% - var(--inspector-w));
+}
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+body.is-resizing * {
+  cursor: col-resize !important;
 }
 
 .side,
 .editor,
 .inspector {
+  min-width: 0;
   min-height: 0;
+  overflow-x: hidden;
   background: var(--bg-1);
   border-right: 1px solid var(--line);
 }
@@ -180,7 +237,8 @@ svg {
 
 .side__actions {
   display: grid;
-  grid-template-columns: 1fr auto;
+  /* Side by side when there is room, stacked in a narrow sidebar. */
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: var(--s-2);
   padding: 0 var(--s-1) var(--s-3);
 }
@@ -207,10 +265,6 @@ svg {
 }
 .list__row:hover {
   background: var(--fill-4);
-}
-.list__row.is-on {
-  background: var(--accent);
-  color: #fff;
 }
 .list__row--muted {
   color: var(--fg-2);

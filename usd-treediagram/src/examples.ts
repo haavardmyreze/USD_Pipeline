@@ -7,53 +7,71 @@ export interface Example {
 
 export const EXAMPLES: Example[] = [
   {
-    name: 'Component asset',
-    source: `# A component asset, as the asset's root layer composes it
-chair  Xform  kind=component  {lod=high}
-  geo  Scope
-    render  Scope
-      seat  Mesh
-      legs  Mesh
-    proxy  Scope  closed
-  mtl  Scope
-    wood  Material  closed
-    metal  Material  closed
+    name: 'Nested instancing',
+    source: `# Point instancing at set level, and again inside the asset
+/
+  World  Xform  kind=Assembly
+    Environment  Scope
+      Houses  PointInstancer  "Set level instancing"
+        Prototypes  Scope
+          House  Xform  kind=Component  "Self-Contained Asset"
+            Geo  Scope
+              PointInstancer  PointInstancer  "Asset level instancing"
+                Prototypes  Scope
+                  PlankA  Xform  kind=SubComponent  closed
+                  PlankB  Xform  kind=SubComponent  closed
+                  Bolt  Xform  kind=SubComponent  closed
+                Base  Mesh
+                Door  Mesh
+              Mtl  Scope  closed
+                Metal  Material  closed
+                PaintedWood  Material  closed
+      Landscape  Xform  kind=Component
+        Geo  Scope
+          Mesh  Mesh
+        Mtl  Scope
+          Landscape  Material  closed
 `,
   },
   {
-    name: 'Shot stage',
-    source: `# The top of a shot, after layout, anim and lighting are sublayered in
+    name: 'Shot scene',
+    source: `# A shot: referenced assets, lights, camera and render settings
 World  Xform  kind=assembly
-  chars  Scope  kind=group
-    hero  Xform  kind=component  +ref +payload  selected  "the published asset"
-      geo  Scope  closed
-    crowd  PointInstancer  +instance
-  sets  Scope  kind=group
-    kitchen  Xform  kind=assembly  +ref +unloaded  "payload not loaded"
-  cam  Scope
-    shotCam  Camera
-  lights  Scope
-    key  RectLight
-    env  DomeLight_1
-  ... 4 more not shown
-`,
-  },
-  {
-    name: 'Composition arcs',
-    source: `# Every flag the renderer knows
-root  Xform
-  referenced  Xform  +ref
-  payloaded  Xform  +payload
-  unloaded  Xform  +unloaded
-  inherits  Xform  +inherit
-  specializes  Xform  +specialize
-  instanced  Xform  +instance
-  variant  Xform  {shading=red}
-  variants  Xform  {shading=red, lod=low}
-  _class_Chair  Xform  class
-  overridden  over
-  disabled  Xform  inactive
-  selectedPrim  Xform  *
+  Characters  Scope
+    CharBob  Xform  kind=component  +ref
+      Mtl  Scope
+        Body  Material  +inherit  closed
+        Head  Material  +inherit  closed
+        Arms  Material  +inherit  closed
+      geo  Scope
+        Body  Mesh
+        Head  Mesh
+        Arms  Mesh
+  Lighting  Scope
+    Skylight  Xform
+      sun  DistantLight
+      sky  KarmaSkyDomeLight
+  Environment  Scope
+    EnvTerrain  Xform  kind=component  +ref
+      mesh_0  Mesh
+  Props  Scope
+    PropSunglasses  Xform  kind=component  +ref
+      geo  Scope
+        Sunglasses  Mesh
+      Mtl  Scope
+        Sunglasses  Material  +inherit  closed
+  Cameras  Scope
+    CamA  Camera
+Render  Scope
+  karmarendersettings  RenderSettings
+    Products  Scope
+      renderproduct  RenderProduct
+    Vars  Scope
+      beauty  RenderVar
+      CryptoObject  RenderVar
+      depth  RenderVar
+      N  RenderVar
+      P  RenderVar
 `,
   },
 ]

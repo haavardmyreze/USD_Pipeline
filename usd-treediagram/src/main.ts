@@ -5,20 +5,13 @@ import './styles.css'
 import { readDirectives } from './directives'
 import { EXAMPLES } from './examples'
 import { loadIcons } from './icons'
+import { setUpPanels } from './panels'
 import { parse, moveKeyword, toggleKeyword, type Parsed } from './parse'
 import { embed, extract } from './png'
 import { ROW_HEIGHT, draw, layout, rowAt, type Layout, type Options } from './render'
 import { guideMarkup } from './guides'
 import { highlight } from './syntax'
-import {
-  loadCurrent,
-  loadDiagrams,
-  newId,
-  normalise,
-  saveCurrent,
-  saveDiagrams,
-  type Diagram,
-} from './store'
+import { loadLook, normalise, saveLook, type Diagram } from './store'
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const node = document.getElementById(id)
@@ -27,7 +20,6 @@ const $ = <T extends HTMLElement>(id: string): T => {
 }
 
 const ui = {
-  list: $('list'),
   examples: $('examples'),
   name: $<HTMLInputElement>('name'),
   source: $<HTMLTextAreaElement>('source'),
@@ -57,8 +49,9 @@ const ui = {
 
 const measure = document.createElement('canvas').getContext('2d')!
 
-let diagrams: Diagram[] = []
 let current!: Diagram
+/** The outline as last opened or saved, to tell whether there is unsaved work. */
+let savedSource = ''
 let parsed: Parsed = { roots: [], problems: [] }
 let tree: Layout | null = null
 let zoom = 1
@@ -76,60 +69,50 @@ async function start(): Promise<void> {
     document.fonts.load(`italic 400 12px "Inter Variable"`, 'Aa'),
   ])
 
-  diagrams = loadDiagrams()
-  if (!diagrams.length) diagrams = [fromExample(1)]
-  const remembered = diagrams.find((d) => d.id === loadCurrent())
   zoom = Number(readSetting('zoom', '1')) || 1
   exportScale = Number(readSetting('scale', '2')) || 2
 
   buildHelp()
   buildExamples()
   wire()
-  open(remembered ?? diagrams[0]!)
+  setUpPanels(document.querySelector<HTMLElement>('.app')!)
+  open(fromExample(1))
 }
 
 function fromExample(index: number): Diagram {
   const example = EXAMPLES[index]!
-  return normalise({ id: newId(), name: example.name, source: example.source })
+  return normalise({ name: example.name, source: example.source }, loadLook())
 }
 
 // ---------------------------------------------------------------------------
-// Diagrams
+// The diagram
 // ---------------------------------------------------------------------------
 
+/** Show `diagram` in place of the current one. */
 function open(diagram: Diagram): void {
   current = diagram
-  saveCurrent(diagram.id)
+  savedSource = diagram.source
   ui.name.value = diagram.name
   ui.source.value = diagram.source
   ui.source.scrollTop = 0
   syncOptions()
   update()
-  renderList()
 }
 
-function add(diagram: Diagram): void {
-  diagrams.unshift(diagram)
-  persist()
+function isDirty(): boolean {
+  return current.source !== savedSource
+}
+
+/**
+ * Replace the current diagram, asking first if its changes are unsaved.
+ * Returns false if the user chose to keep them.
+ */
+function replace(diagram: Diagram): boolean {
+  if (isDirty() && !confirm(`"${current.name}" has changes that are not saved to a PNG. Discard them?`)) {
+    return false
+  }
   open(diagram)
-}
-
-function persist(): void {
-  current.updated = Date.now()
-  saveDiagrams(diagrams)
-}
-
-function renderList(): void {
-  ui.list.replaceChildren(
-    ...diagrams.map((diagram) => {
-      const row = document.createElement('button')
-      row.className = `list__row${diagram === current ? ' is-on' : ''}`
-      row.textContent = diagram.name
-      row.title = diagram.name
-      row.addEventListener('click', () => open(diagram))
-      return row
-    }),
-  )
+  return true
 }
 
 function buildExamples(): void {
@@ -138,18 +121,10 @@ function buildExamples(): void {
       const row = document.createElement('button')
       row.className = 'list__row list__row--muted'
       row.textContent = example.name
-      row.addEventListener('click', () => add(fromExample(index)))
+      row.addEventListener('click', () => replace(fromExample(index)))
       return row
     }),
   )
-}
-
-function remove(): void {
-  if (!confirm(`Delete "${current.name}"? This cannot be undone.`)) return
-  diagrams = diagrams.filter((d) => d !== current)
-  if (!diagrams.length) diagrams = [normalise({ id: newId(), name: 'Untitled', source: '' })]
-  saveDiagrams(diagrams)
-  open(diagrams[0]!)
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +217,7 @@ function markSeg(seg: HTMLElement, value: string): void {
 
 function setOption<K extends keyof Options>(key: K, value: Options[K]): void {
   current.options = { ...current.options, [key]: value }
-  persist()
+  saveLook(current.options)
   syncOptions()
   redraw()
 }
@@ -400,6 +375,7 @@ async function savePng(): Promise<void> {
   link.download = `${base}${exportScale === 1 ? '' : `@${exportScale}x`}.png`
   link.click()
   setTimeout(() => URL.revokeObjectURL(link.href), 10_000)
+  savedSource = current.source
   toast(`Saved ${link.download}`)
 }
 
@@ -419,14 +395,15 @@ async function importFile(file: File): Promise<void> {
       toast(`${file.name} was not saved from this tool, so there is no outline in it.`, true)
       return
     }
-    add(normalise({ ...data, id: newId() }))
-    toast(`Opened ${file.name}`)
+    if (replace(normalise(data, loadLook()))) toast(`Opened ${file.name}`)
     return
   }
   const source = await file.text()
-  const { options } = readDirectives(source)
-  add(normalise({ id: newId(), name: file.name.replace(/\.[^.]+$/, ''), source, options: { ...current.options, ...options } }))
-  toast(`Opened ${file.name}`)
+  // An outline's own `#!` settings win over the remembered look.
+  const look = { ...loadLook(), ...readDirectives(source).options }
+  if (replace(normalise({ name: file.name.replace(/\.[^.]+$/, ''), source }, look))) {
+    toast(`Opened ${file.name}`)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -434,23 +411,21 @@ async function importFile(file: File): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function wire(): void {
-  ui.source.addEventListener('input', () => {
-    update()
-    persist()
-  })
+  ui.source.addEventListener('input', update)
   ui.source.addEventListener('scroll', syncScroll)
   ui.source.addEventListener('keydown', onEditorKey)
 
   ui.name.addEventListener('input', () => {
     current.name = ui.name.value.trim() || 'Untitled'
-    persist()
-    renderList()
   })
 
   $('new').addEventListener('click', () =>
-    add(normalise({ id: newId(), name: 'Untitled', source: 'root  Xform\n  child  Mesh\n', options: current.options })),
+    replace(normalise({ name: 'Untitled', source: 'root  Xform\n  child  Mesh\n' }, loadLook())),
   )
-  $('delete').addEventListener('click', remove)
+  // Nothing is stored, so closing the tab is the one way to lose work.
+  window.addEventListener('beforeunload', (event) => {
+    if (isDirty()) event.preventDefault()
+  })
   $('open').addEventListener('click', () => ui.file.click())
   ui.file.addEventListener('change', () => {
     const file = ui.file.files?.[0]

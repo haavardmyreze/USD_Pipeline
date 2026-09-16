@@ -49,6 +49,9 @@ The editor draws hierarchy lines in the indentation, so the nesting is easy
 to follow. The `?` button above the editor shows this table. Tab and Shift+Tab indent
 and outdent the current line or selection.
 
+Drag the dividers between the columns to resize the diagram list, the editor
+and the settings; double-click a divider to reset it. Widths are remembered.
+
 In the preview, click a row to jump to its line, double-click to open or close
 it, and Shift-click to move the selection highlight there.
 
@@ -62,8 +65,11 @@ Each saved PNG carries its outline and settings inside the file. Drop it back
 onto the tool, or use **Open…**, to edit it again, so the image in the docs is
 its own source. Plain `.txt` outlines open the same way.
 
-Diagrams are kept in the browser's local storage, per browser and per machine.
-Save a PNG of anything you want to keep.
+Diagrams are not stored in the browser. The page holds the one you are
+editing, so save a PNG (or keep the outline as a `.txt`) of anything you want
+to keep. New, a preset or Open asks before discarding unsaved changes, and so
+does closing the tab. Only the look settings, panel widths and zoom are
+remembered.
 
 ## Rendering from the command line
 
