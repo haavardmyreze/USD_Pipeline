@@ -41,6 +41,17 @@ function apply(result: Directives, key: string, value: string): string | null {
   const on = (v: string) => /^(on|yes|true|1)$/i.test(v)
   const number = Number(value)
   switch (key) {
+    case 'mode':
+      if (value === 'tree') o.mode = 'tree'
+      else if (value === 'graph' || value === 'flowchart' || value === 'flow') o.mode = 'graph'
+      else return `mode is tree or graph, not ${value}`
+      return null
+    case 'legend':
+      o.legend = on(value)
+      return null
+    case 'grid':
+      o.grid = on(value)
+      return null
     case 'theme':
       if (value !== 'dark' && value !== 'light') return `theme is dark or light, not ${value}`
       o.theme = value

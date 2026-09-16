@@ -1,9 +1,10 @@
 # USD Tree Diagram
 
-Draw USD scene graph trees for documentation and save them as PNG. The trees
-look exactly like the prim tree in `usd-refgraph`, with Houdini's icons, the
-same connector lines, flags and selection, but nothing here reads real USD.
-You type the structure, and the picture follows.
+Draw USD scene graph trees and layer flowcharts for documentation, and save
+them as PNG. Trees look exactly like the prim tree in `usd-refgraph`, with
+Houdini's icons, connector lines, flags and selection; flowcharts look like
+its reference graph. Nothing here reads real USD: you type the structure, and
+the picture follows.
 
 ## Run
 
@@ -49,11 +50,52 @@ The editor draws hierarchy lines in the indentation, so the nesting is easy
 to follow. The `?` button above the editor shows this table. Tab and Shift+Tab indent
 and outdent the current line or selection.
 
-Drag the dividers between the columns to resize the diagram list, the editor
-and the settings; double-click a divider to reset it. Widths are remembered.
+Drag the dividers between the columns to resize the sidebar, the editor and
+the settings; double-click a divider to reset it. Widths are remembered.
 
 In the preview, click a row to jump to its line, double-click to open or close
 it, and Shift-click to move the selection highlight there.
+
+## Writing a flowchart
+
+Switch **Diagram** to **Flowchart** (or put `#! mode=graph` in the outline) to
+draw layers and the arcs between them, as usd-refgraph's graph does: columns
+left to right, pipes that share a trunk per arc kind, tinted cards, and a
+dash pattern for each kind of arc.
+
+```text
+zulu-0010.usda  shot  root  status=ready  artist=anna
+zulu-0010.usda -> layout.usda  sublayer
+zulu-0010.usda -> anim.usda  sublayer
+layout.usda -> char-test.usda  reference
+anim.usda -> char-test.usda  reference
+char-test.usda  asset  assembly  "assembly"
+char-test.usda -> char-test_model.usda -> sim.0001.usda  payload
+old_hero.usda  missing
+```
+
+A line with `->` is one or more arcs, and the word after the last node is the
+arc kind: `sublayer` (the default), `reference` or `ref`, `payload`, `clip`,
+`texture` or `asset`, and `other`. Nodes appear the first time they are
+named; a line without an arrow decorates one. Quote names with spaces.
+
+| Node word | Draws |
+| --- | --- |
+| `asset` `set` `shot` | The tier tint |
+| `color=blue` | Any other tint: green, red, yellow, pink, teal, indigo, gray |
+| `root` | The blue root outline |
+| `assembly` `block` | A bold name with the layers mark, or a quieter name |
+| `missing` `template` | A dashed red card, or the placeholder mark |
+| `status=ready` `artist=anna` | The status dot (placeholder, ready, locked) and a name |
+| `"text"` | A second line on the card |
+| `icon=camera` | A Houdini icon before the name |
+| `selected` | The selection outline |
+
+A layer reached by more than one arc is drawn once, with a `2×` badge; the
+extra arcs are fainter cross links. **Arc legend** adds a key to the kinds
+used, and **Dotted grid** the stage's grid. Click a node to find its line, and
+Shift-click to select it. If the outline has arrows, Open and the command line
+treat it as a flowchart even without `#! mode=graph`.
 
 ## Exporting
 
@@ -94,7 +136,8 @@ flags win over it:
 ```
 
 Settings: `theme` (dark, light), `frame` (panel, flat, none), `scale`,
-`title`, `count`, `types` and `stripes` (on, off), `width`, `margin`.
+`mode` (tree, graph), `title`, `count`, `types`, `stripes`, `legend` and `grid`
+(on, off), `width`, `margin`.
 
 To use a different Chromium-based browser, set `TREEDIAGRAM_BROWSER` to its
 executable.
@@ -110,7 +153,9 @@ page") and Claude writes the outline, renders it and checks the image.
 
 - **Theme**: Dark matches usd-refgraph; Light suits white documentation pages.
 - **Frame**: a rounded panel, a flat background, or a transparent background.
-- **Alternating rows**: faint shading on every other row (on by default).
+- **Alternating rows** (trees): faint shading on every other row.
+- **Arc legend** and **Dotted grid** (flowcharts): a key to the arc kinds, and
+  the stage's grid behind the chart.
 - **Heading**: an optional title with a prim count, like the app's panel header.
 - **Minimum width** and **Margin** control the image size.
 

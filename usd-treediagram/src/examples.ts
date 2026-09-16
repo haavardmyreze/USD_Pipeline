@@ -74,4 +74,45 @@ Render  Scope
       P  RenderVar
 `,
   },
+  {
+    name: 'Kilo 0010',
+    source: `# Char Bob
+char-bob_model.usdc asset
+char-bob_lookdev.usda asset
+char-bob.usda asset
+char-bob.usda -> char-bob_model.usdc
+char-bob.usda -> char-bob_lookdev.usda
+
+# Env Tree
+env-tree_model.usdc asset
+env-tree_lookdev.usda asset
+env-tree.usda asset
+
+env-tree.usda -> env-tree_model.usdc
+env-tree.usda -> env-tree_lookdev.usda
+
+# Set Landscape
+set-landscape_terrain.usdc set
+set-landscape_dressing.usda set
+set-landscape_lighting.usda set
+set-landscape.usda set
+
+set-landscape_dressing.usda -> env-tree.usda reference
+
+set-landscape.usda -> set-landscape_terrain.usdc
+set-landscape.usda -> set-landscape_dressing.usda
+set-landscape.usda -> set-landscape_lighting.usda
+
+# Kilo 0010
+kilo-0010_layout.usda shot
+kilo-0010.usda shot
+kilo-0010_lighting.usda shot
+
+kilo-0010_layout.usda -> char-bob.usda reference
+
+kilo-0010.usda -> set-landscape.usda sublayer
+kilo-0010.usda -> kilo-0010_lighting.usda sublayer
+kilo-0010.usda -> kilo-0010_layout.usda sublayer
+`,
+  },
 ]

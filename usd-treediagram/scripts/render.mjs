@@ -20,7 +20,7 @@ import { createServer } from 'vite'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const OUTLINE_EXT = new Set(['.txt', '.tree'])
 
-const HELP = `Render USD tree outlines to PNG.
+const HELP = `Render USD tree outlines and flowcharts to PNG.
 
 Usage: npm run render -- <input...> [options]
 
@@ -30,13 +30,16 @@ tool (re-rendered from the outline inside), or - for an outline on stdin.
 Options:
   -o, --out <file>      Output file (one input only). Default: input name with .png
   --out-dir <dir>       Write every PNG into this folder
+  --mode tree|graph     A prim tree or a flowchart (default: guessed from arrows)
   --theme dark|light    Colours (default dark)
   --frame panel|flat|none
   --scale <n>           Pixel density, 1-8 (default 2)
   --title <text>        Heading above the tree
   --no-count            No prim count after the heading
   --no-types            No type column
-  --no-stripes          No shading on every other row
+  --no-stripes          No shading on every other row (trees)
+  --no-legend           No key to the arc kinds (flowcharts)
+  --grid                The dotted stage grid behind a flowchart
   --width <px>          Minimum width (default 320)
   --margin <px>         Space around the image (default 16)
   --strict              Exit with an error when an outline has warnings
@@ -65,6 +68,19 @@ function parseArgs(argv) {
         break
       case '--out-dir':
         args.outDir = next()
+        break
+      case '--mode': {
+        const mode = next()
+        const map = { tree: 'tree', graph: 'graph', flowchart: 'graph' }
+        if (!map[mode]) fail('--mode is tree or graph')
+        args.options.mode = map[mode]
+        break
+      }
+      case '--no-legend':
+        args.options.legend = false
+        break
+      case '--grid':
+        args.options.grid = true
         break
       case '--theme': {
         const theme = next()
@@ -233,7 +249,7 @@ async function main() {
         process.stderr.write(`warning: ${label}:${problem.line + 1}: ${problem.message}\n`)
       }
       if (args.check) {
-        process.stdout.write(`checked ${label} (${result.prims} prims, ${result.problems.length} warnings)\n`)
+        process.stdout.write(`checked ${label} (${result.mode}, ${result.problems.length} warnings)\n`)
         continue
       }
 
@@ -246,7 +262,7 @@ async function main() {
             : input.path.replace(/\.[^./\\]+$/, '') + '.png'
       await mkdir(dirname(out), { recursive: true })
       await writeFile(out, Buffer.from(result.png, 'base64'))
-      process.stdout.write(`wrote ${out} (${result.width}x${result.height}, ${result.scale}x, ${result.prims} prims)\n`)
+      process.stdout.write(`wrote ${out} (${result.width}x${result.height}, ${result.scale}x, ${result.mode})\n`)
     }
   } catch (error) {
     process.stderr.write(`error: ${error.message}\n`)

@@ -8,11 +8,11 @@
 import '@fontsource-variable/inter/wght.css'
 import '@fontsource-variable/inter/wght-italic.css'
 
+import { build, modeOf } from './diagram'
 import { readDirectives } from './directives'
 import { loadIcons } from './icons'
-import { parse } from './parse'
 import { embed, extract } from './png'
-import { DEFAULT_OPTIONS, draw, layout, type Options } from './render'
+import { DEFAULT_OPTIONS, type Options } from './render'
 
 export interface RenderRequest {
   name: string
@@ -27,20 +27,21 @@ export interface RenderResult {
   width: number
   height: number
   scale: number
-  prims: number
+  mode: Options['mode']
   problems: { line: number; message: string }[]
 }
 
 async function render(request: RenderRequest): Promise<RenderResult> {
   const directives = readDirectives(request.source)
   const options: Options = { ...DEFAULT_OPTIONS, ...directives.options, ...request.options }
+  // Stated on the command line, in the file or in a saved PNG; else guessed.
+  options.mode = modeOf(request.source, request.options.mode ?? directives.options.mode)
   const scale = request.scale ?? directives.scale ?? 2
-  const parsed = parse(request.source)
 
   const measure = document.createElement('canvas').getContext('2d')!
-  const tree = layout(measure, parsed.roots, options)
+  const drawing = build(measure, request.source, options)
   const canvas = document.createElement('canvas')
-  draw(canvas, tree, options, scale)
+  drawing.paint(canvas, scale)
   const blob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode the PNG'))), 'image/png'),
   )
@@ -50,8 +51,8 @@ async function render(request: RenderRequest): Promise<RenderResult> {
     width: canvas.width,
     height: canvas.height,
     scale,
-    prims: tree.prims,
-    problems: [...directives.problems, ...parsed.problems].sort((a, b) => a.line - b.line),
+    mode: options.mode,
+    problems: [...directives.problems, ...drawing.problems].sort((a, b) => a.line - b.line),
   }
 }
 

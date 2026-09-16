@@ -15,8 +15,11 @@ import { iconImage, primIcon } from './icons'
 import { THEMES, type Theme } from './theme'
 
 export type Frame = 'panel' | 'flat' | 'transparent'
+export type Mode = 'tree' | 'graph'
 
 export interface Options {
+  /** A prim tree, or a flowchart of layers and arcs. */
+  mode: Mode
   theme: 'dark' | 'light'
   frame: Frame
   title: string
@@ -26,9 +29,14 @@ export interface Options {
   stripes: boolean
   minWidth: number
   padding: number
+  /** Flowcharts: a key to the arc kinds used, under the chart. */
+  legend: boolean
+  /** Flowcharts: the stage's dotted grid behind the chart. */
+  grid: boolean
 }
 
 export const DEFAULT_OPTIONS: Options = {
+  mode: 'tree',
   theme: 'dark',
   frame: 'panel',
   title: '',
@@ -37,6 +45,8 @@ export const DEFAULT_OPTIONS: Options = {
   stripes: true,
   minWidth: 320,
   padding: 16,
+  legend: true,
+  grid: false,
 }
 
 export interface Row {
@@ -60,7 +70,7 @@ export interface Layout {
   prims: number
 }
 
-const FAMILY = '"Inter Variable", "Segoe UI", system-ui, sans-serif'
+export const FAMILY = '"Inter Variable", "Segoe UI", system-ui, sans-serif'
 const FONT_NAME = `400 12px ${FAMILY}`
 const FONT_NAME_ITALIC = `italic 400 12px ${FAMILY}`
 const FONT_NOTE = `400 11px ${FAMILY}`
@@ -79,10 +89,10 @@ const PILL = 16
 const ROW_PAD_LEFT = 4
 const ROW_PAD_RIGHT = 6
 /** `.scene` padding inside a panel. */
-const PANEL_PAD = 12
+export const PANEL_PAD = 12
 const PANEL_RADIUS = 14
-const HEADER = 22
-const HEADER_GAP = 8
+export const HEADER = 22
+export const HEADER_GAP = 8
 const TYPE_GAP = 24
 const CALLOUT_GAP = 20
 
@@ -182,21 +192,8 @@ export function draw(canvas: HTMLCanvasElement, tree: Layout, options: Options, 
   ctx.imageSmoothingQuality = 'high'
   const paint: Paint = { ctx, theme, scale }
 
-  if (options.frame === 'panel') {
-    const p = options.padding
-    ctx.fillStyle = theme.panel
-    ctx.beginPath()
-    ctx.roundRect(p + 0.5, p + 0.5, tree.width - p * 2 - 1, tree.height - p * 2 - 1, PANEL_RADIUS)
-    ctx.fill()
-    ctx.strokeStyle = theme.panelLine
-    ctx.lineWidth = 1
-    ctx.stroke()
-  } else if (options.frame === 'flat') {
-    ctx.fillStyle = theme.panel
-    ctx.fillRect(0, 0, tree.width, tree.height)
-  }
-
-  if (options.title) headerWidth(ctx, options, tree.prims, { paint, x: tree.rowX + ROW_PAD_LEFT, y: tree.headerY })
+  paintFrame(ctx, theme, options, tree.width, tree.height)
+  if (options.title) headerWidth(ctx, options, tree.prims, { theme, x: tree.rowX + ROW_PAD_LEFT, y: tree.headerY })
 
   if (!tree.rows.length) {
     ctx.font = FONT_NOTE
@@ -239,16 +236,48 @@ export function draw(canvas: HTMLCanvasElement, tree: Layout, options: Options, 
   })
 }
 
+/** The panel or flat background, per `options.frame`. */
+export function paintFrame(
+  ctx: CanvasRenderingContext2D,
+  theme: Theme,
+  options: Options,
+  width: number,
+  height: number,
+): void {
+  if (options.frame === 'panel') {
+    const p = options.padding
+    ctx.fillStyle = theme.panel
+    ctx.beginPath()
+    ctx.roundRect(p + 0.5, p + 0.5, width - p * 2 - 1, height - p * 2 - 1, PANEL_RADIUS)
+    ctx.fill()
+    ctx.strokeStyle = theme.panelLine
+    ctx.lineWidth = 1
+    ctx.stroke()
+  } else if (options.frame === 'flat') {
+    ctx.fillStyle = theme.panel
+    ctx.fillRect(0, 0, width, height)
+  }
+}
+
+/** Where the panel's inside begins, for clipping what is drawn within it. */
+export function frameClip(ctx: CanvasRenderingContext2D, options: Options, width: number, height: number): void {
+  if (options.frame !== 'panel') return
+  const p = options.padding
+  ctx.beginPath()
+  ctx.roundRect(p + 1, p + 1, width - p * 2 - 2, height - p * 2 - 2, PANEL_RADIUS - 1)
+  ctx.clip()
+}
+
 function calloutText(node: TreeNode): string {
   return `←  ${node.callout}`
 }
 
-/** The heading above the rows, and its count. Returns its width. */
-function headerWidth(
+/** The heading above a diagram, and its count. Returns its width. */
+export function headerWidth(
   ctx: CanvasRenderingContext2D,
   options: Options,
   count: number,
-  at?: { paint: Paint; x: number; y: number },
+  at?: { theme: Theme; x: number; y: number },
 ): number {
   ctx.font = FONT_TITLE
   const titleWidth = ctx.measureText(options.title).width
@@ -259,19 +288,19 @@ function headerWidth(
   if (options.showCount) width += 6 + badgeWidth
 
   if (at) {
-    const { paint, x, y } = at
+    const { theme, x, y } = at
     const mid = y + HEADER / 2
     ctx.font = FONT_TITLE
-    ctx.fillStyle = paint.theme.fg2
+    ctx.fillStyle = theme.fg2
     ctx.fillText(options.title, x, baseline(ctx, mid))
     if (options.showCount) {
       const bx = x + titleWidth + 6
-      ctx.fillStyle = paint.theme.fill
+      ctx.fillStyle = theme.fill
       ctx.beginPath()
       ctx.roundRect(bx, mid - 8, badgeWidth, 16, 8)
       ctx.fill()
       ctx.font = FONT_BADGE
-      ctx.fillStyle = paint.theme.fg2
+      ctx.fillStyle = theme.fg2
       ctx.fillText(label, bx + 6, baseline(ctx, mid))
     }
   }
@@ -461,7 +490,7 @@ function image(paint: Paint, name: string, x: number, y: number, size: number, a
 }
 
 /** The baseline that centres the current font's capitals on `mid`. */
-function baseline(ctx: CanvasRenderingContext2D, mid: number): number {
+export function baseline(ctx: CanvasRenderingContext2D, mid: number): number {
   const metrics = ctx.measureText('Hg')
   return mid + (metrics.fontBoundingBoxAscent - metrics.fontBoundingBoxDescent) / 2
 }

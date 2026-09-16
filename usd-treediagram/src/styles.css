@@ -139,6 +139,17 @@ svg {
   }
 }
 
+/* Controls and hints that belong to one kind of diagram. */
+.app[data-mode='tree'] [data-only='graph'],
+.app[data-mode='graph'] [data-only='tree'] {
+  display: none !important;
+}
+
+.seg--big button {
+  height: 28px;
+  font-size: var(--t-md);
+}
+
 /* A divider straddles each column edge: a wide invisible grab area with a
    thin line that lights up on hover and while dragging. */
 .divider {
@@ -519,6 +530,10 @@ input[type='checkbox'] {
 .code__input::selection {
   background: rgb(10 132 255 / 0.4);
   color: transparent;
+}
+
+.tok-operator {
+  color: var(--fg-3);
 }
 
 .tok-name {

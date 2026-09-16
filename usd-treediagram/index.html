@@ -47,11 +47,20 @@
           </div>
         </div>
         <footer class="stage__hint">
-          Click a row to find its line · Double-click to open or close · Shift-click to select · Drop a PNG to edit it
+          <span data-only="tree">Click a row to find its line · Double-click to open or close · Shift-click to select · Drop a PNG to edit it</span>
+          <span data-only="graph">Click a node to find its line · Shift-click to select · Drop a PNG to edit it</span>
         </footer>
       </main>
 
       <aside class="inspector">
+        <section class="group">
+          <h3>Diagram</h3>
+          <div class="seg seg--big" data-option="mode">
+            <button data-value="tree">Tree</button>
+            <button data-value="graph">Flowchart</button>
+          </div>
+        </section>
+
         <section class="group">
           <h3>Look</h3>
           <div class="field">
@@ -74,8 +83,10 @@
             <input class="input" id="title" placeholder="e.g. Prims" spellcheck="false" />
           </label>
           <label class="check"><input type="checkbox" id="showCount" /> Count after heading</label>
-          <label class="check"><input type="checkbox" id="showTypes" /> Type column</label>
-          <label class="check"><input type="checkbox" id="stripes" /> Alternating rows</label>
+          <label class="check" data-only="tree"><input type="checkbox" id="showTypes" /> Type column</label>
+          <label class="check" data-only="tree"><input type="checkbox" id="stripes" /> Alternating rows</label>
+          <label class="check" data-only="graph"><input type="checkbox" id="legend" /> Arc legend</label>
+          <label class="check" data-only="graph"><input type="checkbox" id="grid" /> Dotted grid</label>
           <div class="field">
             <span>Minimum width <output id="minWidthOut"></output></span>
             <input type="range" id="minWidth" min="0" max="800" step="10" />
