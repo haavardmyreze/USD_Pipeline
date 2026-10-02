@@ -57,8 +57,6 @@ export const ARC_ORDER: ArcKind[] = [
   'unknown',
 ]
 
-/** Node accent when a file is the graph's root. */
-export const ROOT_COLOR = 'var(--root)'
 export const MISSING_COLOR = 'var(--danger)'
 
 /** The tier tint a card carries, and the accent the inspector echoes. */

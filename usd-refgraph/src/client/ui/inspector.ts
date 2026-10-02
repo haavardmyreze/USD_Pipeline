@@ -14,7 +14,6 @@ import {
   ARC_LABEL,
   ARC_STROKE,
   MISSING_COLOR,
-  ROOT_COLOR,
   TIER_TINT,
   arcSample,
 } from '../graph/theme'
@@ -128,7 +127,7 @@ export class Inspector {
     present(this.root)
     this.root.style.setProperty(
       '--accent',
-      isRoot ? ROOT_COLOR : missing ? MISSING_COLOR : TIER_TINT[node.tier ?? ''] ?? 'var(--fg-3)',
+      missing ? MISSING_COLOR : TIER_TINT[node.tier ?? ''] ?? 'var(--fg-3)',
     )
 
     // A deep prim tree wants width, and code more still; Details reads better
@@ -223,7 +222,7 @@ export class Inspector {
     }
     if (missing) fact('missing on disk', 'danger')
     if (node.template) fact('placeholder path', 'warn')
-    if (isRoot) fact('root', 'accent')
+    if (isRoot) fact('root')
     if (node.role === 'assembly' || node.role === 'block') fact(node.roleLabel)
     fact(node.kind === 'layer' ? node.format : node.ext || 'file')
     if (node.binary) fact('binary')

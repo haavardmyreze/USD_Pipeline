@@ -11,7 +11,7 @@ import type { Graph, GraphNode } from '@shared/types'
 import { readRecord } from '@shared/pipeline'
 import { statusDot } from '../ui/kit'
 import { icon } from '../util'
-import { MISSING_COLOR, ROOT_COLOR, TIER_TINT } from './theme'
+import { MISSING_COLOR, TIER_TINT } from './theme'
 import { ICONS } from '../ui/icons'
 import { Camera, VelocityTracker, type CameraState } from './camera'
 import {
@@ -114,7 +114,7 @@ export class GraphView {
     for (const [id, placed] of this.layout.nodes) {
       const node = graph.nodes.find((n) => n.id === id)
       if (!node) continue
-      const element = this.buildNode(node, placed, graph.rootId)
+      const element = this.buildNode(node, placed)
       this.nodeLayer.appendChild(element)
       this.nodeEls.set(id, element)
     }
@@ -122,13 +122,11 @@ export class GraphView {
     this.applyEmphasis()
   }
 
-  private buildNode(node: GraphNode, placed: Placed, rootId: string): HTMLElement {
-    const isRoot = node.id === rootId
+  private buildNode(node: GraphNode, placed: Placed): HTMLElement {
     const missing = !node.exists && !node.template
 
     const card = document.createElement('div')
     card.className = 'node'
-    if (isRoot) card.classList.add('node--root')
     if (missing) card.classList.add('node--missing')
     if (node.role === 'assembly') card.classList.add('node--assembly')
     else if (node.role === 'block') card.classList.add('node--block')
@@ -137,14 +135,11 @@ export class GraphView {
     card.dataset.id = node.id
     card.style.transform = `translate(${placed.x}px, ${placed.y}px)`
     // What the card is highlighted with when selected or lit: its own tier,
-    // so the emphasis never implies an arc kind.
+    // so the emphasis never implies an arc kind. The root gets no colour of
+    // its own; colour on the graph means asset, set or shot and nothing else.
     card.style.setProperty(
       '--accent',
-      isRoot
-        ? ROOT_COLOR
-        : missing
-          ? MISSING_COLOR
-          : TIER_TINT[node.tier ?? ''] ?? 'var(--fg-3)',
+      missing ? MISSING_COLOR : TIER_TINT[node.tier ?? ''] ?? 'var(--fg-3)',
     )
 
     const body = document.createElement('div')

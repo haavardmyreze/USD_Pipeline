@@ -24,6 +24,15 @@
   --bg-3: #2c2c2e;    /* raised: hover, inputs, chips */
   --bg-4: #3a3a3c;    /* pressed, selected */
 
+  /* The light behind everything: a few broad, faint pools of the accent and
+     tier hues, so the app is not a flat black. Kept dim enough that no card
+     or status colour reads differently on top of it. */
+  --ambient:
+    radial-gradient(70% 60% at 0% 0%, rgb(10 132 255 / 0.14), transparent 70%),
+    radial-gradient(60% 55% at 100% 0%, rgb(191 90 242 / 0.12), transparent 70%),
+    radial-gradient(70% 60% at 100% 100%, rgb(99 230 226 / 0.09), transparent 70%),
+    radial-gradient(60% 50% at 0% 100%, rgb(255 100 130 / 0.08), transparent 70%);
+
   --line: rgb(255 255 255 / 0.08);
   --line-soft: rgb(255 255 255 / 0.05);
   --line-strong: rgb(255 255 255 / 0.14);
@@ -180,7 +189,8 @@ body {
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--ambient), var(--bg);
+  background-attachment: fixed;
   color: var(--fg-1);
   font-family: var(--font);
   font-size: var(--t-md);
@@ -2914,7 +2924,8 @@ kbd {
 .stage {
   position: relative;
   overflow: hidden;
-  background: var(--bg);
+  /* Transparent, so the canvas sits in the same light as the rest of the app. */
+  background: transparent;
   cursor: grab;
   min-width: 0;
 }
@@ -3204,12 +3215,6 @@ kbd {
 
 .node--assembly {
   border-color: color-mix(in srgb, var(--tier) 30%, var(--fg-3));
-}
-
-.node--root,
-.node--root:hover {
-  border-color: var(--root);
-  box-shadow: var(--shadow-2), 0 0 0 1px color-mix(in srgb, var(--root) 45%, transparent);
 }
 
 .node--missing,
@@ -4778,6 +4783,7 @@ button.prim:hover {
 
 @media (prefers-contrast: more) {
   :root {
+    --ambient: none;
     --line: #3c3c46;
     --line-soft: #2e2e37;
     --line-strong: #5a5a66;
