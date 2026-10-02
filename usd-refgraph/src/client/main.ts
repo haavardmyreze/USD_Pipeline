@@ -291,8 +291,11 @@ class App {
       : 'No project'
     this.els.projectPath.textContent = this.project
       ? truncateStart(this.project.root, 52)
-      : 'Open a project folder'
+      : 'Open a folder'
     this.els.projectPath.title = this.project?.root ?? ''
+    this.els.projectPath.classList.toggle('is-empty', !this.project)
+    // Nothing to rescan until a project is open.
+    this.els.rescan.hidden = !this.project
     // The rail is narrow, so a long name ellipsises; the whole name is a hover away.
     this.els.projectName.title = name ? displayName(name) : ''
   }
@@ -413,6 +416,7 @@ class App {
 
     const host = must<HTMLElement>(`#page-${this.page}`)
     if (!this.project) {
+      host.classList.remove('page--fill')
       host.replaceChildren(this.noProjectNotice())
       return
     }
@@ -498,7 +502,7 @@ class App {
 
   private noProjectNotice(): HTMLElement {
     const inTree = Boolean(this.rootPath)
-    return emptyState(inTree ? 'Not inside a project tree' : 'No project open', {
+    const notice = emptyState(inTree ? 'Not inside a project tree' : 'No project open', {
       icon: 'folder',
       body: inTree
         ? 'These pages read a project tree — a folder containing assets, sets or shots. ' +
@@ -511,6 +515,8 @@ class App {
         onClick: () => void this.openPicker(),
       }),
     })
+    notice.classList.add('blank--page')
+    return notice
   }
 
   private setRootFromNode(id: string): void {

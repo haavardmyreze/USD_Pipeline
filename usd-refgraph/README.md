@@ -28,11 +28,17 @@ together, they are a strip with one mark per published file, coloured by its
 status and named after the block as written: the assembly first, then blocks
 in the order they were published.
 
-- **Overview** — deliberately high level. One headline: what share of the
-  project's entities are ready to build on, with the status split behind it.
-  Then the same split for assets, sets and shots, and three signals over the
-  project's whole span: missing files, every publish since the first, and
-  everyone who has published. Each tile opens the page that holds the detail.
+- **Overview** — the project dashboard, in rows of falling importance. A
+  headline band leads: a ring showing what share of entities are ready to
+  build on, beside five numbers (entities, published layers, workfiles,
+  people, last publish). Below it, wide panels paired with narrow ones:
+  **Publishing activity** (publishes per day, or per week on a long project;
+  a bar opens that day in Publishes) beside the **Team**, most recently active
+  first; **Entities** by tier, each with its strip, beside **Health** — facts
+  read off disk: missing files, layers with no status, unreadable layers,
+  unused textures; and the **Latest publishes** beside the **Workfiles** in
+  use. Each panel shows the top of its list and links to the page with the
+  rest.
 - **Workspace** — a split browser. On the left, every entity, filtered by name
   and tier, each with its strip. On the right, the picked entity in full: a
   card per published file with its publish record and textures (missing ones

@@ -30,10 +30,10 @@
             </span>
             <span class="navproj__text">
               <span class="navproj__name" id="project-name">No project</span>
-              <span class="navproj__path" id="project-path">Open a project folder</span>
+              <span class="navproj__path is-empty" id="project-path">Open a folder</span>
             </span>
           </button>
-          <button class="iconbtn navproj__rescan" id="btn-rescan" title="Rescan from disk (R)" aria-label="Rescan from disk">
+          <button class="iconbtn navproj__rescan" id="btn-rescan" hidden title="Rescan from disk (R)" aria-label="Rescan from disk">
             <svg viewBox="0 0 16 16"><path d="M13.4 7a5.5 5.5 0 1 0-.5 3.4"/><path d="M13.8 3.4V7h-3.5"/></svg>
           </button>
         </div>
@@ -266,7 +266,7 @@
       <div class="modal__panel modal__panel--slim" role="dialog" aria-modal="true">
         <header class="picker__head">
           <div class="chooser__head">
-            <span class="chooser__title" id="chooser-title"></span>
+            <span class="chooser__title chooser__title--mono" id="chooser-title"></span>
             <span class="chooser__note" id="chooser-note"></span>
           </div>
           <button class="iconbtn" id="chooser-close" title="Close (Esc)" aria-label="Close">

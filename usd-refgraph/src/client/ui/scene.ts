@@ -488,8 +488,8 @@ export class SceneTree {
     }
 
     const facts = new Facts()
-    facts.add('Type', detail.typeName || '(typeless)')
-    facts.add('Kind', detail.kind)
+    facts.add('Type', detail.typeName || '(typeless)', true)
+    facts.add('Kind', detail.kind, true)
     if (detail.specifier !== 'def') facts.add('Specifier', detail.specifier)
     if (!detail.active) facts.add('Active', 'no')
     if (detail.instance) facts.add('Instance', 'instanceable')
@@ -498,9 +498,9 @@ export class SceneTree {
     for (const set of detail.variantSets) {
       const value = el('span', undefined, set.selection ?? '(none)')
       value.title = `Options: ${set.options.join(', ') || 'none'}`
-      facts.add(`{${set.name}}`, value)
+      facts.add(`{${set.name}}`, value, true)
     }
-    if (detail.appliedSchemas.length) facts.add('Schemas', detail.appliedSchemas.join(', '))
+    if (detail.appliedSchemas.length) facts.add('Schemas', detail.appliedSchemas.join(', '), true)
     facts.add(
       'Properties',
       `${detail.attributeCount} attr · ${detail.relationshipCount} rel`,

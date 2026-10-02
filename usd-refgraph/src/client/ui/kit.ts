@@ -360,10 +360,14 @@ export class Facts {
     this.root = el('dl', `facts${options.columns ? ' facts--columns' : ''}`)
   }
 
-  add(key: string, value: string | HTMLElement | null | undefined): this {
+  /**
+   * `mono` is for names USD or Houdini would recognise — a path, a prim, a
+   * schema. People, dates and counts read as prose.
+   */
+  add(key: string, value: string | HTMLElement | null | undefined, mono = false): this {
     if (value === null || value === undefined || value === '') return this
     this.root.appendChild(el('dt', undefined, key))
-    const dd = el('dd')
+    const dd = el('dd', mono ? 'is-mono' : undefined)
     if (typeof value === 'string') dd.textContent = value
     else dd.appendChild(value)
     this.root.appendChild(dd)

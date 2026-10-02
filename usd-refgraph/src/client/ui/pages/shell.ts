@@ -12,6 +12,11 @@ export interface ShellOptions {
   tabs?: HTMLElement
   /** Headline numbers pinned to the right of the title. */
   stats?: HTMLElement
+  /**
+   * The body fills the rest of the page and does not scroll, for a split
+   * browser whose list and detail keep their own scroll.
+   */
+  fill?: boolean
 }
 
 /**
@@ -31,6 +36,7 @@ export function pageShell(
   // has rendered its content, so filtering or expanding a row keeps your place.
   const scrollTop = host.scrollTop
   clear(host)
+  host.classList.toggle('page--fill', Boolean(options.fill))
   queueMicrotask(() => {
     host.scrollTop = scrollTop
     host.classList.toggle('is-scrolled', host.scrollTop > 2)
@@ -55,7 +61,7 @@ export function pageShell(
   if (options.tabs) bar.appendChild(options.tabs)
   host.appendChild(bar)
 
-  const body = el('div', 'page__body')
+  const body = el('div', options.fill ? 'page__body page__body--fill' : 'page__body')
   host.appendChild(body)
   watchHeader(host, bar)
   return body

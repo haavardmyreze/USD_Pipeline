@@ -19,14 +19,12 @@ import {
   dataTable,
   emptyState,
   headStats,
-  namedCell,
   searchField,
   statusPill,
   truncated,
   type HeadStat,
 } from '../kit'
 import {
-  clear,
   el,
   formatMoment,
   formatRelative,
@@ -35,6 +33,7 @@ import {
   nextFrame,
 } from '../../util'
 import { pageState, type PageContext } from './context'
+import { pageShell } from './shell'
 
 const UNRECORDED = 'no workfile recorded'
 
@@ -77,11 +76,14 @@ export function renderWorkfiles(host: HTMLElement, context: PageContext): void {
   if (!selected || !visible.includes(selected)) selected = visible[0] ?? null
   state.selected = selected?.key ?? null
 
-  clear(host)
+  const body = pageShell(host, 'Workfiles', {
+    subtitle: 'Which Houdini workfile wrote which layer, version by version',
+    fill: true,
+  })
   const split = el('div', 'split')
   split.appendChild(buildSide(workfiles, visible, selected, context))
   split.appendChild(buildDetail(selected))
-  host.appendChild(split)
+  body.appendChild(split)
 
   split.querySelector('.split__list')!.scrollTop = listScroll
   split.querySelector('.split__detail')!.scrollTop = detailScroll
@@ -331,7 +333,10 @@ function versionEntry(version: Version, newest: boolean): HTMLElement {
   return entry
 }
 
-/** The layers written, the file first: it is what anyone downstream uses. */
+/**
+ * The layers written, the file first: it is what anyone downstream uses. The
+ * ROP that wrote it sits beneath, as the detail it is.
+ */
 function outputs(rows: TaskRow[]): HTMLElement {
   // Sorting by ROP keeps the outputs of one part of the stage together, since
   // ROP paths share a prefix per network.
@@ -343,22 +348,28 @@ function outputs(rows: TaskRow[]): HTMLElement {
 
   return dataTable(
     [
-      { label: 'Layer written', width: 'minmax(0, 1.2fr)' },
-      { label: 'ROP', width: 'minmax(0, 1fr)' },
-      { label: 'Entity', width: 'minmax(0, 0.8fr)' },
+      { label: 'Layer written · ROP', width: 'minmax(0, 2fr)' },
+      { label: 'Entity', width: 'minmax(0, 1fr)' },
       { label: 'Status', width: '110px', end: true },
     ],
     sorted.map((row) => ({
       title: row.layer.path,
       layerPath: row.layer.path,
       cells: [
-        namedCell(row.layer.name, { mono: true, strong: true }),
-        truncated(ropLabel(row.layer.pipeline.ropPath), 'mono dim'),
+        stacked(row.layer.name, ropLabel(row.layer.pipeline.ropPath)),
         truncated(row.entity.name),
         statusPill(row.layer.pipeline.status, true),
       ],
     })),
   )
+}
+
+/** A file name over the ROP that wrote it. */
+function stacked(file: string, rop: string): HTMLElement {
+  const cell = el('span', 'wfl__out')
+  cell.appendChild(truncated(file, 'wfl__file'))
+  cell.appendChild(truncated(rop, 'wfl__rop'))
+  return cell
 }
 
 /** `/stage/Bob_Lookdev/mz_usd_rop2` reads better as `Bob_Lookdev / mz_usd_rop2`. */

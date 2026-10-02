@@ -39,6 +39,18 @@ export const ICONS = {
   search: '<circle cx="7" cy="7" r="4.6"/><path d="m10.6 10.6 3 3"/>',
   close: '<path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/>',
   user: '<circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.4a5 5 0 0 1 10 0"/>',
+  /** Two people — everyone who publishes. */
+  users:
+    '<circle cx="6" cy="5.4" r="2.4"/><path d="M1.6 13.4a4.4 4.4 0 0 1 8.8 0"/><path d="M10.8 3.2a2.4 2.4 0 0 1 0 4.6M12 9.4a4.4 4.4 0 0 1 2.4 4"/>',
+  /** A cube — an asset. */
+  asset: '<path d="M8 1.8 13.6 5v6L8 14.2 2.4 11V5z"/><path d="M2.4 5 8 8.2 13.6 5M8 8.2v6"/>',
+  /** Hills under a sun — a set. */
+  set: '<path d="M1.6 13.2 6 6.4l2.6 3.8 1.8-2.4 4 5.4z"/><circle cx="11.6" cy="4" r="1.4"/>',
+  /** A film camera — a shot. */
+  shot: '<rect x="1.6" y="5.6" width="9" height="7" rx="1.4"/><path d="m10.6 8 3.8-2v6l-3.8-2"/><circle cx="3.8" cy="3.4" r="1.4"/><circle cx="7.6" cy="3.4" r="1.4"/>',
+  /** An arrow leaving a tray — a publish. */
+  publish:
+    '<path d="M8 10.4V2.6M4.6 5.8 8 2.4l3.4 3.4"/><path d="M2.6 10v2.4a1.4 1.4 0 0 0 1.4 1.4h8a1.4 1.4 0 0 0 1.4-1.4V10"/>',
   clock: '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.4V8l2.4 1.6"/>',
   hip: '<path d="M9.6 1.8H4.6A1.4 1.4 0 0 0 3.2 3.2v9.6a1.4 1.4 0 0 0 1.4 1.4h6.8a1.4 1.4 0 0 0 1.4-1.4V5.2z"/><path d="M9.6 1.8v3.6h3.2"/><path d="M5.6 9h4.8M5.6 11.2h3"/>',
   keyboard:

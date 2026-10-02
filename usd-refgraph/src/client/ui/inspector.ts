@@ -190,7 +190,10 @@ export class Inspector {
     const head = el('div', 'insp__head')
 
     const top = el('div', 'insp__top')
-    const title = el('h2', 'insp__title', node.name)
+    // Non-breaking hyphens: `set-landscape.usda` should wrap as a whole name,
+    // never as `set-` over `landscape.usda`.
+    const title = el('h2', 'insp__title', node.name.replace(/-/g, '‑'))
+    title.title = node.name
     title.title = node.path
     top.appendChild(title)
 
@@ -302,10 +305,10 @@ export class Inspector {
     const facts = new Facts()
     facts.add('Artist', record.artist)
     facts.add('Published', record.exportedAt ? formatMoment(record.exportedAt) : null)
-    facts.add('Workfile', record.hipFile)
-    facts.add('ROP', record.ropPath)
+    facts.add('Workfile', record.hipFile, true)
+    facts.add('ROP', record.ropPath, true)
     if (record.status === 'unknown' && record.statusRaw) {
-      facts.add('Status as written', record.statusRaw)
+      facts.add('Status as written', record.statusRaw, true)
     }
     for (const [key, value] of Object.entries(record.extra ?? {})) facts.add(key, value)
     if (!facts.isEmpty) section.appendChild(facts.root)
@@ -323,7 +326,7 @@ export class Inspector {
     section.appendChild(el('h3', undefined, 'Layer'))
 
     const facts = new Facts()
-    facts.add('Default prim', meta.defaultPrim)
+    facts.add('Default prim', meta.defaultPrim, true)
     facts.add('Up axis', meta.upAxis)
     facts.add(
       'Metres/unit',

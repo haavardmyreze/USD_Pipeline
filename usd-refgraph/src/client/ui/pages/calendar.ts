@@ -14,7 +14,7 @@ import {
   card,
   emptyState,
   iconButton,
-  namedCell,
+  headStats,
   markLayer,
   statusPill,
   truncated,
@@ -36,9 +36,15 @@ export function renderCalendar(host: HTMLElement, context: PageContext): void {
     .filter((task) => task.layer.pipeline.exportedAt)
     .sort(byRecency)
 
+  const days = new Set(published.map((task) => dayKey(task.layer.pipeline.exportedAt!))).size
   const body = pageShell(host, 'Publishes', {
     subtitle: 'When each layer was published — history, not a schedule',
-    meta: `${published.length} ${published.length === 1 ? 'publish' : 'publishes'}`,
+    stats: published.length
+      ? headStats([
+          { value: published.length, label: published.length === 1 ? 'publish' : 'publishes' },
+          { value: days, label: days === 1 ? 'day with a publish' : 'days with a publish' },
+        ])
+      : undefined,
   })
 
   if (!published.length) {
@@ -179,12 +185,11 @@ function listCard(
     )
 
     const main = el('span', 'timeline__main')
-    main.appendChild(
-      namedCell(`${task.entity.name} · ${task.step}`, {
-        status: task.layer.pipeline.status,
-        strong: true,
-      }),
-    )
+    // Named the way every list names a publish: the entity, then its block.
+    const name = el('span', 'timeline__name')
+    name.appendChild(el('span', 'timeline__entity', task.entity.name))
+    name.appendChild(el('span', 'timeline__block', task.step))
+    main.appendChild(name)
     main.appendChild(el('span', 'timeline__sub', task.layer.pipeline.artist ?? '—'))
     row.appendChild(main)
 

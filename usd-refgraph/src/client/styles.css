@@ -301,8 +301,6 @@ kbd {
 .picker__roots-label,
 .split__group,
 .split__rowSub,
-.fcard__step,
-.rcard__title,
 .group-badge,
 .pill,
 .badge,
@@ -608,6 +606,12 @@ kbd {
   white-space: nowrap;
 }
 
+/* The hint shown before a project is open is prose, not a path. */
+.navproj__path.is-empty {
+  font-family: var(--font);
+  font-size: var(--t-xs);
+}
+
 .navproj__rescan {
   flex: none;
   width: 28px;
@@ -842,15 +846,20 @@ kbd {
   top: 0;
   z-index: 5;
   padding: var(--s-5) var(--s-6) 0;
+  /* At rest the header is just a title on the page: no band, no edges. */
+  background: transparent;
+  border-bottom: 1px solid transparent;
+  transition:
+    background-color 0.2s var(--ease),
+    border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+/* The band, and its scroll edge, only appear once something is actually
+   passing underneath the header and needs it to stay legible. */
+.page--scroll.is-scrolled .page__bar {
   background: var(--material);
   -webkit-backdrop-filter: var(--material-blur);
   backdrop-filter: var(--material-blur);
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
-}
-/* A scroll edge, not a divider: it only appears once something is actually
-   passing underneath the header. */
-.page--scroll.is-scrolled .page__bar {
   border-bottom-color: var(--line);
   box-shadow: 0 12px 24px -20px rgb(0 0 0 / 0.9);
 }
@@ -859,6 +868,24 @@ kbd {
 .page--scroll .table__row--head,
 .page--scroll .timeline__day {
   top: var(--bar-h, 0px);
+}
+
+
+/* A split browser: the header, then the list and detail filling the rest,
+   each keeping its own scroll. Same header, same inset, same cards as every
+   other page; only the scrolling differs. */
+.page--fill {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.page--fill .page__bar {
+  flex: none;
+}
+.page__body.page__body--fill {
+  flex: 1;
+  min-height: 0;
+  display: block;
 }
 
 .page__barTop {
@@ -892,7 +919,6 @@ kbd {
   align-items: center;
   gap: var(--s-3);
   flex: none;
-  padding-top: var(--s-1);
 }
 
 .page__meta {
@@ -910,7 +936,10 @@ kbd {
   padding-bottom: var(--s-4);
 }
 
+/* Every page fills the window, edge to edge inside the same inset as its
+   header, so switching pages never moves the title or the content. */
 .page__body {
+  width: 100%;
   padding: var(--s-6);
   display: grid;
   gap: var(--s-5);
@@ -1058,133 +1087,113 @@ kbd {
 }
 
 /* ===========================================================================
-   Overview: how finished the project is, and whether anything needs a look
+   Overview: the project dashboard
    =========================================================================== */
 
-/* The one headline: a percentage, what it means, and the split behind it. */
-.ov__hero {
+/* Twelve columns: a headline band across the top, then rows that pair a wide
+   panel with a narrow one. Panels in a row share a height, so the page reads
+   as rows rather than a ragged pile. */
+.page__body.dash {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: stretch;
+}
+.dash--full {
+  grid-column: span 12;
+}
+.dash--wide {
+  grid-column: span 8;
+}
+.dash--side {
+  grid-column: span 4;
+}
+@media (max-width: 1180px) {
+  .dash--wide,
+  .dash--side {
+    grid-column: span 12;
+  }
+}
+
+.dash__panel .card__head {
+  justify-content: space-between;
+}
+.dash__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--t-sm);
+  color: var(--root);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dash__more:hover {
+  text-decoration: underline;
+}
+.dash__more .dash__chevron {
+  width: 14px;
+  color: inherit;
+}
+
+/* -- Headline band ------------------------------------------------------- */
+
+.dash__hero {
   display: grid;
-  gap: var(--s-4);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-6);
   padding: var(--s-6);
   border-radius: var(--r-lg);
   border: 1px solid var(--line);
-  background: var(--bg-2);
+  background:
+    radial-gradient(90% 160% at 0% 0%, rgb(10 132 255 / 0.10), transparent 60%),
+    var(--bg-2);
 }
-
-.ov__heroLead {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-5);
-  flex-wrap: wrap;
-}
-
-.ov__heroValue {
-  font-family: var(--font-display);
-  font-size: var(--t-display);
-  font-weight: 700;
-  line-height: var(--lh-display);
-  letter-spacing: var(--tr-display);
-  color: var(--fg);
-  font-variant-numeric: tabular-nums;
-}
-
-.ov__heroWords {
-  display: grid;
-  gap: 2px;
-}
-
-.ov__heroTitle {
-  font-size: var(--t-lg);
-  font-weight: 600;
-  color: var(--fg);
-}
-
-.ov__heroSub {
-  font-size: var(--t-sm);
-  color: var(--fg-3);
-}
-
-.ov__hero .meter {
-  height: 10px;
-}
-
-.ov__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2) var(--s-6);
-}
-
-.ov__legendItem {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-size: var(--t-sm);
-  color: var(--fg-2);
-}
-
-.ov__legendCount {
-  font-weight: 600;
-  color: var(--fg);
-  font-variant-numeric: tabular-nums;
-}
-
-.ov__row {
-  display: grid;
-  gap: var(--s-5);
-}
-.ov__row--three {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-@media (max-width: 900px) {
-  .ov__row--three {
+@media (max-width: 1180px) {
+  .dash__hero {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-/* A tile: a label, one number, one line about it. Tiles that lead somewhere
-   are buttons and lift on hover; the rest are plain facts. */
-.ov__tile {
+.dash__lead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  padding-right: var(--s-6);
+  border-right: 1px solid var(--line);
+}
+@media (max-width: 1180px) {
+  .dash__lead {
+    padding-right: 0;
+    border-right: 0;
+  }
+}
+
+.dash__dial {
   position: relative;
+  flex: none;
+  width: 116px;
+  height: 116px;
   display: grid;
-  align-content: start;
-  gap: var(--s-2);
-  min-width: 0;
-  padding: var(--s-5);
-  border-radius: var(--r-lg);
-  border: 1px solid var(--line);
-  background: var(--bg-2);
-  text-align: left;
-  overflow: clip;
-  transition: background var(--fast), border-color var(--fast);
+  place-items: center;
 }
-.ov__tile::before {
-  content: '';
+.dash__ring {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--tile-accent, transparent);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
 }
-.ov__tile--door {
-  cursor: pointer;
+.dash__ringTrack {
+  stroke: var(--bg-3);
+  stroke-width: 3.2;
 }
-.ov__tile--door:hover {
-  background: var(--bg-3);
-  border-color: var(--line-strong);
+.dash__ringPart {
+  stroke-width: 3.2;
 }
-.ov__tile--alert {
-  --tile-accent: var(--danger);
-}
-.ov__tile--alert .ov__value {
-  color: var(--danger);
-}
-
-.ov__label {
-  font-size: var(--t-xs);
-  font-weight: 600;
-  color: var(--fg-2);
-}
-
-.ov__value {
+.dash__dialValue {
   font-family: var(--font-display);
   font-size: var(--t-2xl);
   font-weight: 700;
@@ -1194,12 +1203,401 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 
-.ov__tile .meter {
+.dash__leadWords {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.dash__leadTitle {
+  margin: 0;
+  font-size: var(--t-xl);
+  font-weight: 700;
+  letter-spacing: var(--tr-title);
+  color: var(--fg);
+}
+.dash__leadSub {
+  margin: 0;
+  color: var(--fg-2);
+}
+.dash__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
   margin-top: var(--s-1);
 }
+.dash__legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+}
+.dash__legendCount {
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
 
-.ov__note {
+.dash__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--s-5);
+}
+.dash__kpi {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.dash__kpiLabel {
   font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--fg-2);
+}
+.dash__kpiValue {
+  font-family: var(--font-display);
+  font-size: var(--t-2xl);
+  font-weight: 700;
+  line-height: var(--lh-display);
+  letter-spacing: var(--tr-display);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.dash__kpiNote {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+}
+
+/* -- Activity chart ------------------------------------------------------ */
+
+.dash__chartSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-6);
+}
+.dash__stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+.dash__statValue {
+  font-family: var(--font-display);
+  font-size: var(--t-stat);
+  font-weight: 700;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.dash__statLabel {
+  font-size: var(--t-sm);
+  color: var(--fg-3);
+}
+
+.dash__chart {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--s-3);
+  align-items: start;
+}
+.dash__axisMax {
+  font-size: var(--t-2xs);
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(-50%);
+}
+.dash__plot {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 150px;
+  border-top: 1px dashed var(--line);
+  border-bottom: 1px solid var(--line-strong);
+}
+.dash__bar {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.dash__bar.is-empty {
+  cursor: default;
+}
+.dash__barFill {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--fg-3);
+  transition: background var(--fast);
+}
+.dash__bar:hover .dash__barFill,
+.dash__bar:focus-visible .dash__barFill {
+  background: var(--fg-1);
+}
+.dash__tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  translate: -50% 0;
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-4);
+  font-size: var(--t-xs);
+  color: var(--fg);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-2);
+}
+.dash__axis {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  padding-top: var(--s-2);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+}
+
+/* -- Lists: team, health, publishes, workfiles --------------------------- */
+
+.dash__list {
+  display: grid;
+}
+
+/* One row: icon, what it is, then whatever the row measures, right-aligned. */
+.dash__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--s-2) var(--s-5);
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.dash__item:first-child {
+  border-top: 0;
+}
+.dash__item--door,
+.dash__item--more {
+  cursor: pointer;
+  transition: background var(--fast);
+}
+.dash__item--door:hover,
+.dash__item--more:hover {
+  background: var(--bg-3);
+}
+.dash__item--person,
+.dash__item--publish {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+.dash__item--more {
+  display: block;
+  min-height: 0;
+  padding-block: var(--s-3);
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+}
+.dash__item--danger .dash__itemValue {
+  color: var(--danger);
+}
+.dash__item--warn .dash__itemValue {
+  color: var(--warn);
+}
+
+.dash__glyph {
+  --glyph: var(--fg-2);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--glyph) 16%, transparent);
+  color: var(--glyph);
+}
+.dash__glyph svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dash__glyph--small {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+}
+.dash__glyph--small svg {
+  width: 15px;
+  height: 15px;
+}
+
+.dash__avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg-4);
+  border: 1px solid var(--line-strong);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: var(--tr-small);
+  color: var(--fg-1);
+}
+
+.dash__itemText {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.dash__itemLabel {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: var(--fg);
+}
+.dash__itemLabel--mono {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+}
+.dash__itemBlock {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--fg-3);
+}
+.dash__itemNote {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-sm);
+  color: var(--fg-3);
+}
+.dash__itemMeter--small {
+  width: 64px;
+}
+.dash__itemMeter--small .meter {
+  height: 6px;
+}
+.dash__itemMeter--none {
+  width: 0;
+}
+.dash__itemValue {
+  min-width: 2ch;
+  font-family: var(--font-display);
+  font-size: var(--t-stat);
+  font-weight: 700;
+  letter-spacing: var(--tr-title);
+  text-align: right;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.dash__itemWhen {
+  min-width: 3ch;
+  font-size: var(--t-sm);
+  color: var(--fg-3);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dash__chevron {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  color: var(--fg-3);
+}
+.dash__chevron svg {
+  width: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* -- Entities: one column per tier --------------------------------------- */
+
+.dash__tiers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-5);
+}
+@media (max-width: 760px) {
+  .dash__tiers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.dash__tier {
+  display: grid;
+  align-content: start;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.dash__tierHead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dash__tierHead:hover .dash__itemLabel {
+  text-decoration: underline;
+}
+.dash__tierList {
+  display: grid;
+  gap: 2px;
+}
+.dash__entity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  margin-inline: calc(-1 * var(--s-2));
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  font: inherit;
+  font-size: var(--t-sm);
+  color: var(--fg-1);
+  text-align: left;
+  cursor: pointer;
+}
+.dash__entity:hover {
+  background: var(--bg-3);
+}
+.dash__entityName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash__entity--more {
+  display: block;
   color: var(--fg-3);
 }
 
@@ -1331,6 +1729,16 @@ kbd {
   gap: var(--s-3);
   padding: var(--s-7) var(--s-6);
   text-align: center;
+}
+
+/* The whole page is the empty state: centre it in the window, not the top. */
+.blank--page {
+  min-height: 100%;
+  padding-bottom: 12vh;
+}
+.blank--page .blank__icon {
+  width: 36px;
+  height: 36px;
 }
 
 .blank__icon {
@@ -1811,15 +2219,25 @@ kbd {
 .split {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--s-5);
   height: 100%;
   min-height: 0;
+}
+
+/* The list is a card, like every panel in the app. The detail is not: it
+   lays its own cards straight on the page, as the other pages do, so no card
+   ever sits inside another of the same colour. */
+.split__side {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
 }
 
 .split__side {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-right: 1px solid var(--line);
+  overflow: clip;
 }
 
 .split__sideHead {
@@ -1871,8 +2289,9 @@ kbd {
 .split__row:hover {
   background: var(--fill-4);
 }
+/* Selected the way every list in the app marks it: an accent tint. */
 .split__row.is-on {
-  background: var(--bg-3);
+  background: color-mix(in srgb, var(--root) 16%, transparent);
 }
 
 .split__rowText {
@@ -1933,17 +2352,10 @@ kbd {
 }
 
 .split__head {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   display: flex;
   align-items: flex-start;
   gap: var(--s-5);
-  padding: var(--s-5) var(--s-6);
-  border-bottom: 1px solid var(--line);
-  background: var(--material);
-  -webkit-backdrop-filter: var(--material-blur);
-  backdrop-filter: var(--material-blur);
+  padding: var(--s-1) 0 var(--s-5);
 }
 
 .split__title {
@@ -1996,7 +2408,6 @@ kbd {
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: var(--s-5);
   align-items: start;
-  padding: var(--s-6);
 }
 /* Too narrow for cards beside the side column: stack them, files first. */
 @container (max-width: 860px) {
@@ -2010,16 +2421,6 @@ kbd {
     margin-left: 0;
   }
 }
-@container (max-width: 520px) {
-  .fcard {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s-3);
-  }
-  .fcard__lead {
-    display: flex;
-    align-items: center;
-  }
-}
 
 .wsp__cards,
 .wsp__aside {
@@ -2028,12 +2429,10 @@ kbd {
   min-width: 0;
 }
 
-/* A published file: its step and status on the left, its record on the right. */
+/* A published file: its block and status as the heading, then its record. */
 .fcard {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  gap: var(--s-5);
-  padding: var(--s-5);
+  padding: var(--s-4) var(--s-5);
   border-radius: var(--r-lg);
   border: 1px solid var(--line);
   background: var(--bg-2);
@@ -2049,42 +2448,35 @@ kbd {
   box-shadow: none;
 }
 
-.fcard__lead {
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: var(--s-2);
-  min-width: 0;
-}
-
-.fcard__step {
-  max-width: 100%;
-  font-size: var(--t-2xs);
-  font-weight: 600;
-  letter-spacing: var(--tr-caps);
-  text-transform: uppercase;
-  color: var(--fg-2);
-  overflow-wrap: anywhere;
-}
-
 .fcard__main {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-2);
   min-width: 0;
 }
 
 .fcard__top {
   display: flex;
-  align-items: baseline;
-  gap: var(--s-4);
+  align-items: center;
+  gap: var(--s-3);
   min-width: 0;
+}
+
+.fcard__step {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: var(--tr-heading);
+  color: var(--fg);
 }
 
 .fcard__file {
   font-family: var(--mono);
-  font-size: var(--t-sm);
-  font-weight: 600;
-  color: var(--fg);
+  font-size: var(--t-xs);
+  color: var(--fg-2);
 }
 
 .fcard__when {
@@ -2095,6 +2487,7 @@ kbd {
 }
 
 .fcard__facts {
+  margin-top: var(--s-1);
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-1) var(--s-5);
@@ -2168,11 +2561,10 @@ kbd {
 
 .rcard__title {
   padding: 0 var(--s-2) var(--s-2);
-  font-size: var(--t-2xs);
+  font-size: var(--t-md);
   font-weight: 600;
-  letter-spacing: var(--tr-caps);
-  text-transform: uppercase;
-  color: var(--fg-3);
+  letter-spacing: var(--tr-heading);
+  color: var(--fg);
 }
 
 .rcard__row {
@@ -2248,6 +2640,24 @@ kbd {
   color: var(--warn);
 }
 
+/* A layer a workfile wrote, over the ROP that wrote it. */
+.wfl__out {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.wfl__file {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--fg);
+}
+.wfl__rop {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+}
+
 .split__sub {
   font-size: var(--t-xs);
   color: var(--fg-3);
@@ -2267,7 +2677,7 @@ kbd {
 .hstat__value {
   font-family: var(--font-display);
   font-size: var(--t-2xl);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.1;
   letter-spacing: var(--tr-display);
   color: var(--fg);
@@ -2285,7 +2695,6 @@ kbd {
 .wfl__body {
   display: grid;
   gap: var(--s-4);
-  padding: var(--s-6);
 }
 
 .wfl__note {
@@ -2440,9 +2849,12 @@ kbd {
   margin: 0;
   font-size: var(--t-sm);
   color: var(--fg-1);
-  font-family: var(--mono);
   word-break: break-word;
   min-width: 0;
+}
+.facts dd.is-mono {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
 }
 
 /* ===========================================================================
@@ -2564,10 +2976,28 @@ kbd {
   min-width: 0;
 }
 
+.timeline__name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.timeline__entity {
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: var(--fg);
+}
+.timeline__block {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+}
+
 .timeline__sub {
   font-size: var(--t-xs);
   color: var(--fg-3);
-  padding-left: 15px;
 }
 
 .timeline__comment {
@@ -3444,7 +3874,7 @@ kbd {
   font-weight: 600;
   letter-spacing: var(--tr-heading);
   line-height: var(--lh-title);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* The file's own tools beside its name: copy, reveal, then close, set apart. */
@@ -4330,6 +4760,11 @@ button.prim:hover {
   padding: var(--s-3);
   outline: none;
 }
+/* The list takes focus on open so the arrow keys work at once; ringing the
+   whole pane for it reads as an error frame rather than as focus. */
+.picker__list:focus-visible {
+  box-shadow: none;
+}
 
 .entry {
   display: flex;
@@ -4397,22 +4832,22 @@ button.prim:hover {
   background: var(--bg-2);
 }
 
+/* Shaped and filled like every other text field: the search boxes. */
 .picker__input {
   flex: 1;
   min-width: 0;
   height: 30px;
-  padding: 0 var(--s-3);
-  border-radius: var(--r-md);
-  border: 1px solid var(--line-strong);
-  background: var(--bg);
+  padding: 0 var(--s-4);
+  border-radius: var(--r-full);
+  border: 1px solid transparent;
+  background: var(--fill-3);
   font-size: var(--t-sm);
   font-family: var(--mono);
   outline: none;
   transition: border-color var(--fast), box-shadow var(--fast);
 }
 .picker__input:focus {
-  border-color: color-mix(in srgb, var(--root) 55%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--root) 14%, transparent);
+  box-shadow: var(--ring);
 }
 .picker__input::placeholder {
   color: var(--fg-3);
@@ -4429,10 +4864,15 @@ button.prim:hover {
 }
 
 .chooser__title {
-  font-size: var(--t-md);
+  font-size: var(--t-lg);
   font-weight: 600;
+  letter-spacing: var(--tr-heading);
   color: var(--fg);
+}
+/* The chooser is titled with a file name, which reads as one. */
+.chooser__title--mono {
   font-family: var(--mono);
+  font-size: var(--t-md);
 }
 
 .chooser__note {

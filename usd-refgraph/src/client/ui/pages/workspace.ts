@@ -26,8 +26,9 @@ import {
   tabs,
   truncated,
 } from '../kit'
-import { clear, el, formatBytes, formatMoment, formatRelative, matches, nextFrame } from '../../util'
+import { el, formatBytes, formatMoment, formatRelative, matches, nextFrame } from '../../util'
 import { pageState, type PageContext } from './context'
+import { pageShell } from './shell'
 
 const TIER_TABS: { value: NodeTier | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -63,11 +64,14 @@ export function renderWorkspace(host: HTMLElement, context: PageContext): void {
   if (!selected || !visible.includes(selected)) selected = visible[0] ?? null
   state.selected = selected?.name ?? null
 
-  clear(host)
+  const body = pageShell(host, 'Workspace', {
+    subtitle: 'Every entity, and each file it has published',
+    fill: true,
+  })
   const split = el('div', 'split')
   split.appendChild(buildSide(project, visible, selected, context))
   split.appendChild(buildDetail(project, selected, context))
-  host.appendChild(split)
+  body.appendChild(split)
 
   split.querySelector('.split__list')!.scrollTop = listScroll
   split.querySelector('.split__detail')!.scrollTop = detailScroll
@@ -253,14 +257,12 @@ function fileCard(file: ProjectLayer): HTMLElement {
   const card = markLayer(el('article', 'fcard'), file.path)
   card.title = file.path
 
-  const lead = el('div', 'fcard__lead')
-  lead.appendChild(el('span', 'fcard__step', layerStep(file)))
-  lead.appendChild(statusPill(file.pipeline.status, true))
-  card.appendChild(lead)
-
+  // The block names the card, as it does the strip's mark; the file it was
+  // written to sits beneath, since that is what anyone downstream points at.
   const main = el('div', 'fcard__main')
   const top = el('div', 'fcard__top')
-  top.appendChild(truncated(file.name, 'fcard__file'))
+  top.appendChild(el('h3', 'fcard__step', layerStep(file)))
+  top.appendChild(statusPill(file.pipeline.status, true))
   // The exact moment is a hover away; the card says how long ago, once.
   const when = file.pipeline.exportedAt ?? file.mtime
   if (when) {
@@ -269,6 +271,7 @@ function fileCard(file: ProjectLayer): HTMLElement {
     top.appendChild(ago)
   }
   main.appendChild(top)
+  main.appendChild(truncated(file.name, 'fcard__file'))
 
   // Each fact is named on hover, since a workfile and a ROP path look alike.
   const record = file.pipeline
