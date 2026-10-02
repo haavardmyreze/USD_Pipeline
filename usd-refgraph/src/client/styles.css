@@ -10,8 +10,10 @@
 :root {
   /* Colours are Apple's dark-mode system colours (Human Interface
      Guidelines). Each meaning the app already had keeps its hue — amber,
-     blue and green for status; purple, cyan and orange for the tiers — in
-     Apple's exact version of it, and the interface accent is systemBlue. */
+     blue and green for status; purple, mint and pink for the tiers — in
+     Apple's exact version of it, and the interface accent is systemBlue.
+     Status and tier never share a hue: a shot must not read as a
+     placeholder, nor a set as production ready. */
 
   /* -- Surfaces ----------------------------------------------------------
      A five-step ladder rather than the old four, so a card can sit on a page
@@ -62,17 +64,13 @@
   --status-locked: #30d158;
   --status-unknown: #636366;
 
-  /* -- Tiers and categories ---------------------------------------------- */
+  /* -- Tiers ---------------------------------------------------------------
+     Hues no status uses. Categories (character, prop…) carry no colour at
+     all: there are already two colour meanings on screen, and a third
+     would only make the first two harder to read. */
   --tier-asset: #bf5af2;
-  --tier-set: #64d2ff;
-  --tier-shot: #ff9f0a;
-
-  --cat-character: #30d158;
-  --cat-prop: #bf5af2;
-  --cat-environment: #63e6e2;
-  --cat-vehicle: #64d2ff;
-  --cat-fx: #ff375f;
-  --cat-set: #ffd60a;
+  --tier-set: #63e6e2;
+  --tier-shot: #ff6482;
 
   /* -- Type scale --------------------------------------------------------
      In rem, so it follows the browser's text-size setting; at the default
@@ -1239,11 +1237,9 @@ kbd {
 .load__row--head {
   padding-block: var(--s-2);
   border-top: none;
-  font-size: var(--t-2xs);
+  font-size: var(--t-xs);
   font-weight: 600;
-  letter-spacing: var(--tr-caps);
-  text-transform: uppercase;
-  color: var(--fg-3);
+  color: var(--fg-2);
 }
 .load__row--head .load__cell:nth-child(n + 4) {
   text-align: right;
@@ -1964,13 +1960,12 @@ kbd {
 .split__badge {
   padding: 1px var(--s-2);
   border-radius: var(--r-sm);
-  border: 1px solid color-mix(in srgb, var(--badge) 50%, transparent);
-  background: color-mix(in srgb, var(--badge) 12%, transparent);
+  border: 1px solid var(--line-strong);
   font-size: var(--t-2xs);
   font-weight: 600;
   letter-spacing: var(--tr-caps);
   text-transform: uppercase;
-  color: var(--badge);
+  color: var(--fg-2);
 }
 
 .split__path {

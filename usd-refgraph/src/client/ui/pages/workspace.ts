@@ -16,10 +16,8 @@ import type { Project, ProjectEntity, ProjectLayer } from '@shared/project'
 import type { NodeTier } from '@shared/types'
 import { entityLayers, entitySort, entityTarget, layerStep } from '@shared/project'
 import {
-  CATEGORY_COLOR,
   button,
   emptyState,
-  hashHue,
   markLayer,
   searchField,
   statusDot,
@@ -28,7 +26,7 @@ import {
   tabs,
   truncated,
 } from '../kit'
-import { clear, el, formatBytes, formatRelative, formatShortMoment, matches, nextFrame } from '../../util'
+import { clear, el, formatBytes, formatMoment, formatRelative, matches, nextFrame } from '../../util'
 import { pageState, type PageContext } from './context'
 
 const TIER_TABS: { value: NodeTier | 'all'; label: string }[] = [
@@ -221,9 +219,7 @@ function detailHead(entity: ProjectEntity, context: PageContext): HTMLElement {
   line.appendChild(statusPill(entity.status, true))
   const badge = entity.category ?? entity.sequence
   if (badge) {
-    const tag = el('span', 'split__badge', badge)
-    tag.style.setProperty('--badge', CATEGORY_COLOR[badge] ?? hashHue(badge))
-    line.appendChild(tag)
+    line.appendChild(el('span', 'split__badge', badge))
   }
   title.appendChild(line)
   title.appendChild(truncated(entity.dir, 'split__path'))
@@ -265,23 +261,35 @@ function fileCard(file: ProjectLayer): HTMLElement {
   const main = el('div', 'fcard__main')
   const top = el('div', 'fcard__top')
   top.appendChild(truncated(file.name, 'fcard__file'))
+  // The exact moment is a hover away; the card says how long ago, once.
   const when = file.pipeline.exportedAt ?? file.mtime
-  if (when) top.appendChild(el('span', 'fcard__when', formatRelative(when)))
+  if (when) {
+    const ago = el('span', 'fcard__when', formatRelative(when))
+    ago.title = `${file.pipeline.exportedAt ? 'Published' : 'Modified'} ${formatMoment(when)}`
+    top.appendChild(ago)
+  }
   main.appendChild(top)
 
+  // Each fact is named on hover, since a workfile and a ROP path look alike.
   const record = file.pipeline
   const facts = el('div', 'fcard__facts')
-  const fact = (text: string | null | undefined, mono = false): void => {
-    if (text) facts.appendChild(truncated(text, mono ? 'fcard__fact fcard__fact--mono' : 'fcard__fact'))
+  const fact = (label: string, text: string | null | undefined, mono = false): void => {
+    if (!text) return
+    const node = truncated(text, mono ? 'fcard__fact fcard__fact--mono' : 'fcard__fact')
+    node.title = `${label}: ${text}`
+    facts.appendChild(node)
   }
-  fact(record.artist)
-  fact(record.exportedAt ? formatShortMoment(record.exportedAt) : null)
-  fact(record.hipFile, true)
-  fact(record.ropPath, true)
-  fact(file.size !== null ? formatBytes(file.size) : null)
+  fact('Artist', record.artist)
+  fact('Workfile', record.hipFile, true)
+  fact('ROP', record.ropPath, true)
+  fact('Size', file.size !== null ? formatBytes(file.size) : null)
   if (facts.childElementCount) main.appendChild(facts)
 
-  if (record.comment) main.appendChild(el('p', 'fcard__comment', record.comment))
+  if (record.comment) {
+    const comment = el('p', 'fcard__comment', record.comment)
+    comment.title = 'Publish comment'
+    main.appendChild(comment)
+  }
 
   if (file.textures?.length) {
     const chips = el('div', 'fcard__textures')

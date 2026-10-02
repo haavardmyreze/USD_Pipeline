@@ -293,6 +293,8 @@ class App {
       ? truncateStart(this.project.root, 52)
       : 'Open a project folder'
     this.els.projectPath.title = this.project?.root ?? ''
+    // The rail is narrow, so a long name ellipsises; the whole name is a hover away.
+    this.els.projectName.title = name ? displayName(name) : ''
   }
 
   private showCapabilities(capabilities: Capabilities): void {

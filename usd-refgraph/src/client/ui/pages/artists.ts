@@ -57,10 +57,10 @@ export function renderArtists(host: HTMLElement, context: PageContext): void {
       ? headStats([
           { value: named.length, label: named.length === 1 ? 'person publishing' : 'people publishing' },
           ...(busiest
-            ? [{ value: busiest.tasks.length, label: `busiest — ${busiest.name}`, title: 'Most layers published' }]
+            ? [{ value: busiest.tasks.length, label: `layers by ${busiest.name}`, title: 'The most anyone has published' }]
             : []),
           ...(quietest && named.length > 1
-            ? [{ value: sinceShort(quietest.last), label: `quietest — ${quietest.name}`, title: 'Longest since a publish' }]
+            ? [{ value: sinceShort(quietest.last), label: `since ${quietest.name} published`, title: 'The longest anyone has gone without publishing' }]
             : []),
         ])
       : undefined,
@@ -113,19 +113,19 @@ function loadCard(people: Person[], context: PageContext): HTMLElement {
   for (const status of STATUS_ORDER) {
     const item = el('span', 'legendkey__item')
     item.appendChild(statusDot(status))
-    item.appendChild(el('span', undefined, STATUS_LABEL[status].toLowerCase()))
+    item.appendChild(el('span', undefined, STATUS_LABEL[status]))
     legend.appendChild(item)
   }
 
-  const { root, body } = card('Load', {
-    hint: 'what each person has published, and where',
+  const { root, body } = card('Who publishes what', {
+    hint: 'pick a person to see everything they published',
     actions: legend,
     flush: true,
   })
 
   const board = el('div', 'load')
   const head = el('div', 'load__row load__row--head')
-  for (const label of ['Artist', 'Status split', 'Entities', 'Layers', 'Last']) {
+  for (const label of ['Artist', 'Their layers by status', 'Entities', 'Layers', 'Last publish']) {
     head.appendChild(el('span', 'load__cell', label))
   }
   board.appendChild(head)
@@ -214,7 +214,7 @@ function latestCard(people: Person[]): HTMLElement {
       [
         { label: 'Artist', width: 'minmax(0, 0.7fr)' },
         { label: 'Entity', width: 'minmax(0, 1fr)' },
-        { label: 'Step', width: 'minmax(0, 0.8fr)' },
+        { label: 'Block', width: 'minmax(0, 0.8fr)' },
         { label: 'Comment', width: 'minmax(0, 2fr)' },
         { label: 'Status', width: '120px', end: true },
         { label: 'When', width: '100px', end: true },
@@ -228,7 +228,7 @@ function latestCard(people: Person[]): HTMLElement {
             layerPath: task.layer.path,
             cells: [
               truncated(person.name, person.name === UNATTRIBUTED ? 'dim' : 'strong'),
-              namedCell(task.entity.name, { status: task.entity.status }),
+              namedCell(task.entity.name),
               truncated(task.step, 'mono dim'),
               truncated(task.layer.pipeline.comment || '—', 'dim'),
               statusPill(task.layer.pipeline.status, true),
@@ -258,7 +258,7 @@ function historyCard(person: Person, context: PageContext): HTMLElement {
     dataTable(
       [
         { label: 'Entity', width: 'minmax(0, 1fr)' },
-        { label: 'Step', width: 'minmax(0, 0.8fr)' },
+        { label: 'Block', width: 'minmax(0, 0.8fr)' },
         { label: 'Workfile', width: 'minmax(0, 1.1fr)' },
         { label: 'Comment', width: 'minmax(0, 1.6fr)' },
         { label: 'Status', width: '120px', end: true },
@@ -268,7 +268,7 @@ function historyCard(person: Person, context: PageContext): HTMLElement {
         title: task.layer.path,
         layerPath: task.layer.path,
         cells: [
-          namedCell(task.entity.name, { status: task.entity.status, strong: true }),
+          namedCell(task.entity.name, { strong: true }),
           truncated(task.step, 'mono dim'),
           truncated(task.layer.pipeline.hipFile ?? '—', 'mono dim'),
           truncated(task.layer.pipeline.comment || '—', 'dim'),

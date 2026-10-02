@@ -48,16 +48,6 @@ export const STATUS_HINT: Record<Status, string> = {
   unknown: 'No status was written into this layer',
 }
 
-/** Colour per asset category prefix (guide §15.2). */
-export const CATEGORY_COLOR: Record<string, string> = {
-  character: 'var(--cat-character)',
-  prop: 'var(--cat-prop)',
-  environment: 'var(--cat-environment)',
-  vehicle: 'var(--cat-vehicle)',
-  fx: 'var(--cat-fx)',
-  set: 'var(--cat-set)',
-}
-
 export const TIER_COLOR: Record<string, string> = {
   asset: 'var(--tier-asset)',
   set: 'var(--tier-set)',
@@ -578,13 +568,4 @@ export function groupHead(label: string, count: string, accent?: string): HTMLEl
   head.appendChild(badge)
   head.appendChild(el('span', 'group-head__count', count))
   return head
-}
-
-/** A stable colour for badges that have no fixed palette, e.g. sequences. */
-export function hashHue(name: string): string {
-  let hash = 0
-  for (let index = 0; index < name.length; index++) {
-    hash = (hash * 31 + name.charCodeAt(index)) >>> 0
-  }
-  return `hsl(${hash % 360} 62% 62%)`
 }

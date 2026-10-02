@@ -244,8 +244,9 @@ The visual language follows Apple's Human Interface Guidelines and the
 translucent, floating chrome of macOS 26:
 
 - **Apple's system colours**, dark variants. Status keeps amber, blue and green
-  and the tiers keep purple, cyan and orange — each in Apple's exact version of
-  that hue. The interface accent is systemBlue.
+  and the tiers take purple, mint and pink — hues no status uses, so a shot
+  never reads as a placeholder or a set as production ready. Categories
+  (character, prop…) carry no colour. The interface accent is systemBlue.
 - **Type is SF on a Mac and Inter elsewhere.** SF cannot be shipped off Apple
   platforms; Inter was drawn to the same proportions and has an optical-size
   axis, so large numbers take the display cut and body text the text cut. It
@@ -351,7 +352,7 @@ The graph shows two things at once — what a file *is*, and how it was *reached
 things in colour says neither quickly.
 
 **Cards carry colour.** A card's tint is the tier the file belongs to: violet
-for an asset, cyan for a set, orange for a shot. Areas hold colour well, and a
+for an asset, mint for a set, pink for a shot. Areas hold colour well, and a
 tint still reads when the whole graph is zoomed out to fit, which is exactly
 when you want to see how a scene divides. A file outside the three tiers keeps
 the plain card surface. The key in the stage's lower left says which is which,

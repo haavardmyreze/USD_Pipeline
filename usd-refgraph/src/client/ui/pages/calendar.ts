@@ -140,7 +140,7 @@ function listCard(
   const showing = state.selectedDay ? byDay.get(state.selectedDay) ?? [] : published
 
   const { root, body } = card(state.selectedDay ? 'That day' : 'Most recent first', {
-    hint: `${showing.length} ${showing.length === 1 ? 'layer' : 'layers'}`,
+    hint: `${showing.length} ${showing.length === 1 ? 'publish' : 'publishes'}`,
     flush: true,
     actions: state.selectedDay
       ? button('Show all', {

@@ -299,7 +299,7 @@ function detailHead(file: Workfile): HTMLElement {
     stats.push({ value: file.versions.length, label: file.versions.length === 1 ? 'version' : 'versions' })
   }
   stats.push({ value: file.rows.length, label: 'layers written' })
-  if (!file.unrecorded) stats.push({ value: rops.size, label: rops.size === 1 ? 'ROP' : 'ROPs' })
+  if (!file.unrecorded) stats.push({ value: rops.size, label: rops.size === 1 ? 'ROP used' : 'ROPs used' })
   head.appendChild(headStats(stats))
   return head
 }
@@ -343,9 +343,9 @@ function outputs(rows: TaskRow[]): HTMLElement {
 
   return dataTable(
     [
-      { label: 'Writes', width: 'minmax(0, 1.3fr)' },
+      { label: 'Layer written', width: 'minmax(0, 1.2fr)' },
       { label: 'ROP', width: 'minmax(0, 1fr)' },
-      { label: 'Entity', width: 'minmax(0, 0.7fr)' },
+      { label: 'Entity', width: 'minmax(0, 0.8fr)' },
       { label: 'Status', width: '110px', end: true },
     ],
     sorted.map((row) => ({
@@ -354,7 +354,7 @@ function outputs(rows: TaskRow[]): HTMLElement {
       cells: [
         namedCell(row.layer.name, { mono: true, strong: true }),
         truncated(ropLabel(row.layer.pipeline.ropPath), 'mono dim'),
-        namedCell(row.entity.name, { status: row.entity.status }),
+        truncated(row.entity.name),
         statusPill(row.layer.pipeline.status, true),
       ],
     })),
