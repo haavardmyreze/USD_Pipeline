@@ -23,3 +23,6 @@ venv/
 *.hip.bak
 *.hiplc.bak
 *.hipnc.bak
+
+# Obsidian vault: per-machine window state
+USD_Pipeline/.obsidian/workspace*.json

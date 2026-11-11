@@ -1,0 +1,11 @@
+filters:
+  and:
+    - note.type == "spec"
+    - '!file.inFolder("Templates")'
+views:
+  - type: table
+    name: All specs
+    order:
+      - file.name
+      - status
+      - summary
