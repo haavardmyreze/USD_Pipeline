@@ -28,4 +28,3 @@ render file   one .rat per EXR     made with imaketx straight after the EXR is w
 
 - Confirm that Karma uses the exporter's `.rat` and does not convert again. Check the render log at verbosity 3 or in the logging panel.
 - Are `bc` and `e` written in ACEScg, or with their colour space set on the material? Karma's automatic colour space reads every EXR as linear.
-- Should farm nodes turn conversion off (`HOUDINI_TEXTURE_DISK_CACHE`), so a missing `.rat` fails instead of converting?

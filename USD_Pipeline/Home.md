@@ -15,6 +15,7 @@ The source of truth for the Houdini Solaris and USD pipeline. How the vault is w
 - [[Work tree]]
 - [[Asset scene graph]]
 - [[World scene graph]]
+- [[Instancing]]
 - [[Assembly file]]
 - [[Stage metrics]]
 

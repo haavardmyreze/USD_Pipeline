@@ -1,6 +1,6 @@
 ---
 type: spec
-status: draft
+status: stub
 summary: The OCIO config, working space and render output colour space.
 ---
 

@@ -21,7 +21,7 @@ $PROJECT/
 │           └── tex/
 ├── sets/
 │   └── [<sub-folder>/]
-│       └── <set>/                living-room/, without the set- prefix
+│       └── <set>/                set-living-room/
 │           ├── assembly
 │           ├── block(s)
 │           └── tex/

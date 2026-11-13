@@ -26,5 +26,5 @@ Nothing in a spec repeats its own structure. Worked examples, reasons and valida
 | Property | Values |
 | --- | --- |
 | `type` | `spec`, or `meta` for notes about the vault. More types are added when they are needed |
-| `status` | `draft` or `decided`. Only a person sets `decided` |
+| `status` | `stub`, `draft` or `decided`. A `stub` is a placeholder whose contents are not worked through yet. Only a person sets `decided` |
 | `summary` | One sentence saying what the note settles |
