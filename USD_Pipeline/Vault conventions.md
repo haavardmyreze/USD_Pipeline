@@ -39,7 +39,8 @@ A finding is only true for the build and hardware it was tested on, so `houdini`
 
 | Property | Values |
 | --- | --- |
-| `type` | `spec`, `concept` for background on how USD or a tool works, `finding` for a result we tested, or `meta` for notes about the vault. More types are added when they are needed |
+| `type` | `spec`, `concept` for background on how USD or a tool works, `finding` for a result we tested, `hda` for one of our digital assets, or `meta` for notes about the vault. More types are added when they are needed |
 | `status` | `stub`, `draft` or `decided`. A `stub` is a placeholder whose contents are not worked through yet. Only a person sets `decided`. A finding is `observed` until a measured test makes it `confirmed` |
 | `summary` | One sentence saying what the note settles |
 | `houdini`, `engine` | Findings only: the Houdini build and the Karma engine tested |
+| `hda` | HDAs only: the operator type name, such as `Havard::Lop/mz_usd_rop::1.0` |
