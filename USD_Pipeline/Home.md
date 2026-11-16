@@ -41,3 +41,12 @@ The source of truth for the Houdini Solaris and USD pipeline. How the vault is w
 - [[Texture export]]
 
 ![[Specs.base]]
+
+## Concepts
+
+- [[Schemas]]
+- [[Kind]]
+
+## Karma
+
+- [[Karma]]

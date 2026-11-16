@@ -22,7 +22,12 @@ shot        4 digits, in steps of 10  0010, 0020
 
 ## Notes
 
-- `env-` is one reusable piece of environment, such as a warehouse shell. `set-` is the dressed space built from assets.
+- A category only sorts assets: `env-` is an environmental asset such as a tree or a rock, `prop-` a hammer, `veh-` a car. Every category builds the same way.
+- `set-` is the dressed space built from assets.
 - Shots step by 10 so a shot can be inserted later without renumbering.
 - Sequence codes are chosen once, at the start of a project.
 - The categories are defaults. A project can add its own, and `set` is never one of them.
+
+## Open
+
+- Is the category list fixed for the pipeline, or chosen per project?
