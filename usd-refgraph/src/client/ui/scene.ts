@@ -10,7 +10,7 @@
  * opinion on it, and clicking one selects that layer in the graph — which in
  * turn swaps this tree for that layer's own.
  *
- * A layer's tree opens fully expanded, materials excepted, fetched in one
+ * A layer's tree opens expanded down to its components, fetched in one
  * request up to a budget; past that, levels are fetched as rows are opened, so
  * a heavy shot is never walked whole. Each layer keeps its own expansion and
  * selection, so moving around the graph and back finds the tree as you left it.
@@ -162,8 +162,10 @@ export class SceneTree {
    * children are still fetched, so opening one is instant. Expanding a
    * material itself — Shift-click on its arrow — does open it.
    *
-   * `initial` marks the expansion a layer opens with, which stays quiet about
-   * running out of budget.
+   * `initial` marks the expansion a layer opens with. It stays quiet about
+   * running out of budget, and it stops at the component level: a component
+   * shows as a closed row, so a set or shot opens as its list of assets rather
+   * than every mesh inside them (see `stopsAtComponent`).
    */
   private async expandAll(
     primPath: string = ROOT,
@@ -186,7 +188,7 @@ export class SceneTree {
         state.errors.delete(level.primPath)
         const insideClosed = closed.has(level.primPath)
         for (const child of level.children) {
-          if (insideClosed || isMaterial(child)) {
+          if (insideClosed || isMaterial(child) || (options.initial && stopsAtComponent(child))) {
             closed.add(child.path)
             continue
           }
@@ -667,6 +669,16 @@ function rowTitle(prim: ScenePrim): string {
 /** Materials, which expanding leaves closed over their shaders. */
 function isMaterial(prim: ScenePrim): boolean {
   return prim.typeName === 'Material'
+}
+
+/**
+ * Whether the tree a layer opens with leaves this prim closed: a component
+ * below the top of the stage. A component *at* the top is the asset the layer
+ * is about, so it opens; otherwise an asset's own layer would open as one
+ * closed row.
+ */
+function stopsAtComponent(prim: ScenePrim): boolean {
+  return prim.kind === 'component' && parentOf(prim.path) !== ROOT
 }
 
 function parentOf(path: string): string {
