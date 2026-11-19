@@ -5,7 +5,7 @@
  * first brings it in — and is placed inside that parent's vertical band, so a
  * subtree always occupies a contiguous run of rows and you can see at a glance
  * which files belong to which. A file pulled in by more than one layer is drawn
- * once, with the extra arcs shown as thinner cross links.
+ * once, with the extra arcs drawn as cross links onto their own entry points.
  *
  * Edges leave a parent's right edge, run to a shared vertical trunk in the
  * gutter, then turn into each child. Children are grouped onto one trunk per
@@ -38,6 +38,10 @@ const CORNER = 9
 const CROSS_STANDOFF = 24
 /** Extra air after a block of siblings, separating one parent's brood. */
 const SUBTREE_GAP = 14
+/** Vertical spacing between the entry points of arcs arriving at one card. */
+const PORT_STEP = 6
+/** How many entry points fit on each side of a card's centre line. */
+const PORT_MAX = 2
 
 export interface Placed {
   id: string
@@ -58,6 +62,12 @@ export interface Routed {
   backwards: boolean
   /** Trunk offset from the parent's right edge, kept so drags can re-route. */
   bus: number
+  /**
+   * Which entry point on the child's left edge the arc lands on: 0 is the
+   * centre line, kept for the tree arc; cross links take 1, 2… stepping away
+   * from it on the side their source sits, so they never share a segment.
+   */
+  port: number
 }
 
 export interface Layout {
@@ -217,7 +227,9 @@ function assignRows(
 
 export function layoutGraph(graph: Graph, visible: Set<string>): Layout {
   const ids = graph.nodes.filter((n) => visible.has(n.id)).map((n) => n.id)
-  const edges = graph.edges.filter((e) => visible.has(e.from) && visible.has(e.to))
+  const edges = oneWirePerPair(
+    graph.edges.filter((e) => visible.has(e.from) && visible.has(e.to)),
+  )
 
   if (!ids.length) return { nodes: new Map(), edges: [], width: 0, height: 0 }
 
@@ -247,6 +259,22 @@ export function layoutGraph(graph: Graph, visible: Set<string>): Layout {
     width: (maxColumn + 1) * (NODE_W + GAP_X) - GAP_X,
     height,
   }
+}
+
+/**
+ * One wire per file pair and arc kind. A layer often names the same file more
+ * than once — a triplanar shader reads one texture through `filex`, `filey`
+ * and `filez` — and each of those is its own arc, but drawn they are the same
+ * line three times over. The detail panel still lists every arc.
+ */
+function oneWirePerPair(edges: GraphEdge[]): GraphEdge[] {
+  const seen = new Set<string>()
+  return edges.filter((edge) => {
+    const key = `${edge.from}\u0000${edge.to}\u0000${edge.kind}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +321,7 @@ function routeEdges(
   tree: Tree,
 ): Routed[] {
   const lanes = assignBusLanes(edges, tree)
+  const ports = assignPorts(edges, placed, tree, lanes)
   const routed: Routed[] = []
 
   for (const edge of edges) {
@@ -301,13 +330,15 @@ function routeEdges(
     if (!a || !b) continue
 
     const bus = lanes.get(edge.id) ?? BUS_BASE
+    const port = ports.get(edge.id) ?? 0
     const backwards = b.x <= a.x
     routed.push({
       edge,
-      d: pipePath(a, b, bus),
+      d: pipePath(a, b, bus, port),
       tree: tree.treeEdges.has(edge.id),
       backwards,
       bus,
+      port,
     })
   }
 
@@ -315,15 +346,63 @@ function routeEdges(
 }
 
 /**
+ * Give each cross link its own entry point on the child, so it never runs
+ * along the last stretch of another arc into the same card. Two dash patterns
+ * laid over each other out of step read as one muddy line of a third kind.
+ *
+ * Links arriving from above step upwards from the centre and links from below
+ * step downwards. On each side the link whose trunk stands furthest left takes
+ * the innermost point, so a trunk further right drops onto an outer point and
+ * never has to cross the inner link's last run.
+ */
+function assignPorts(
+  edges: GraphEdge[],
+  placed: Map<string, Placed>,
+  tree: Tree,
+  lanes: Map<string, number>,
+): Map<string, number> {
+  const ports = new Map<string, number>()
+  const byTarget = new Map<string, { edge: GraphEdge; above: boolean; busX: number }[]>()
+
+  for (const edge of edges) {
+    if (tree.treeEdges.has(edge.id)) continue
+    const a = placed.get(edge.from)
+    const b = placed.get(edge.to)
+    if (!a || !b) continue
+    const busX = Math.min(a.x + a.w + (lanes.get(edge.id) ?? BUS_BASE), b.x - 12)
+    const entry = { edge, above: a.y + a.h / 2 < b.y + b.h / 2, busX }
+    const list = byTarget.get(edge.to)
+    if (list) list.push(entry)
+    else byTarget.set(edge.to, [entry])
+  }
+
+  for (const list of byTarget.values()) {
+    for (const above of [true, false]) {
+      list
+        .filter((entry) => entry.above === above)
+        .sort((p, q) => p.busX - q.busX)
+        .forEach((entry, i) => ports.set(entry.edge.id, Math.min(i + 1, PORT_MAX)))
+    }
+  }
+
+  return ports
+}
+
+/**
  * The orthogonal path from one card to another: out of the right edge, along to
  * the trunk, up or down, then into the left edge. Backward links stand off and
  * travel over the top instead.
+ *
+ * `port` picks the entry point (see `Routed.port`). Its side is read from where
+ * the two cards sit now rather than where they sat at layout, so a link keeps
+ * landing on the side it comes from while a card is dragged past the other.
  */
-export function pipePath(a: Placed, b: Placed, bus: number): string {
+export function pipePath(a: Placed, b: Placed, bus: number, port = 0): string {
   const x1 = a.x + a.w
   const y1 = a.y + a.h / 2
   const x2 = b.x
-  const y2 = b.y + b.h / 2
+  const side = y1 < b.y + b.h / 2 ? -1 : 1
+  const y2 = b.y + b.h / 2 + side * port * PORT_STEP
 
   if (b.x > a.x) {
     if (Math.abs(y1 - y2) < 0.5) return `M ${round(x1)} ${round(y1)} L ${round(x2)} ${round(y2)}`

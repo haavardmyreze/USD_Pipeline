@@ -3456,18 +3456,17 @@ kbd {
 }
 
 /*
- * Missing and cross-link are not arc kinds — they are notes about one. Each
- * keeps whatever pattern its kind gave it and changes only colour or weight,
- * so a dashed red line still reads as "payload, and the file is not there".
+ * Missing is not an arc kind — it is a note about one. It keeps whatever
+ * pattern its kind gave it and changes only colour, so a dashed red line
+ * still reads as "payload, and the file is not there".
+ *
+ * A cross link (a second arc into a file already drawn elsewhere) gets no
+ * style of its own: an arc is drawn the same however the layout placed it,
+ * and it lands on its own entry point instead of being dimmed.
  */
 .edge--missing {
   stroke: var(--danger);
   opacity: 0.9;
-}
-
-/* A second arc into a file already drawn elsewhere: secondary to structure. */
-.edge--cross {
-  opacity: 0.26;
 }
 
 .edge.is-lit {

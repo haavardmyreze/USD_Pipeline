@@ -384,7 +384,7 @@ export class GraphView {
       const a = this.layout.nodes.get(routed.edge.from)
       const b = this.layout.nodes.get(routed.edge.to)
       if (!a || !b) continue
-      routed.d = pipePath(a, b, routed.bus)
+      routed.d = pipePath(a, b, routed.bus, routed.port)
       this.edgeEls[i]?.path.setAttribute('d', routed.d)
     }
   }
