@@ -54,3 +54,7 @@ The source of truth for the Houdini Solaris and USD pipeline. How the vault is w
 ## HDAs
 
 - [[HDAs]]
+
+## Ideas
+
+- [[Future ideas]]
