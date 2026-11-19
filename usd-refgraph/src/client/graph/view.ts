@@ -130,7 +130,7 @@ export class GraphView {
     if (missing) card.classList.add('node--missing')
     if (node.role === 'assembly') card.classList.add('node--assembly')
     else if (node.role === 'block') card.classList.add('node--block')
-    // Filled with the tier's colour: asset, set or shot.
+    // Tinted with the tier's colour: asset, set or shot.
     if (node.tier) card.classList.add(`node--tier-${node.tier}`)
     card.dataset.id = node.id
     card.style.transform = `translate(${placed.x}px, ${placed.y}px)`

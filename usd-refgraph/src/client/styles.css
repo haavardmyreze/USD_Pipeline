@@ -81,10 +81,6 @@
   --tier-asset: #524294;
   --tier-set: #4d861d;
   --tier-shot: #ffb900;
-  /* Text drawn on a card filled with that tier's colour. */
-  --tier-asset-ink: #f2f0fa;
-  --tier-set-ink: #f3f8ee;
-  --tier-shot-ink: #1f1700;
 
   /* -- Type scale --------------------------------------------------------
      In rem, so it follows the browser's text-size setting; at the default
@@ -3620,49 +3616,42 @@ kbd {
 }
 
 /*
- * Which tier a file belongs to — asset, set or shot — as a solid fill, the way
- * Houdini colours the LOP network the file comes from. The text on the card
- * takes the tier's ink: light on purple and green, dark on yellow. A file
- * outside the three tiers keeps `--tier: transparent` and so keeps the plain
- * card surface. A missing file keeps its own dashed red look whatever its tier.
+ * Which tier a file belongs to — asset, set or shot — as a strong tint across
+ * the whole card and a border in the full colour, the way Houdini colours the
+ * LOP network the file comes from. Strong enough to read at a glance, dark
+ * enough that the card's normal light text stays legible on all three. A
+ * file outside the three tiers keeps `--tier: transparent` and so keeps the
+ * plain card surface. A missing file keeps its own dashed red look.
  */
 .node--tier-asset {
   --tier: var(--tier-asset);
-  --tier-ink: var(--tier-asset-ink);
 }
 .node--tier-set {
   --tier: var(--tier-set);
-  --tier-ink: var(--tier-set-ink);
 }
 .node--tier-shot {
   --tier: var(--tier-shot);
-  --tier-ink: var(--tier-shot-ink);
 }
 
 .node[class*='node--tier-']:not(.node--missing) {
-  background: var(--tier);
-  border-color: color-mix(in srgb, var(--tier) 70%, black);
+  background: color-mix(in srgb, var(--tier) 38%, var(--bg-2));
+  border-color: color-mix(in srgb, var(--tier) 75%, var(--line-strong));
 }
 .node[class*='node--tier-']:not(.node--missing):hover {
-  background: color-mix(in srgb, var(--tier) 88%, white);
-  border-color: color-mix(in srgb, var(--tier) 70%, black);
+  background: color-mix(in srgb, var(--tier) 46%, var(--bg-2));
+  border-color: var(--tier);
 }
-/* The tier is the fill now, so emphasis is drawn in the foreground colour. */
-.node[class*='node--tier-']:not(.node--missing).is-lit {
-  border-color: color-mix(in srgb, var(--fg) 60%, var(--tier));
-}
+/* The border already carries the tier, so emphasis is drawn in the foreground colour. */
 .node[class*='node--tier-']:not(.node--missing).is-selected {
   border-color: var(--fg);
   box-shadow: var(--shadow-2), 0 0 0 1px var(--fg);
 }
-.node[class*='node--tier-']:not(.node--missing) .node__name {
-  color: var(--tier-ink);
+/* The dim greys meant for the plain surface sink into a tint; lift them a step. */
+.node[class*='node--tier-']:not(.node--missing) :is(.node__artist, .node__role) {
+  color: var(--fg-2);
 }
 .node--block[class*='node--tier-']:not(.node--missing) .node__name {
-  color: color-mix(in srgb, var(--tier-ink) 85%, transparent);
-}
-.node[class*='node--tier-']:not(.node--missing) :is(.node__artist, .node__role) {
-  color: color-mix(in srgb, var(--tier-ink) 70%, transparent);
+  color: var(--fg-1);
 }
 
 .node--assembly {
