@@ -74,12 +74,13 @@
   --status-unknown: #636366;
 
   /* -- Tiers ---------------------------------------------------------------
-     Hues no status uses. Categories (character, prop…) carry no colour at
-     all: there are already two colour meanings on screen, and a third
-     would only make the first two harder to read. */
-  --tier-asset: #bf5af2;
-  --tier-set: #63e6e2;
-  --tier-shot: #ff6482;
+     The node colours the LOP networks carry in Houdini, so a file reads as
+     the same kind here as it does in /stage. Categories (character, prop…)
+     carry no colour at all: there are already two colour meanings on
+     screen, and a third would only make the first two harder to read. */
+  --tier-asset: #524294;
+  --tier-set: #4d861d;
+  --tier-shot: #ffb900;
 
   /* -- Type scale --------------------------------------------------------
      In rem, so it follows the browser's text-size setting; at the default
