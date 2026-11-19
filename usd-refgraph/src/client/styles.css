@@ -3638,7 +3638,7 @@ kbd {
   border-color: color-mix(in srgb, var(--tier) 75%, var(--line-strong));
 }
 .node[class*='node--tier-']:not(.node--missing):hover {
-  background: color-mix(in srgb, var(--tier) 46%, var(--bg-2));
+  background: color-mix(in srgb, var(--tier) 42%, var(--bg-2));
   border-color: var(--tier);
 }
 /* The border already carries the tier, so emphasis is drawn in the foreground colour. */
@@ -3646,11 +3646,18 @@ kbd {
   border-color: var(--fg);
   box-shadow: var(--shadow-2), 0 0 0 1px var(--fg);
 }
-/* The dim greys meant for the plain surface sink into a tint; lift them a step. */
-.node[class*='node--tier-']:not(.node--missing) :is(.node__artist, .node__role) {
-  color: var(--fg-2);
+/*
+ * Text on a tint is moved up the scale so every line stays at 4.5:1 or better
+ * on all three tiers, hover included. Yellow is the tight one: there the
+ * secondary grey falls to about 2:1, so names go to white and the quieter
+ * lines (artist, role mark, block names) to the body colour, which measures
+ * 4.8:1 at the hover tint.
+ */
+.node[class*='node--tier-']:not(.node--missing) .node__name {
+  color: var(--fg);
 }
-.node--block[class*='node--tier-']:not(.node--missing) .node__name {
+.node--block[class*='node--tier-']:not(.node--missing) .node__name,
+.node[class*='node--tier-']:not(.node--missing) :is(.node__artist, .node__role) {
   color: var(--fg-1);
 }
 
