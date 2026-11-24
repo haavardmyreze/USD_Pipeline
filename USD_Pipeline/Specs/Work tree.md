@@ -23,7 +23,7 @@ $WORK/
 
 - The owning folder holds every version of one HIP and everything that HIP depends on.
 - The task level is left out when a context has only one HIP.
-- A context for one entity mirrors that entity's path in the project tree: `shots/kilo/0010/`.
+- A context for one entity mirrors that entity's path below its project folder in the project tree: `shots/kilo/0010/`.
 - A context for a group of entities gets a descriptive name: `props-batch-a/`.
 - Inside the owning folder, use Houdini's standard project folders, so `$HIP/geo` and the other defaults just work.
 - Nothing resolves a file here by path, so it can be reorganised freely.

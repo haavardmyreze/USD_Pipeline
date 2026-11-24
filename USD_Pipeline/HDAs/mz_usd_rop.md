@@ -47,3 +47,4 @@ network          input → configurelayer1 → usd_rop2            writes output
 - The default prim is left as the input stage has it, and the reference import needs one.
 - Checks run only from parameter callbacks, so values changed by script or expression are not checked again.
 - It writes blocks and assemblies, but not the payload files in [[Published USD filenames]].
+- The output path has no `content/<project>/` level yet, which [[Project tree]] now asks for.

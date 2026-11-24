@@ -38,5 +38,6 @@ network          input → resample1 (square, resolution) → rop_image1    writ
 
 - No UDIMs. [[Texture filenames]] allows `.<udim>`, but the path never adds one and the inner ROP has UDIM output off.
 - Asset textures only. [[Project tree]] gives sets a `tex/` folder too.
+- The output path has no `content/<project>/` level yet, which [[Project tree]] now asks for.
 - The Signature parameter is not connected to anything.
 - The module's docstring names an OnLoaded script, but the HDA has none.

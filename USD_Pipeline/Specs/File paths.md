@@ -11,7 +11,7 @@ How one file points at another. The rule differs on each side of a publish.
 ## Structure
 
 ```
-In a HIP parameter          $PROJECT/assets/char-robot/char-robot.usda
+In a HIP parameter          $PROJECT/content/robot-film/assets/char-robot/char-robot.usda
 
 Inside a published USD      @char-robot_model.usdc@
                             @../../../sets/living-room/set-living-room.usda@
