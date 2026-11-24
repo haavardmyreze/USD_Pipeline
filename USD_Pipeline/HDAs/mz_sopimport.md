@@ -28,5 +28,5 @@ network       input → sopimport2 → output0
 
 ## Open
 
-- The prim is named after the node, for example `/mz_sopimport1`. [[Prim names]] asks for PascalCase, and [[Asset scene graph]] puts geometry under `/<AssetRoot>/Geo`.
+- The prim is named after the node, for example `/mz_sopimport1`. [[Prim names]] asks for PascalCase, and [[Asset scene graph]] puts geometry under `/Root/Geo`.
 - SOP Path defaults to `/stage/Bob_Model/sopnet1/_OUT`, left over from a test scene.

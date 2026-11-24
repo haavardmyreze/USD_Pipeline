@@ -17,6 +17,7 @@ $PROJECT/
 │       └── <asset>/              char-robot/
 │           ├── assembly
 │           ├── block(s)
+│           ├── payload(s)        geometry
 │           ├── rig HDA           if rigged
 │           └── tex/
 ├── sets/

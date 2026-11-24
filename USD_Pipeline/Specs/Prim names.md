@@ -11,7 +11,7 @@ The naming rule for every prim. Which prims exist, and where, is in [[Asset scen
 ## Structure
 
 ```
-PascalCase      CharRobot, Geo, Hero, CrateA, KeyLight, Main
+PascalCase      Root, Geo, Hero, CrateA, KeyLight, Main
 ```
 
 ## Notes

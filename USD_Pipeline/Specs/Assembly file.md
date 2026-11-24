@@ -13,11 +13,11 @@ The one file per asset, set or shot that lists its blocks. It is the file other 
 ```
 #usda 1.0
 (
-    defaultPrim = "CharRobot"       # assets only
+    defaultPrim = "Root"            # assets only
     # the stage metrics go here
     subLayers = [                   # strongest first
         @char-robot_lookdev.usda@,
-        @char-robot_model.usdc@
+        @char-robot_model.usda@
     ]
 )
 ```
