@@ -112,8 +112,9 @@ export function locate(
 
 /**
  * Scan the project tree that contains `path`. The backend walks up from the
- * file to find the folder holding assets/sets/shots, then reads every
- * published layer's metadata.
+ * file to find the root holding `content/<project>/assets|sets|shots` (or, in
+ * an older tree, the tiers directly), then reads every published layer's
+ * metadata.
  */
 export function getProject(path: string): Promise<Project> {
   return request<Project>(`/api/project?path=${encodeURIComponent(path)}`)

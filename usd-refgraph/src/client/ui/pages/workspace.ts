@@ -164,6 +164,8 @@ function entityRow(entity: ProjectEntity, on: boolean, context: PageContext): HT
   text.appendChild(el('span', 'split__rowName', entity.name))
   const files = entityLayers(entity)
   const sub = [
+    // Which project folder under content/, once there is more than one.
+    context.project.projectFolders.length > 1 ? entity.project : null,
     entity.category ?? null,
     `${files.length} ${files.length === 1 ? 'layer' : 'layers'}`,
     latestArtist(files),
@@ -224,6 +226,9 @@ function detailHead(entity: ProjectEntity, context: PageContext): HTMLElement {
   const badge = entity.category ?? entity.sequence
   if (badge) {
     line.appendChild(el('span', 'split__badge', badge))
+  }
+  if (entity.project && context.project.projectFolders.length > 1) {
+    line.appendChild(el('span', 'split__badge', entity.project))
   }
   title.appendChild(line)
   title.appendChild(truncated(entity.dir, 'split__path'))

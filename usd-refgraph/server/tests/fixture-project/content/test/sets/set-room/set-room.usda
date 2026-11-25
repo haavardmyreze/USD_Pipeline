@@ -15,4 +15,10 @@ def Xform "Room"
     )
     {
     }
+
+    def "Floor" (
+        prepend references = @../../../library/assets/mtl-shared/mtl-shared.usda@
+    )
+    {
+    }
 }

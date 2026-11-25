@@ -191,9 +191,13 @@ The Python server then serves the built viewer itself, on
 
 ## Using it
 
-**Open the project folder** — the one holding `assets`, `sets` and `shots`.
-Browse to it and press **Use this folder**. Everything published inside is
-scanned, and the graph opens on a shot root so you land on something.
+**Open the project folder** — the one holding `content/`, with one folder per
+project inside it (`content/<project>/assets|sets|shots`, `library/`
+included). Browse to it and press **Use this folder**. Every project folder
+under `content/` is scanned, and the graph opens on a shot root so you land on
+something. Opening `content/` itself, or a folder inside it, finds the same
+root. An older tree with `assets`, `sets` and `shots` directly in the root
+still opens.
 
 From there the **Graph** tab lists every layer in a tree down the left side;
 click one to draw its graph. Switching layers does not rescan the project.

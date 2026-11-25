@@ -505,9 +505,9 @@ class App {
     const notice = emptyState(inTree ? 'Not inside a project tree' : 'No project open', {
       icon: 'folder',
       body: inTree
-        ? 'These pages read a project tree — a folder containing assets, sets or shots. ' +
+        ? 'These pages read a project tree — a folder holding content/<project>/ with assets, sets or shots in it. ' +
           'The open file is not inside one, so there is nothing to summarise.'
-        : 'Open the folder that holds your assets, sets and shots, and everything ' +
+        : 'Open the project folder that holds content/, and everything ' +
           'published in it will be summarised here.',
       action: button('Open a project folder', {
         variant: 'primary',
@@ -667,11 +667,15 @@ class App {
     this.els.rootName.textContent = node.name
     this.els.openLayer.title = `${node.path}\nGraph another layer`
 
-    const root = this.project?.root
-    const inside = root && node.dir.toLowerCase().startsWith(root.toLowerCase())
-    const dirs = inside
-      ? node.dir.slice(root.length).split(/[\\/]/).filter(Boolean).join(' / ')
-      : truncateStart(node.dir, 40)
+    const project = this.project
+    const inside = project && node.dir.toLowerCase().startsWith(project.root.toLowerCase())
+    const parts = inside ? node.dir.slice(project.root.length).split(/[\\/]/).filter(Boolean) : []
+    // `content/` is on every path in the tree, so it says nothing. The project
+    // folder after it only says something once there is more than one.
+    if (parts[0]?.toLowerCase() === 'content') {
+      parts.splice(0, project!.projectFolders.length > 1 ? 1 : 2)
+    }
+    const dirs = inside ? parts.join(' / ') : truncateStart(node.dir, 40)
     this.els.rootPath.textContent = dirs ? `${dirs} /` : ''
     this.els.rootPath.title = node.dir
 

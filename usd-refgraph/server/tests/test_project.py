@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -92,12 +93,18 @@ def main() -> int:
     check("an empty comment is not stored", read_record({"comment": ""}).comment, None)
 
     print("\nscanning a project")
-    check("root found from a shot file", find_root(os.path.join(FIXTURE, "shots", "zulu", "0010")), FIXTURE)
+    shot_dir = os.path.join(FIXTURE, "content", "test", "shots", "zulu", "0010")
+    check("root found from a shot file", find_root(shot_dir), FIXTURE)
+    check("root found from a project folder", find_root(os.path.join(FIXTURE, "content", "test")), FIXTURE)
+    check("root found from content/", find_root(os.path.join(FIXTURE, "content")), FIXTURE)
 
     project = ProjectScanner(FIXTURE).run()
     entities = {e["name"]: e for e in project["entities"]}
 
-    check("every entity found", sorted(entities), ["char-test", "set-room", "zulu-0010"])
+    check("every entity found", sorted(entities), ["char-test", "mtl-shared", "set-room", "zulu-0010"])
+    check("project folders listed", project["projectFolders"], ["library", "test"])
+    check("an entity knows its project folder", entities["char-test"]["project"], "test")
+    check("library is a project folder too", entities["mtl-shared"]["project"], "library")
     check("tiers", [entities[n]["tier"] for n in ["char-test", "set-room", "zulu-0010"]],
           ["asset", "set", "shot"])
     check("block columns", project["blockNames"], ["lookdev", "model"])
@@ -109,7 +116,7 @@ def main() -> int:
     check("entity status rolls up", entities["char-test"]["status"], "production_ready")
     check("legacy wip is understood", entities["zulu-0010"]["status"], "placeholder")
 
-    check("a reference becomes a dependency", entities["set-room"]["dependsOn"], ["char-test"])
+    check("a reference becomes a dependency", entities["set-room"]["dependsOn"], ["char-test", "mtl-shared"])
     check("a sublayer becomes a dependency", entities["zulu-0010"]["dependsOn"], ["set-room"])
     check("assets depend on nothing here", entities["char-test"]["dependsOn"], [])
 
@@ -143,7 +150,30 @@ def main() -> int:
     )
 
     check("publish times counted", project["stats"]["publishes"], 5)
-    check("layers counted", project["stats"]["layers"], 5)
+    check("layers counted", project["stats"]["layers"], 6)
+
+    print("\nthe older layout, tiers directly under the root")
+    with tempfile.TemporaryDirectory() as legacy:
+        os.makedirs(os.path.join(legacy, "assets", "char-old"))
+        with open(os.path.join(legacy, "assets", "char-old", "char-old.usda"), "w") as handle:
+            handle.write("#usda 1.0\n")
+        check("root found", find_root(os.path.join(legacy, "assets", "char-old")), legacy)
+        old = ProjectScanner(legacy).run()
+        check("entity found", [e["name"] for e in old["entities"]], ["char-old"])
+        check("no project folder named", old["entities"][0]["project"], None)
+        check("no project folders listed", old["projectFolders"], [])
+
+    print("\nthe same name in two project folders")
+    with tempfile.TemporaryDirectory() as clash:
+        for folder in ("alpha", "beta"):
+            path = os.path.join(clash, "content", folder, "assets", "char-twin")
+            os.makedirs(path)
+            with open(os.path.join(path, "char-twin.usda"), "w") as handle:
+                handle.write("#usda 1.0\n")
+        twin = ProjectScanner(clash).run()
+        check("kept once, from the first folder", [(e["name"], e["project"]) for e in twin["entities"]],
+              [("char-twin", "alpha")])
+        check("the clash is reported", len(twin["warnings"]), 1)
 
     print()
     if failures:

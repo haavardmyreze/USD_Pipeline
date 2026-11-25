@@ -161,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_error_json(
                     404,
                     "No project tree found",
-                    "Looked upwards for a folder containing assets, sets or shots.",
+                    "Looked upwards for a folder holding content/<project>/ with assets, sets or shots in it.",
                 )
                 return
 

@@ -20,8 +20,12 @@ from .model import USD_EXTS
 from .naming import category_of, classify, describe, parse_shot_code, split_entity
 from .pipeline import PipelineRecord, Status, read_record, rollup_status
 
-#: The three tiers live in these folders directly under the project root.
+#: The three tiers live in these folders directly inside a project folder.
 TIER_DIRS = {"assets": "asset", "sets": "set", "shots": "shot"}
+
+#: The folder under the project root holding one folder per project, like an
+#: Unreal Engine content folder: `$PROJECT/content/<project>/assets/...`.
+CONTENT_DIR = "content"
 
 #: Never descend into these while scanning.
 SKIP_DIRS = {".git", ".svn", "__pycache__", "node_modules", "backup", ".mothership"}
@@ -79,6 +83,8 @@ class Entity:
     name: str
     tier: str
     dir: str
+    #: The project folder under `content/` it lives in; None in a legacy tree.
+    project: str | None = None
     category: str | None = None
     sequence: str | None = None
     shotNumber: int | None = None
@@ -131,6 +137,7 @@ class Entity:
             "name": self.name,
             "tier": self.tier,
             "dir": self.dir,
+            "project": self.project,
             "status": rollup_status(self.statuses()),
             "assembly": self.assembly.to_dict() if self.assembly else None,
             "blocks": [layer.to_dict() for layer in blocks],
@@ -154,16 +161,55 @@ class Entity:
 # ---------------------------------------------------------------------------
 
 
-def looks_like_root(path: str) -> bool:
-    """A project root is the folder holding `assets`, `sets` and/or `shots`."""
+def _subdirs(path: str) -> dict[str, str]:
+    """Lower-cased name to real name of each folder directly in `path`."""
     try:
-        names = {entry.name.lower() for entry in os.scandir(path) if entry.is_dir()}
+        return {entry.name.lower(): entry.name for entry in os.scandir(path) if entry.is_dir()}
     except OSError:
-        return False
-    return bool(names & set(TIER_DIRS))
+        return {}
 
 
-def find_root(start: str, levels: int = 8) -> str | None:
+def is_project_folder(path: str) -> bool:
+    """A project folder holds `assets`, `sets` and/or `shots`."""
+    return bool(set(_subdirs(path)) & set(TIER_DIRS))
+
+
+def project_folders(root: str) -> list[tuple[str | None, str]]:
+    """The project folders under a root, as (name, path), sorted by name.
+
+    The tree is `$PROJECT/content/<project>/assets|sets|shots`: one folder per
+    project, including work migrated from other projects and the shared
+    `library/`. A root that holds the tier folders itself is the older layout
+    and counts as a single, unnamed project folder.
+    """
+    content = _subdirs(root).get(CONTENT_DIR)
+    if content:
+        base = os.path.join(root, content)
+        return [
+            (name, os.path.join(base, name))
+            for name in sorted(_subdirs(base).values(), key=str.lower)
+            if name.lower() not in SKIP_DIRS and is_project_folder(os.path.join(base, name))
+        ]
+    if is_project_folder(root):
+        return [(None, root)]
+    return []
+
+
+def looks_like_root(path: str) -> bool:
+    """A project root holds `content/` with project folders in it.
+
+    A folder holding the tiers directly is a root too (the older layout), but
+    not when it is itself a project folder inside `content/`: its root is two
+    levels up.
+    """
+    path = os.path.normpath(os.path.abspath(path))
+    if CONTENT_DIR in _subdirs(path):
+        return bool(project_folders(path))
+    in_content = os.path.basename(os.path.dirname(path)).lower() == CONTENT_DIR
+    return is_project_folder(path) and not in_content
+
+
+def find_root(start: str, levels: int = 10) -> str | None:
     """Walk up from a file or folder looking for the project root."""
     current = os.path.normpath(os.path.abspath(start))
     if os.path.isfile(current):
@@ -190,6 +236,7 @@ class ProjectScanner:
         self.read_dependencies = read_dependencies
         self.entities: dict[str, Entity] = {}
         self.warnings: list[str] = []
+        self.folders: list[tuple[str | None, str]] = []
         #: file id -> owning entity, so arcs can be mapped back to entities.
         self._owner: dict[str, str] = {}
         self._layers: list[LayerEntry] = []
@@ -197,10 +244,12 @@ class ProjectScanner:
     def run(self) -> dict[str, Any]:
         started = time.perf_counter()
 
-        for tier_dir, tier in TIER_DIRS.items():
-            base = os.path.join(self.root, tier_dir)
-            if os.path.isdir(base):
-                self._scan_tier(base, tier)
+        self.folders = project_folders(self.root)
+        for project, folder in self.folders:
+            tiers = _subdirs(folder)
+            for tier_dir, tier in TIER_DIRS.items():
+                if tier_dir in tiers:
+                    self._scan_tier(os.path.join(folder, tiers[tier_dir]), tier, project)
 
         if self.read_dependencies:
             self._resolve_dependencies()
@@ -214,7 +263,7 @@ class ProjectScanner:
 
     # -- walking ----------------------------------------------------------
 
-    def _scan_tier(self, base: str, tier: str) -> None:
+    def _scan_tier(self, base: str, tier: str, project: str | None) -> None:
         seen = 0
         for dirpath, dirnames, filenames in os.walk(base):
             dirnames[:] = [d for d in dirnames if d.lower() not in SKIP_DIRS]
@@ -223,9 +272,9 @@ class ProjectScanner:
                 if seen > MAX_FILES:
                     self.warnings.append("Scan stopped early: too many files.")
                     return
-                self._consider(os.path.join(dirpath, filename), tier)
+                self._consider(os.path.join(dirpath, filename), tier, project)
 
-    def _consider(self, path: str, tier: str) -> None:
+    def _consider(self, path: str, tier: str, project: str | None) -> None:
         name = os.path.basename(path)
         ext = os.path.splitext(name)[1].lower()
         role, name_tier = classify(name)
@@ -236,7 +285,14 @@ class ProjectScanner:
             return
 
         entity_name, block = split_entity(name)
-        entity = self._entity(entity_name, name_tier or tier, os.path.dirname(path))
+        entity = self._entity(entity_name, name_tier or tier, os.path.dirname(path), project)
+        if entity.project != project:
+            # Names are not yet unique across project folders (see the Project
+            # tree spec); a second one would be merged into the first silently.
+            clash = f"{entity_name} exists in both {entity.project} and {project}; showing {entity.project}."
+            if clash not in self.warnings:
+                self.warnings.append(clash)
+            return
 
         try:
             stat = os.stat(path)
@@ -272,12 +328,12 @@ class ProjectScanner:
         else:
             entity.blocks.append(layer)
 
-    def _entity(self, name: str, tier: str, directory: str) -> Entity:
+    def _entity(self, name: str, tier: str, directory: str, project: str | None) -> Entity:
         existing = self.entities.get(name)
         if existing:
             return existing
 
-        entity = Entity(name=name, tier=tier, dir=directory)
+        entity = Entity(name=name, tier=tier, dir=directory, project=project)
         entity.category = category_of(name)
         shot = parse_shot_code(name)
         if shot:
@@ -393,6 +449,7 @@ class ProjectScanner:
         return {
             "root": self.root,
             "name": os.path.basename(self.root) or self.root,
+            "projectFolders": [name for name, _ in self.folders if name],
             "entities": [entity.to_dict() for entity in entities],
             "artists": sorted(artists),
             "blockNames": sorted(block_names),

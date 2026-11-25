@@ -59,6 +59,8 @@ export interface ProjectEntity {
   name: string
   tier: NodeTier
   dir: string
+  /** The project folder under `content/` it lives in; null in an older tree. */
+  project: string | null
   /** Rolled up from the parts: an entity is only as finished as its weakest. */
   status: Status
   assembly: ProjectLayer | null
@@ -91,6 +93,8 @@ export interface ProjectStats {
 export interface Project {
   root: string
   name: string
+  /** The folders under `content/`, one per project, `library` included. */
+  projectFolders: string[]
   entities: ProjectEntity[]
   artists: string[]
   /** Every block name seen, for the workspace grid's columns. */

@@ -73,7 +73,7 @@ export function renderOverview(host: HTMLElement, context: PageContext): void {
     body.appendChild(
       emptyState('Nothing published yet.', {
         icon: 'inbox',
-        body: 'The scan looks for assets, sets and shots directly under the project root.',
+        body: 'The scan looks for assets, sets and shots in each project folder under content/.',
       }),
     )
     return
